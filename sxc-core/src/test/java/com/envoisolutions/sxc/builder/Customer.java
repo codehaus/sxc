@@ -1,4 +1,4 @@
-package com.envoisolutions.sxc.customer;
+package com.envoisolutions.sxc.builder;
 
 public class Customer {
     private int id;

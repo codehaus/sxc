@@ -13,7 +13,6 @@ import com.envoisolutions.sxc.builder.Builder;
 import com.envoisolutions.sxc.builder.ElementWriterBuilder;
 import com.envoisolutions.sxc.builder.WriterBuilder;
 import com.envoisolutions.sxc.builder.impl.BuilderImpl;
-import com.envoisolutions.sxc.customer.Customer;
 import com.envoisolutions.sxc.util.XoTestCase;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JType;

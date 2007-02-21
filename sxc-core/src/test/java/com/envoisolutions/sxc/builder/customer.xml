@@ -1,1 +1,3 @@
-<customer><name>Dan Diephouse</name><id>1</id></customer>
+<customer id="1">
+<name>Dan Diephouse</name>
+</customer>
