@@ -1,0 +1,34 @@
+package com.envoisolutions.caserta.xpath;
+
+import com.envoisolutions.sxc.xpath.XPathEvent;
+
+rule "Test"
+    when
+        XPathEvent( expression == "hello" ) or
+        XPathEvent( expression == "world" );
+        XPathEvent( expression == "hello" ) or
+        XPathEvent( expression == "world" );
+        eval ( true );
+        exists( XPathEvent() );
+        not( XPathEvent() );
+    then
+        System.out.println("Great Success! - " + drools.getRule().getName());
+end
+
+rule "Test2"
+    when
+        event : XPathEvent( expression == "/order/address[@country]" );
+    then
+        System.out.println("Great Success! - " + drools.getRule().getName());
+end
+
+rule "Test3"
+    when
+        (XPathEvent( expression == "hello" ) and
+        XPathEvent( expression == "world" )) or
+        (XPathEvent( expression == "hello" ) and
+        XPathEvent( expression == "world" ));
+    then
+        System.out.println("Great Success! - " + drools.getRule().getName());
+end
+
