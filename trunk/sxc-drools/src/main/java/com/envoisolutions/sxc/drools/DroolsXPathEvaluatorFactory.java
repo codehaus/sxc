@@ -36,10 +36,6 @@ public class DroolsXPathEvaluatorFactory {
         prefixes.put(prefix, namespace);
     }
 
-    public InputStream getPackageStream() {
-        return packageStream;
-    }
-
     public void setPackageStream(InputStream packageStream) {
         this.packageStream = packageStream;
     }
@@ -162,7 +158,7 @@ public class DroolsXPathEvaluatorFactory {
      * @return
      */
     private boolean columnContainsXPathEvent(LiteralConstraint literalConstraint) {
-        return literalConstraint.toString().indexOf("com.envoisolutions.caserta.xpath.XPathEvent") > -1;
+        return literalConstraint.toString().indexOf("com.envoisolutions.sxc.xpath.XPathEvent") > -1;
     }
 
 }
