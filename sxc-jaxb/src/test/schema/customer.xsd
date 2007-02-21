@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schema xmlns:tns="http://cxf.apache.org/person/" 
+  xmlns="http://www.w3.org/2001/XMLSchema"
+  xmlns:xmime="http://www.w3.org/2005/05/xmlmime" 
+  targetNamespace="urn:customer"
+  elementFormDefault="qualified"
+  xmlns:xo="urn:envoi:streax:xo:customer">
+  <element name="customer">
+    <complexType>
+      <sequence>
+        <element name="name" type="string" />
+        <element name="id" type="int" />
+      </sequence>
+    </complexType>
+  </element>
+</schema>
