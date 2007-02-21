@@ -1,0 +1,143 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.envoisolutions.sxc</groupId>
+  <artifactId>sxc</artifactId>
+  <name>Simple XML Compiler</name>
+  <version>0.5-SNAPSHOT</version>
+  <inceptionYear>2006</inceptionYear>
+  <packaging>pom</packaging>
+  
+  <licenses>
+    <license>
+      <name>CDDL 1.0</name>
+      <url>http://sxc.codehaus.org/License</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+  <organization>
+    <name>Envoi Solutions LLC</name>
+    <url>http://www.envoisolutions.com/</url>
+  </organization>
+  
+  <modules>
+    <module>sxc-core</module>
+    <module>sxc-xpath</module>
+    <module>sxc-jaxb</module>
+    <module>sxc-drools</module>
+  </modules>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>com.envoisolutions.sxc</groupId>
+        <artifactId>sxc-core</artifactId>
+        <version>${version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.envoisolutions.sxc</groupId>
+        <artifactId>sxc-jaxb</artifactId>
+        <version>${version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.envoisolutions.sxc</groupId>
+        <artifactId>sxc-drools</artifactId>
+        <version>${version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.envoisolutions.sxc</groupId>
+        <artifactId>sxc-xpath</artifactId>
+        <version>${version}</version>
+      </dependency>
+
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>3.8.1</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <!--  needed for plugin snapshots (i.e. jdepend) -->
+  <repositories>
+    <repository>
+      <id>jboss</id>
+      <name>JBoss Repository - for commons jci</name>
+      <url>http://repository.jboss.com/maven2/</url>
+    </repository>
+    <repository>
+      <id>java.net</id>
+      <name>Java.net - Japex</name>
+      <url>https://maven-repository.dev.java.net/nonav/repository/</url>
+      <layout>legacy</layout>
+    </repository>
+    <repository>
+      <id>local</id>
+      <name>Local filesystem</name>
+      <url>file:///${basedir}/repo/</url>
+    </repository>
+  </repositories>
+
+  <!--  needed for plugin snapshots (i.e. jdepend) -->
+  <pluginRepositories>
+    <pluginRepository>
+      <id>snapshot</id>
+      <name>Snapshot repository</name>
+      <url>http://snapshots.maven.codehaus.org/maven2/</url>
+    </pluginRepository>
+  </pluginRepositories>
+  <build>
+    <testResources>
+      <testResource>
+        <directory>src/test/java</directory>
+        <includes>
+          <include>**/*.xml</include>
+        </includes>
+      </testResource>
+    </testResources>
+    <plugins>
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <source>1.5</source>
+          <target>1.5</target>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+  <reporting>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-project-info-reports-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </reporting>
+
+  <distributionManagement>
+    <repository>
+      <id>codehaus.org</id>
+      <name>Central Repository</name>
+      <url>dav:https://dav.codehaus.org/repository/sxc/</url>
+    </repository>
+    <snapshotRepository>
+      <id>codehaus.org</id>
+      <name>Central Development Repository</name>
+      <url>dav:https://dav.codehaus.org/snapshots.repository/sxc/</url>
+    </snapshotRepository>
+    <site>
+      <id>codehaus.org</id>
+      <url>dav:https://dav.codehaus.org/sxc/</url>
+    </site>
+  </distributionManagement>
+</project>
