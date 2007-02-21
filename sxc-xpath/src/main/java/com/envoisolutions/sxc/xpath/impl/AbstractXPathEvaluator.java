@@ -17,6 +17,7 @@ public abstract class AbstractXPathEvaluator implements XPathEvaluator {
         }
         final XMLStreamReader reader = xmlInputFactory.createXMLStreamReader(stream);
         evaluate(reader);
+        reader.close();
     }
 
     public void evaluate(Source resourceAsSource) throws Exception {
@@ -25,6 +26,7 @@ public abstract class AbstractXPathEvaluator implements XPathEvaluator {
         }
         final XMLStreamReader reader = xmlInputFactory.createXMLStreamReader(resourceAsSource);
         evaluate(reader);
+        reader.close();
     }
 
 }
