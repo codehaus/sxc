@@ -1,25 +1,52 @@
 package com.envoisolutions.sxc.builder.impl;
 
+import com.envoisolutions.sxc.builder.ParserBuilder;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JConditional;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JVar;
 
 
 public class AttributeParserBuilderImpl extends AbstractParserBuilder {
 
+    private ElementParserBuilderImpl parent;
+
     public AttributeParserBuilderImpl(ElementParserBuilderImpl parent) {
         this.model = parent.getCodeModel();
         this.buildContext = parent.getBuildContext();
         this.readerClass = parent.getReaderClass();
+        this.parent = parent;
         
         method = buildContext.getNextReadMethod(readerClass);
         addBasicArgs(method);
     }
-    
+
+    public ParserBuilder newState() {
+        return newState(method.body());
+    }
+
+    public ParserBuilder newState(JBlock block) {
+        AttributeParserBuilderImpl b = 
+            new AttributeParserBuilderImpl(parent);
+        // states.add(b);
+        
+        JMethod nextMethod = b.getMethod();
+        
+        JInvocation invocation = JExpr.invoke(nextMethod).arg(xsrVar).arg(rtContextVar);
+        for (JVar v : b.variables) {
+            invocation.arg(v);
+        }
+        
+        block.add(invocation);
+        
+        return b;
+    }
+
 
     public JVar asString() {
         JVar var = method.body().decl(model._ref(String.class), "value", JExpr.direct("_attValue"));

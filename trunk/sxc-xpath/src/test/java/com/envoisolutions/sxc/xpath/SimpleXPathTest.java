@@ -13,6 +13,7 @@ public class SimpleXPathTest extends TestCase {
     
     public void testNonMatchedText() throws Exception {
 
+        System.setProperty("streax-xo.output.directory", "target/tmp-xpath");
         XPathEventHandler matchIdHandler = new XPathEventHandler() {
 
             public void onMatch(XPathEvent event) throws XMLStreamException {
@@ -35,6 +36,7 @@ public class SimpleXPathTest extends TestCase {
     
     public void testText() throws Exception {
 
+        System.setProperty("streax-xo.output.directory", "target/tmp-xpath");
         XPathEventHandler idHandler = new XPathEventHandler() {
 
             public void onMatch(XPathEvent event) throws XMLStreamException {
@@ -71,6 +73,72 @@ public class SimpleXPathTest extends TestCase {
         XPathBuilder builder = new XPathBuilder();
         builder.addPrefix("c", "urn:customer");
         builder.listen("//c:id", idHandler);
+        
+        XPathEvaluator evaluator = builder.compile();
+        
+        evaluator.evaluate(getClass().getResourceAsStream("customer.xml"));
+        
+        assertEquals("id", idTag);
+    }
+    
+    public void testGlobalElementLocalName() throws Exception {
+
+        System.setProperty("streax-xo.output.directory", "target/tmp-xpath");
+        XPathEventHandler idHandler = new XPathEventHandler() {
+
+            public void onMatch(XPathEvent event) throws XMLStreamException {
+                idTag = event.getReader().getLocalName();
+            }
+            
+        };
+        
+        XPathBuilder builder = new XPathBuilder();
+        builder.addPrefix("c", "urn:customer");
+        builder.listen("//*[local-name()='id']", idHandler);
+        
+        XPathEvaluator evaluator = builder.compile();
+        
+        evaluator.evaluate(getClass().getResourceAsStream("customer.xml"));
+        
+        assertEquals("id", idTag);
+    }
+    
+    public void testAnd() throws Exception {
+
+        System.setProperty("streax-xo.output.directory", "target/tmp-xpath");
+        XPathEventHandler idHandler = new XPathEventHandler() {
+
+            public void onMatch(XPathEvent event) throws XMLStreamException {
+                idTag = event.getReader().getLocalName();
+            }
+            
+        };
+        
+        XPathBuilder builder = new XPathBuilder();
+        builder.addPrefix("c", "urn:customer");
+        builder.listen("//*[local-name()='id' and namespace-uri()='urn:customer']", idHandler);
+        
+        XPathEvaluator evaluator = builder.compile();
+        
+        evaluator.evaluate(getClass().getResourceAsStream("customer.xml"));
+        
+        assertEquals("id", idTag);
+    }
+    
+    public void testOr() throws Exception {
+
+        System.setProperty("streax-xo.output.directory", "target/tmp-xpath");
+        XPathEventHandler idHandler = new XPathEventHandler() {
+
+            public void onMatch(XPathEvent event) throws XMLStreamException {
+                idTag = event.getReader().getLocalName();
+            }
+            
+        };
+        
+        XPathBuilder builder = new XPathBuilder();
+        builder.addPrefix("c", "urn:customer");
+        builder.listen("//*[local-name()='foo' or local-name()='id']", idHandler);
         
         XPathEvaluator evaluator = builder.compile();
         

@@ -2,6 +2,7 @@ package com.envoisolutions.sxc.builder;
 
 import java.util.List;
 
+import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JVar;
@@ -34,5 +35,9 @@ public interface ParserBuilder {
     boolean isRequired();
     
     void setRequired(boolean b);
+    
+    ParserBuilder newState();
+    
+    ParserBuilder newState(JBlock block);
 
 }
