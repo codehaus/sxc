@@ -15,7 +15,9 @@ import com.envoisolutions.sxc.builder.ParserBuilder;
 import com.envoisolutions.sxc.builder.impl.BuilderImpl;
 import com.envoisolutions.sxc.xpath.impl.XPathEvaluatorImpl;
 import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JPrimitiveType;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 
@@ -23,8 +25,10 @@ import org.jaxen.JaxenHandler;
 import org.jaxen.expr.AllNodeStep;
 import org.jaxen.expr.EqualityExpr;
 import org.jaxen.expr.Expr;
+import org.jaxen.expr.FunctionCallExpr;
 import org.jaxen.expr.LiteralExpr;
 import org.jaxen.expr.LocationPath;
+import org.jaxen.expr.LogicalExpr;
 import org.jaxen.expr.NameStep;
 import org.jaxen.expr.Predicate;
 import org.jaxen.expr.TextNodeStep;
@@ -43,7 +47,9 @@ public class XPathBuilder {
     private JType stringType;
     private Builder builder;
     private JType eventType;
-    
+    private int varCount = 0;
+    private JPrimitiveType boolType;
+
     public XPathBuilder() {
         super();
         
@@ -53,7 +59,7 @@ public class XPathBuilder {
         eventHandlerType = parserBldr.getCodeModel()._ref(XPathEventHandler.class);
         eventType = parserBldr.getCodeModel()._ref(XPathEvent.class);
         stringType = parserBldr.getCodeModel()._ref(String.class);
-        
+        boolType = parserBldr.getCodeModel().BOOLEAN;
     }
 
     public void listen(String expr, XPathEventHandler handler) {
@@ -85,7 +91,17 @@ public class XPathBuilder {
             
             XPathExpr path = handler.getXPathExpr(true);
             
-            xpathBuilder = handleExpression(parserBldr, path.getRootExpr());
+            Object o = handleExpression(parserBldr, path.getRootExpr());
+            if (o instanceof ExpressionState) {
+                ExpressionState exp = (ExpressionState) o;
+                JVar var = exp.getVar();
+                ParserBuilder builder = exp.getBuilder();
+                JBlock block = builder.getBody().getBlock();
+                
+                xpathBuilder = builder.newState(block._if(var)._then());
+            } else {
+                xpathBuilder = (ParserBuilder) o;
+            }
         } catch (SAXPathException e) {
             throw new XPathException(e);
         }
@@ -100,37 +116,87 @@ public class XPathBuilder {
         body.add(handlerVar.invoke("onMatch").arg(JExpr._new(eventType).arg(JExpr.lit(expr)).arg(xpathBuilder.getXSR())));
     }
 
-    private ParserBuilder handleExpression(ElementParserBuilder xpathBuilder, Expr expr) {
+    private Object handleExpression(ElementParserBuilder xpathBuilder, Expr expr) {
+        // System.out.println("Expression " + expr);
         if (expr instanceof LocationPath) {
             return handle(xpathBuilder, (LocationPath) expr);
         } else if (expr instanceof EqualityExpr) {
             return handle(xpathBuilder, (EqualityExpr) expr);
         } else if (expr instanceof LiteralExpr) {
             return handle(xpathBuilder, (LiteralExpr) expr);
+        } else if (expr instanceof FunctionCallExpr) {
+            return handle(xpathBuilder, (FunctionCallExpr) expr);
+        } else if (expr instanceof LogicalExpr) {
+            return handle(xpathBuilder, (LogicalExpr) expr);
         } else {
-            System.out.println("UNKNOWN EXPRESSION: " + expr );
-            System.out.println(expr.getClass().getName());
+            throw new XPathException("Unknown expression type " + expr);
         }
-        return xpathBuilder;
     }
 
-    private ParserBuilder handle(ElementParserBuilder xpathBuilder, LiteralExpr expr) {
-        xpathBuilder.getBody().decl(stringType, "_literal", JExpr.lit(expr.getLiteral()));
-        return xpathBuilder;
+    private ExpressionState handle(ElementParserBuilder xpathBuilder, LiteralExpr expr) {
+        JVar var = xpathBuilder.getBody().decl(stringType, 
+                                               "_literal" + varCount++,
+                                               JExpr.lit(expr.getLiteral()));
+        return new ExpressionState(xpathBuilder, var);
     }
-
-    private ParserBuilder handle(ElementParserBuilder xpathBuilder, EqualityExpr expr) {
-        handleExpression(xpathBuilder, expr.getLHS());
-        handleExpression(xpathBuilder, expr.getRHS());
+    
+    private ParserBuilder handle(ElementParserBuilder parent, LogicalExpr expr) {
+        Object left = handleExpression(parent, expr.getLHS());
+        Object right = handleExpression(parent, expr.getRHS());
         
-        JBlock block = xpathBuilder.getBody().getBlock();
-        JBlock ifBlock = block._if(JExpr.direct("_literal").invoke("equals").arg(JExpr.direct("_value")))._then();
+        JBlock block = parent.getBody().getBlock();
         
-        return xpathBuilder.newState(ifBlock);
+        JVar b1 = ((ExpressionState) left).getVar();
+        JVar b2 = ((ExpressionState) right).getVar();
+        
+        String op = expr.getOperator();
+        
+        JBlock newBlock;
+        if (op.equals("and")) {
+            newBlock = block._if(b1.cand(b2))._then();
+        } else if (op.equals("or")) {
+            newBlock = block._if(b1.cor(b2))._then();
+        } else {
+            throw new UnsupportedOperationException("Operator " + op + " is not supported");
+        }
+        
+        return parent.newState(newBlock);
+    }
+    
+    private ExpressionState handle(ElementParserBuilder xpathBuilder, FunctionCallExpr expr) {
+
+        String name = "functValue" + varCount++;
+        String functionName = expr.getFunctionName();
+        JVar var;
+        // See http://www.w3schools.com/xpath/xpath_functions.asp for a complete list
+        if ("local-name".equals(functionName)) {
+            var =  xpathBuilder.getBody().decl(stringType, 
+                                               name, 
+                                               xpathBuilder.getXSR().invoke("getLocalName"));
+        } else if ("namespace-uri".equals(functionName)) {
+            var =  xpathBuilder.getBody().decl(stringType, 
+                                               name, 
+                                               xpathBuilder.getXSR().invoke("getNamespaceURI"));
+        } else {
+            throw new XPathException("Function " + functionName + " is not understood!");
+        }
+        
+        return new ExpressionState(xpathBuilder, var);
     }
 
-    private ParserBuilder handle(ElementParserBuilder xpathBuilder, LocationPath path) {
-        ParserBuilder returnBuilder = xpathBuilder;
+    private ExpressionState handle(ElementParserBuilder parent, EqualityExpr expr) {
+        ExpressionState left = (ExpressionState) handleExpression(parent, expr.getLHS());
+        ExpressionState right = (ExpressionState) handleExpression(parent, expr.getRHS());
+        
+        JVar var = parent.getBody().decl(boolType,
+                              "b" + varCount++,
+                     left.getVar().invoke("equals").arg(right.getVar()));
+        
+        return new ExpressionState(parent, var);
+    }
+
+    private Object handle(ElementParserBuilder xpathBuilder, LocationPath path) {
+        Object returnObj = xpathBuilder;
         
         // look for the next part on all child elements
         boolean globalElement = false;
@@ -138,27 +204,26 @@ public class XPathBuilder {
             Object o = itr.next();
             
             if (o instanceof NameStep) {
-                returnBuilder = handleNameStep(returnBuilder, (NameStep) o, globalElement);
+                returnObj = handleNameStep((ParserBuilder) returnObj, (NameStep) o, globalElement);
                 globalElement = false;
             } else if (o instanceof AllNodeStep) {
                 globalElement = true;
             } else if (o instanceof TextNodeStep) {
-                returnBuilder = handleTextNodeStep(returnBuilder, (TextNodeStep) o);
+                returnObj = handleTextNodeStep((ParserBuilder) returnObj, (TextNodeStep) o);
             } else {
-                System.out.println("UNKNOWN STEP: " + o);
+                throw new XPathException("Unsupported expression: " + o);
             }
         }
         
-        return returnBuilder;
+        return returnObj;
     }
 
-    private ParserBuilder handleTextNodeStep(ParserBuilder returnBuilder, TextNodeStep step) {
+    private ExpressionState handleTextNodeStep(ParserBuilder returnBuilder, TextNodeStep step) {
         JVar var = returnBuilder.as(String.class);
-        returnBuilder.getBody().decl(returnBuilder.getCodeModel()._ref(String.class), "_value", var);
-        return returnBuilder;
+        return new ExpressionState(returnBuilder, var);
     }
 
-    private ParserBuilder handleNameStep(ParserBuilder returnBuilder, NameStep step, boolean globalElement) {
+    private Object handleNameStep(ParserBuilder returnBuilder, NameStep step, boolean globalElement) {
         String prefix = step.getPrefix();
         String ns = "";
         if (prefix != null && !prefix.equals("")) {
@@ -183,20 +248,21 @@ public class XPathBuilder {
         } else if (step.getAxis() == Axis.ATTRIBUTE) {
             returnBuilder = elBuilder.expectAttribute(n);
         } else {
-            System.out.println("UNKNOWN AXIS " + step.getAxis());
+            throw new XPathException("Unsupported axis: " + step.getAxis());
         }
         
         return handlePredicates(returnBuilder, step.getPredicateSet().getPredicates());
     }
 
-    private ParserBuilder handlePredicates(ParserBuilder returnBuilder, List predicates) {
+    private Object handlePredicates(ParserBuilder returnBuilder, List predicates) {
+        Object returnObj = returnBuilder;
         for (Iterator pitr = predicates.iterator(); pitr.hasNext();) {
             Predicate p = (Predicate) pitr.next();
             
-            Expr expr = p.getExpr();
-            returnBuilder = handleExpression((ElementParserBuilder) returnBuilder, expr);
+            returnObj = 
+                handleExpression((ElementParserBuilder) returnObj, p.getExpr());
         }
-        return returnBuilder;
+        return returnObj;
     }
 
     public Map<String, String> getNamespaceContext() {
@@ -212,5 +278,32 @@ public class XPathBuilder {
             namespaceContext = new HashMap<String, String>();
         }
         namespaceContext.put(prefix, namespace);
+    }
+    
+    public static class ExpressionState {
+        private JVar var;
+        private ParserBuilder builder;
+
+        public ExpressionState(ParserBuilder builder, JVar var) {
+            this.builder = builder;
+            this.var = var;
+        }
+
+        public ParserBuilder getBuilder() {
+            return builder;
+        }
+
+        public void setBuilder(ParserBuilder builder) {
+            this.builder = builder;
+        }
+
+        public JVar getVar() {
+            return var;
+        }
+
+        public void setVar(JVar var) {
+            this.var = var;
+        }
+        
     }
 }

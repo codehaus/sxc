@@ -197,6 +197,10 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         return as(String.class, false);
     }
     
+    public ParserBuilder newState() {
+        return newState(codeBlock);
+    }
+
     public ParserBuilder newState(JBlock block) {
         ElementParserBuilderImpl b = new ElementParserBuilderImpl(this, false, name);
         states.add(b);
@@ -209,6 +213,23 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         }
         
         block.add(invocation);
+        
+        return b;
+    }
+
+    public ElementParserBuilder newState(JType type, String varName) {
+        JBlock block = codeBlock;
+        ElementParserBuilderImpl b = new ElementParserBuilderImpl(this, false, name);
+        states.add(b);
+        
+        JMethod nextMethod = b.getMethod();
+        
+        JInvocation invocation = JExpr.invoke(nextMethod).arg(xsrVar).arg(rtContextVar);
+        for (JVar v : b.variables) {
+            invocation.arg(v);
+        }
+        
+        block.decl(type, varName, invocation);
         
         return b;
     }
