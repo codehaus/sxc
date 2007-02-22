@@ -78,7 +78,7 @@ public class DroolsXPathEvaluatorFactory {
             builder.addPrefix(entry.getKey(), entry.getValue());
         }
         if (workingMemory == null && ruleBase == null && packageStream == null) {
-            throw new RuntimeException();
+            throw new RuntimeException("You must set either the WorkingMemory, RuleBase, or PackageStream properties.");
         }
         if (packageStream != null) {
             // process package stream
@@ -133,8 +133,7 @@ public class DroolsXPathEvaluatorFactory {
             } else if (ruleElement instanceof EvalCondition) {
                 // ignore
             } else {
-                System.out.println("ruleElement = " + ruleElement);
-                throw new RuntimeException("");
+                throw new RuntimeException("Could not process rule element: " + ruleElement);
             }
         }
     }
