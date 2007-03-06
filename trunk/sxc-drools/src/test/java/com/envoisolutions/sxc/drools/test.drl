@@ -1,34 +1,12 @@
-package com.envoisolutions.caserta.xpath;
+// START SNIPPET: rules
+package com.envoisolutions.sxc.drools;
 
 import com.envoisolutions.sxc.xpath.XPathEvent;
 
-rule "Test"
-    when
-        XPathEvent( expression == "hello" ) or
-        XPathEvent( expression == "world" );
-        XPathEvent( expression == "hello" ) or
-        XPathEvent( expression == "world" );
-        eval ( true );
-        exists( XPathEvent() );
-        not( XPathEvent() );
-    then
-        System.out.println("Great Success! - " + drools.getRule().getName());
-end
-
-rule "Test2"
+rule "AddresTest"
     when
         event : XPathEvent( expression == "/order/address[@country]" );
     then
-        System.out.println("Great Success! - " + drools.getRule().getName());
+        System.out.println("Success! - " + drools.getRule().getName());
 end
-
-rule "Test3"
-    when
-        (XPathEvent( expression == "hello" ) and
-        XPathEvent( expression == "world" )) or
-        (XPathEvent( expression == "hello" ) and
-        XPathEvent( expression == "world" ));
-    then
-        System.out.println("Great Success! - " + drools.getRule().getName());
-end
-
+// END SNIPPET: rules
