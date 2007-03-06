@@ -149,7 +149,8 @@ public class SimpleXPathTest extends TestCase {
     
     
     public void testSimpleNamespaces() throws Exception {
-
+        System.setProperty("streax-xo.output.directory", "target/tmp-xpath");
+        
         XPathEventHandler idHandler = new XPathEventHandler() {
 
             public void onMatch(XPathEvent event) throws XMLStreamException {

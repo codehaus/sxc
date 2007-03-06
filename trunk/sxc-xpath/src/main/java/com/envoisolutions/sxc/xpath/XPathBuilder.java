@@ -280,6 +280,13 @@ public class XPathBuilder {
         namespaceContext.put(prefix, namespace);
     }
     
+    public void addAllPrefixes(Map<String, String> prefixes) {
+        if (namespaceContext == null) {
+            namespaceContext = new HashMap<String, String>();
+        }
+        namespaceContext.putAll(prefixes);
+    }
+    
     public static class ExpressionState {
         private JVar var;
         private ParserBuilder builder;
