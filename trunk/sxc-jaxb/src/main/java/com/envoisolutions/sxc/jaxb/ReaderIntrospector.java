@@ -240,7 +240,7 @@ public class ReaderIntrospector {
                 
                 handlePropertyAttribute(attBuilder, propVar, beanClass, propAt, target, set);
             } else {
-                System.out.println("Unknown Property " + prop.getName());
+                System.out.println("Unknown Property " + prop.getName() + " with type " + prop.getRawType());
             }
         }
         

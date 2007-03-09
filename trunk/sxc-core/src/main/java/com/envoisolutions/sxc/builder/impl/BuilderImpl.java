@@ -8,6 +8,9 @@ import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.Builder;
 import com.envoisolutions.sxc.builder.ElementParserBuilder;
 import com.envoisolutions.sxc.builder.ElementWriterBuilder;
+import com.envoisolutions.sxc.compiler.Compiler;
+import com.envoisolutions.sxc.compiler.JavacCompiler;
+import com.envoisolutions.sxc.util.Util;
 import com.sun.codemodel.JCodeModel;
 
 public class BuilderImpl implements Builder {
@@ -16,7 +19,8 @@ public class BuilderImpl implements Builder {
     private File file;
     private BuildContext buildContext;
     private ElementWriterBuilderImpl writerBuilder;
-
+    private Compiler compiler = new JavacCompiler();
+    
     public BuilderImpl() {
         this.buildContext = new BuildContext();
         parserBuilder = new ElementParserBuilderImpl(buildContext);
@@ -48,16 +52,17 @@ public class BuilderImpl implements Builder {
     }
     
     public Context compile() {
+        boolean delete = true;
+        File dir = null;
         if (file == null) {
             try {
                 String cdir = System.getProperty("streax-xo.output.directory");
-                
-                File dir;
                 
                 if (cdir == null) {
                     dir = File.createTempFile("compile", "");
                 } else {
                     dir = new File(cdir);
+                    delete = false;
                 }
 
                 dir.delete();
@@ -65,15 +70,29 @@ public class BuilderImpl implements Builder {
                 dir.mkdirs();
                 write(dir);
                 
-                dir.deleteOnExit();
+                
             } catch (IOException e) {
                 throw new BuildException(e);
             }
         }
         
-        ClassLoader cl = Compiler.compile(file);
+        ClassLoader cl = compiler.compile(file);
 
+        // Only delete if the output directory hasn't been set
+        if (delete && file == null) {
+            Util.delete(dir);
+        }
+        
         return new CompiledContext(cl, parserBuilder.readerClass.fullName(), writerBuilder.getWriterClass().fullName());
     }
+    
+    public Compiler getCompiler() {
+        return compiler;
+    }
 
+    public void setCompiler(Compiler compiler) {
+        this.compiler = compiler;
+    }
+
+    
 }

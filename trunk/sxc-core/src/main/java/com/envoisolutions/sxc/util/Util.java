@@ -4,11 +4,23 @@ import java.beans.BeanInfo;
 import java.beans.IntrospectionException;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
+import java.io.File;
 import java.lang.reflect.Type;
 
 import com.sun.codemodel.JMethod;
 
 public class Util {
+
+    public static void delete(File classDir) {
+        File[] files = classDir.listFiles();
+        if (files != null) {
+            for (File f : files) {
+                delete(f);
+            }
+        }
+        
+        classDir.delete();
+    }
     
     public static String getGetter(String name, Type type) {
         if (name.startsWith("_")) 

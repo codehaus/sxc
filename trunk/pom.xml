@@ -26,6 +26,7 @@
     <module>sxc-xpath</module>
     <module>sxc-jaxb</module>
     <module>sxc-drools</module>
+    <module>sxc-jaxb-bundle</module>
   </modules>
 
   <dependencyManagement>
@@ -93,6 +94,13 @@
     </pluginRepository>
   </pluginRepositories>
   <build>
+    <extensions>
+      <extension>
+        <groupId>org.apache.maven.wagon</groupId>
+        <artifactId>wagon-webdav</artifactId>
+        <version>1.0-beta-2</version>
+      </extension>
+    </extensions>
     <testResources>
       <testResource>
         <directory>src/test/java</directory>
@@ -108,6 +116,10 @@
           <source>1.5</source>
           <target>1.5</target>
         </configuration>
+      </plugin>
+      <plugin>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>2.3</version>
       </plugin>
     </plugins>
   </build>
@@ -141,3 +153,4 @@
     </site>
   </distributionManagement>
 </project>
+

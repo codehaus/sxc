@@ -1,4 +1,4 @@
-package com.envoisolutions.sxc.builder.impl;
+package com.envoisolutions.sxc.compiler;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -18,9 +18,12 @@ import org.apache.commons.jci.stores.ResourceStore;
 import org.apache.commons.jci.stores.ResourceStoreClassLoader;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 
-public class Compiler {
+public class EclipseCompiler implements Compiler {
+    /* (non-Javadoc)
+     * @see com.envoisolutions.sxc.builder.impl.ICompiler#compile(java.io.File)
+     */
     @SuppressWarnings("unchecked")
-    public final static ClassLoader compile(File dir) {
+    public ClassLoader compile(File dir) {
         EclipseJavaCompilerSettings settings = new EclipseJavaCompilerSettings();
         Map<Object, Object> map = settings.getMap();
         map.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_1_5);
