@@ -12,6 +12,7 @@ import com.envoisolutions.sxc.builder.ElementParserBuilder;
 import com.envoisolutions.sxc.builder.ParserBuilder;
 import com.envoisolutions.sxc.builder.impl.BuilderImpl;
 import com.envoisolutions.sxc.builder.impl.ElementParserBuilderImpl;
+import com.envoisolutions.sxc.util.XoXMLStreamReader;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JType;
@@ -20,7 +21,6 @@ import com.sun.codemodel.JVar;
 import junit.framework.TestCase;
 
 public class ParserBuilderTest extends TestCase {
-
     public void testBuilder() throws Exception {
         // START SNIPPET: parser
         // Create a Parser/Writer Builder 

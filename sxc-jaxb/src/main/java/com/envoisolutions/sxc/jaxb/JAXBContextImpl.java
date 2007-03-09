@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -50,7 +51,6 @@ public class JAXBContextImpl extends JAXBContext {
             
             WeakReference<JAXBContextImpl> ctx = contexts.get(clsSet);
             if (ctx != null) {
-                System.out.println("Found context match!");
                 return ctx.get();
             }
             
@@ -114,6 +114,7 @@ public class JAXBContextImpl extends JAXBContext {
         Class[] clsArray = classes.toArray(new Class[classes.size()]);
         JAXBContextImpl c = new JAXBContextImpl(clsArray, properties);
         contexts.put(classes, new WeakReference<JAXBContextImpl>(c));
+        System.out.println("classes " + Arrays.toString(clsArray));
         return c;
     }       
     

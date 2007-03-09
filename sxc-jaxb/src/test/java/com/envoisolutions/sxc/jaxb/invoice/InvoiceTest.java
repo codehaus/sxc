@@ -11,6 +11,7 @@ import org.w3c.dom.Document;
 
 import com.envoisolutions.sxc.jaxb.JAXBContextImpl;
 import com.envoisolutions.sxc.util.XoTestCase;
+import com.sun.xml.bind.v2.ContextFactory;
 
 import org.apache.cxf.courseware.invoice.Customer;
 import org.apache.cxf.courseware.invoice.Invoice;
@@ -63,7 +64,7 @@ public class InvoiceTest extends XoTestCase {
     }
     
     public void testJAXBContextUnmarshalReal() throws Exception {
-        JAXBContext ctx = JAXBContext.newInstance(new Class[] {Invoice.class});
+        JAXBContext ctx = ContextFactory.createContext(new Class[] {Invoice.class}, null);
         Invoice i = (Invoice) ctx.createUnmarshaller().unmarshal(
                           getClass().getResourceAsStream("invoice-2.xml"));
         assertNotNull(i);
