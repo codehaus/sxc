@@ -1,0 +1,48 @@
+<testSuite name="JAXB Write Performance" xmlns="http://www.sun.com/japex/testSuite">
+
+  <param name="japex.classPath" value="target/classes;target/test-classes;target/dependency/*.jar" />
+  <param name="japex.warmupTime" value="30" />
+  <param name="japex.runTime" value="30" />
+  <param name="japex.numberOfThreads" value="10" />
+  <param name="write" value="true" />
+
+  <driver name="Caserta">
+    <param name="Description" value="Caserta" />
+     <param name="japex.driverClass" value="com.envoisolutions.sxc.performance.SXCDriver" />
+  </driver>
+
+  <driver name="com.envoisolutions.caserta.performance.JAXBRIDriver">
+    <param name="Description" value="JAXB RI" />
+   <param name="japex.driverClass" value="com.envoisolutions.sxc.performance.JAXBRIDriver" />
+  </driver>
+
+  <testCase name="invoice.xml">
+    <param name="inputFile" value="src/test/invoice.xml" />
+    <param name="jaxbPackage" value="org.apache.cxf.courseware.invoice" />
+  </testCase>
+
+  <testCase name="intCollection-100.xml">
+    <param name="inputFile" value="src/test/intCollection-100.xml" />
+    <param name="jaxbPackage" value="com.envoisolutions.caserta" />
+  </testCase>
+
+  <testCase name="stringCollection-100.xml">
+    <param name="inputFile" value="src/test/stringCollection-100.xml" />
+    <param name="jaxbPackage" value="com.envoisolutions.caserta" />
+  </testCase>
+
+  <testCase name="intCollection-1.xml">
+    <param name="inputFile" value="src/test/intCollection-1.xml" />
+    <param name="jaxbPackage" value="com.envoisolutions.caserta" />
+  </testCase>
+
+  <testCase name="stringCollection-1.xml">
+    <param name="inputFile" value="src/test/stringCollection-1.xml" />
+    <param name="jaxbPackage" value="com.envoisolutions.caserta" />
+  </testCase>
+
+  <testCase name="simple.xml">
+    <param name="inputFile" value="src/test/simple.xml" />
+    <param name="jaxbPackage" value="com.envoisolutions.caserta" />
+  </testCase>
+</testSuite>

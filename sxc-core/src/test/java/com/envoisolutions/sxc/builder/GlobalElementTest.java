@@ -36,7 +36,7 @@ public class GlobalElementTest extends TestCase {
         body._return(var);
         
         // handle <id>
-        ParserBuilder globalBuilder = root.globalElement(new QName("global"));
+        ParserBuilder globalBuilder = root.expectGlobalElement(new QName("global"));
         JVar bal = globalBuilder.as(String.class);
         body = globalBuilder.getBody();
         body.add(JExpr.direct("context").invoke("put").arg(bal).arg(bal));

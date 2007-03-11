@@ -2,11 +2,13 @@ package com.envoisolutions.sxc.compiler;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.net.URLEncoder;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -107,9 +109,11 @@ public class JavacCompiler implements Compiler {
                     } else {
                         cp.append(File.pathSeparatorChar);
                     }
-                    cp.append(new File(u.toURI()).getAbsolutePath());
+                    String uStr = URLEncoder.encode(u.toString(), "UTF-8");
+                    System.out.println("Adding " + uStr);
+                    cp.append(new File(uStr).getAbsolutePath());
 
-                } catch (URISyntaxException e) {
+                } catch (UnsupportedEncodingException e) {
                     throw new BuildException("Invalid classpath URL: " + u.toString(), e);
                 }
             }

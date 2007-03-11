@@ -36,7 +36,6 @@ public abstract class AbstractParserBuilder implements ParserBuilder {
     boolean written;
     boolean required;
     JType returnType;
-    JVar assignReturnTo;
     JBlock codeBlock = new JBlock();
     
     static class Prop {
@@ -46,12 +45,6 @@ public abstract class AbstractParserBuilder implements ParserBuilder {
 
     public AbstractParserBuilder() throws BuildException {
     }
-
-    
-    public void assignReturnTo(JVar var) {
-        this.assignReturnTo = var;
-    }
-
 
     public JVar getXSR() {
         return xsrVar;
@@ -102,7 +95,11 @@ public abstract class AbstractParserBuilder implements ParserBuilder {
     
     public JVar passParentVariable(JVar parentVar) {
         variables.add(parentVar);
-        return method.param(parentVar.type(), "parent_" + parentVar.name());
+        String name = "parent_" + parentVar.name();
+//        if (!name.startsWith("_p_")) {
+//            name = "_p_" + name;
+//        }
+        return method.param(parentVar.type(), name);
     }
 
     public List<JVar> getVariables() {

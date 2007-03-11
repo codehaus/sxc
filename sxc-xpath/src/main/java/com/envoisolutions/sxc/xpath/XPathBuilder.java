@@ -241,7 +241,7 @@ public class XPathBuilder {
             if (n.getLocalPart().equals("*")) {
                 returnBuilder = elBuilder.expectAnyElement();
             } else if (globalElement) {
-                returnBuilder = elBuilder.globalElement(n);
+                returnBuilder = elBuilder.expectGlobalElement(n);
             } else {
                 returnBuilder = elBuilder.expectElement(n);
             }

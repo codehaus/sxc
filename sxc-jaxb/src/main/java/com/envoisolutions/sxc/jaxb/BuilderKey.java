@@ -21,9 +21,12 @@ package com.envoisolutions.sxc.jaxb;
 
 import javax.xml.namespace.QName;
 
+import org.jvnet.jaxb.reflection.model.runtime.RuntimePropertyInfo;
+
 class BuilderKey {
     QName type;
     Class parentClass;
+    RuntimePropertyInfo property;
     
     @Override
     public boolean equals(Object obj) {
@@ -31,7 +34,8 @@ class BuilderKey {
         
         if (key.type == null) return false;
         
-        return key.type.equals(type) && key.parentClass.equals(parentClass);
+        return key.type.equals(type) && key.parentClass.equals(parentClass) 
+            && property == key.property;
     }
     
     @Override
