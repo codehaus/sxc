@@ -71,6 +71,7 @@
               <tasks>
                 <taskdef classname="com.sun.tools.xjc.XJCTask" classpathref="maven.test.classpath"
                   name="xjc" />
+                <delete dir="${project.build.directory}/dependency" />
                 <mkdir dir="${project.build.directory}/generated-source" />
                 <xjc target="2.1" destdir="${basedir}/target/generated-source">
                   <schema includes="**/*.xsd" dir="${basedir}/src/test/schema" />
@@ -82,11 +83,17 @@
         </executions>
       </plugin>
       <plugin>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <configuration>
-          <source>1.5</source>
-          <target>1.5</target>
-        </configuration>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>2.0-alpha-1</version>
+        <executions>
+          <execution>
+            <phase>generate-test-sources</phase>
+            <goals>
+              <goal>copy-dependencies</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
