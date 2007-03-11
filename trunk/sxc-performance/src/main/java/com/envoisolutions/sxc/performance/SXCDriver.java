@@ -15,7 +15,6 @@ public class SXCDriver extends AbstractDriver {
         try {
             context = JAXBContextImpl.createContext(tc.getParam("jaxbPackage"), 
                                                     Thread.currentThread().getContextClassLoader(), null);
-            System.out.println("context " + context.getClass().getName());
         } catch (Exception e1) {
             System.err.println(e1.getMessage());
             e1.printStackTrace();
