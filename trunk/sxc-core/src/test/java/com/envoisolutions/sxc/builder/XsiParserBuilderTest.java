@@ -70,10 +70,10 @@ public class XsiParserBuilderTest extends TestCase {
     }
 
     private void addExpectXsis(ElementParserBuilder b) {
-        ElementParserBuilder nodeB = b.onXsiType(new QName(nodeNs, "Node"));
+        ElementParserBuilder nodeB = b.expectXsiType(new QName(nodeNs, "Node"));
         addExpectNode(nodeB);
         
-        ElementParserBuilder namedNodeB = b.onXsiType(new QName(nodeNs, "NamedNode"));
+        ElementParserBuilder namedNodeB = b.expectXsiType(new QName(nodeNs, "NamedNode"));
         addExpectNamedNode(namedNodeB);
     }
     
@@ -122,22 +122,22 @@ public class XsiParserBuilderTest extends TestCase {
         JVar var2 = b.getBody().decl(nodeClass, "node", JExpr._new(nodeClass));
         b.getBody().add(parentNodeVar2.invoke("getNode").invoke("add").arg(var2));
 
-        b.expectElement(new QName(nodeNs, "node"), childNodeBuilder);
+        b.expectElement(new QName(nodeNs, "node"), childNodeBuilder, var2);
     }
 
     private void handleXsiNode(ElementParserBuilder b, JVar parentNodeVar2) {
-        ElementParserBuilder nodeB = b.onXsiType(new QName(nodeNs, "Node"));
+        ElementParserBuilder nodeB = b.expectXsiType(new QName(nodeNs, "Node"));
         JVar parentNodeVar3 = nodeB.passParentVariable(parentNodeVar2);
         
         CodeBody body = nodeB.getBody();
         JVar var = body.decl(nodeClass, "node", JExpr._new(nodeClass));
         body.add(parentNodeVar3.invoke("getNode").invoke("add").arg(var));
         
-        nodeB.expectElement(new QName(nodeNs, "node"), childNodeBuilder);
+        nodeB.expectElement(new QName(nodeNs, "node"), childNodeBuilder, var);
     }
 
     private void handleXsiNamedNode(ElementParserBuilder b, JVar parentNodeVar2) {
-        ElementParserBuilder namedNodeB = b.onXsiType(new QName(nodeNs, "NamedNode"));
+        ElementParserBuilder namedNodeB = b.expectXsiType(new QName(nodeNs, "NamedNode"));
         JVar parentNodeVar3 = namedNodeB.passParentVariable(parentNodeVar2);
         
         CodeBody body = namedNodeB.getBody();
@@ -147,7 +147,7 @@ public class XsiParserBuilderTest extends TestCase {
         if (childNamedNodeBuilder == null) {
             namedNodeExpectChildNode(b, parentNodeVar3);
         } else {
-            namedNodeB.expectElement(new QName(nodeNs, "node"), childNamedNodeBuilder);
+            namedNodeB.expectElement(new QName(nodeNs, "node"), childNamedNodeBuilder, var);
         }
     }
 }

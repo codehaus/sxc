@@ -28,6 +28,19 @@
     <module>sxc-drools</module>
     <module>sxc-jaxb-bundle</module>
   </modules>
+<profiles>
+  <profile>
+    <id>performance</id>
+    <activation>
+      <property>
+        <name>performance</name>
+      </property>
+    </activation>
+    <modules>
+      <module>sxc-performance</module>
+    </modules>
+  </profile>
+</profiles>
 
   <dependencyManagement>
     <dependencies>

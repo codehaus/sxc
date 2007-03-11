@@ -21,8 +21,7 @@ public class EverythingAttributeTest extends XoTestCase {
     public void testJAXBContextUnmarshal() throws Exception {
         System.setProperty("streax-xo.output.directory", "target/tmp-jaxb");
         JAXBContextImpl ctx = JAXBContextImpl.createContext("com.everything", getClass().getClassLoader(), null);
-        
-        
+
         JAXBElement<AttributesType> a = (JAXBElement<AttributesType>) 
             ctx.createUnmarshaller().unmarshal(getClass().getResourceAsStream("everything-attribute.xml"));
         assertNotNull(a);

@@ -24,11 +24,6 @@ public interface ParserBuilder {
      * @return
      */
     JVar getXSR();
-
-    /** 
-     * Assigns the return value of this ElementParserBuilder to the specified variable. 
-     */
-    void assignReturnTo(JVar nodeVar);
     
     JVar passParentVariable(JVar parentVar);
 

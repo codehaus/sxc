@@ -105,16 +105,19 @@ public class JAXBContextImpl extends JAXBContext {
             }
         }
 
+        // Yeah, I have no idea what I'm doing here... need to look at javadocs
+        // on weakreferences.
         WeakReference<JAXBContextImpl> ctx = contexts.get(classes);
         if (ctx != null) {
-            System.out.println("Found context match!");
-            return ctx.get();
+            JAXBContextImpl c = ctx.get();
+            if (c != null) {
+                return c;
+            }
         }
         
         Class[] clsArray = classes.toArray(new Class[classes.size()]);
         JAXBContextImpl c = new JAXBContextImpl(clsArray, properties);
         contexts.put(classes, new WeakReference<JAXBContextImpl>(c));
-        System.out.println("classes " + Arrays.toString(clsArray));
         return c;
     }       
     

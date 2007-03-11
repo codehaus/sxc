@@ -46,7 +46,7 @@ public class WriterIntrospector {
     private Builder builder;
     private JCodeModel model;
     private Map<Class, QName> c2type = new HashMap<Class, QName>();    
-    private Map<BuilderKey, ElementWriterBuilder> type2Parser 
+    private Map<BuilderKey, ElementWriterBuilder> type2Writer 
         = new HashMap<BuilderKey, ElementWriterBuilder>();
     
     
@@ -201,16 +201,17 @@ public class WriterIntrospector {
         
         QName name = typeRef.getTagName();
         JBlock block = b.getCurrentBlock();
-        
+        JBlock origBlock = block;
+
         addType(c, target.getTypeName());
 
         String propName = JaxbUtil.getGetter(parentClass, propEl.getName(), rawType);
         
         JVar var = block.decl(rawJT, 
-                              propEl.getName(), 
+                              propEl.getName() + "_" + javify(name.getLocalPart()), 
                               b.getObject().invoke(propName));
 
-        JBlock origBlock = block;
+        
         if (!propEl.isRequired()) {
             JConditional nullCond = block._if(var.ne(JExpr._null()));
             block = nullCond._then();
@@ -224,7 +225,7 @@ public class WriterIntrospector {
         }
         
         if (propEl.isCollection()) {
-            JForEach each = block.forEach(jt, "_o", var);
+            JForEach each = block.forEach(getGenericType(rawType), "_o", var);
             JBlock newBody = each.body();
             b.setCurrentBlock(newBody);
             var = each.var();
@@ -247,7 +248,7 @@ public class WriterIntrospector {
             key.parentClass = parentClass;
             key.type = rci.getTypeName();
             
-            if (key.type == null || !type2Parser.containsKey(key)) {
+            if (key.type == null || !type2Writer.containsKey(key)) {
                 if (typeRef.isNillable()) {
                     valueBuilder.writeNilIfNull();
                 }
@@ -255,11 +256,11 @@ public class WriterIntrospector {
                 if (propEl.parent() != null) {
                     valueBuilder.moveTo(rootWriter);
                 } else {
-                    type2Parser.put(key, valueBuilder);
+                    type2Writer.put(key, valueBuilder);
                     add(valueBuilder, name, c, rci, false);
                 }
             } else {
-                    WriterBuilder builder2 = type2Parser.get(key);
+                    WriterBuilder builder2 = type2Writer.get(key);
                     
                     valueBuilder.moveTo(builder2);
             }
@@ -272,6 +273,10 @@ public class WriterIntrospector {
         }
         
         b.setCurrentBlock(origBlock);
+    }
+
+    private String javify(String localPart) {
+        return JavaUtils.makeNonJavaKeyword(localPart);
     }
 
     private void writeSimpleTypeElement(ElementWriterBuilder b, 
@@ -300,8 +305,8 @@ public class WriterIntrospector {
         } else if (c.equals(QName.class)) {
             writeQName(b, jt, nillable);  
         } else if (target instanceof RuntimeClassInfo) {
-            RuntimeClassInfo rci = (RuntimeClassInfo) target;
-            
+//            RuntimeClassInfo rci = (RuntimeClassInfo) target;
+//            
 //            writeProperties(rci, c, b);
             b.moveTo(rootWriter);
         } else {
@@ -489,6 +494,17 @@ public class WriterIntrospector {
         throw new IllegalStateException();
     }
     
+    private JType getGenericType(Type t) {
+        if (t instanceof ParameterizedType) {
+            ParameterizedType pt = (ParameterizedType) t;
+
+            Type[] actualTypes = pt.getActualTypeArguments();
+            for (Type actual : actualTypes) {
+                return getType(actual);
+            }
+        }
+        throw new IllegalStateException();
+    }
     private JType getType(Class<?> c) {
         return rootWriter.getCodeModel()._ref(c);
     }

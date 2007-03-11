@@ -9,6 +9,7 @@ import com.envoisolutions.sxc.builder.Builder;
 import com.envoisolutions.sxc.builder.ElementParserBuilder;
 import com.envoisolutions.sxc.builder.ElementWriterBuilder;
 import com.envoisolutions.sxc.compiler.Compiler;
+import com.envoisolutions.sxc.compiler.EclipseCompiler;
 import com.envoisolutions.sxc.compiler.JavacCompiler;
 import com.envoisolutions.sxc.util.Util;
 import com.sun.codemodel.JCodeModel;
@@ -19,7 +20,7 @@ public class BuilderImpl implements Builder {
     private File file;
     private BuildContext buildContext;
     private ElementWriterBuilderImpl writerBuilder;
-    private Compiler compiler = new JavacCompiler();
+    private Compiler compiler = new EclipseCompiler();
     
     public BuilderImpl() {
         this.buildContext = new BuildContext();
