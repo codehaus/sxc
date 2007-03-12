@@ -27,7 +27,7 @@
     <attribute name="anyURI" type="anyURI" />
     <attribute name="base64Binary" type="base64Binary" />
     <attribute name="boolean" type="boolean" />
-    <!-- attribute name="byte" type="byte" / -->
+    <attribute name="byte" type="byte" />
     <attribute name="date" type="date" />
     <attribute name="dateTime" type="dateTime" />
     <attribute name="decimal" type="decimal" />
@@ -39,7 +39,7 @@
     <attribute name="gMonthDay" type="gMonthDay" />
     <attribute name="gYear" type="gYear" />
     <attribute name="gYearMonth" type="gYearMonth" />
-    <!-- attribute name="hexBinary" type="hexBinary" / -->
+    <attribute name="hexBinary" type="hexBinary" />
     <attribute name="int" type="int" />
     <attribute name="integer" type="integer" />
     <attribute name="language" type="language" />

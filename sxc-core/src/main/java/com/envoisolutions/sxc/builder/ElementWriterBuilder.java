@@ -5,6 +5,7 @@ import javax.xml.namespace.QName;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JType;
+import com.sun.codemodel.JVar;
 
 public interface ElementWriterBuilder extends WriterBuilder {
     
@@ -31,5 +32,8 @@ public interface ElementWriterBuilder extends WriterBuilder {
     void writeAsInt();
 
     void writeAs(Class cls, boolean nillable);
+
+    void setObject(JVar object);
+
 
 }

@@ -81,10 +81,13 @@ public class XoXMLStreamReaderImpl implements XoXMLStreamReader {
         return Short.parseShort(getElementAsString());
     }
 
+    public byte getElementAsByte() throws XMLStreamException {
+        return Byte.parseByte(getElementAsString());
+    }
+    
     public String getElementAsString() throws XMLStreamException {
         return getElementText().trim();
     }
-
 
     public boolean getElementAsBoolean() throws XMLStreamException {
         String s = getElementAsString();

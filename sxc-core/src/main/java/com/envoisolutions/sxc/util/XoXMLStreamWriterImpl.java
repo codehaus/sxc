@@ -126,7 +126,10 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
     public void writeShort(short b) throws XMLStreamException {
         writeCharacters(Short.toString(b));
     }
-
+    public void writeByte(byte b) throws XMLStreamException {
+        writeCharacters(Byte.toString(b));
+    }
+    
     public void writeInt(int i) throws XMLStreamException {
         writeCharacters(Integer.toString(i));
     }

@@ -66,6 +66,8 @@ public class AttributeParserBuilderImpl extends AbstractParserBuilder {
             return createVar(long.class, Long.class);
         } else if (cls.equals(short.class) || cls.equals(Short.class)) {
             return createVar(short.class, Short.class);
+        } else if (cls.equals(byte.class) || cls.equals(Byte.class)) {
+            return createVar(byte.class, Byte.class);
         } else if (cls.equals(boolean.class) || cls.equals(Boolean.class)) {
             JExpression var = JExpr.direct("_attValue");
             JBlock b = method.body();

@@ -62,6 +62,10 @@ public class AbstractWriterBuilder {
         return objectVar;
     }
 
+    public void setObject(JVar var) {
+        this.objectVar = var;
+    }
+    
     public JVar getXSW() {
         return xswVar;
     }

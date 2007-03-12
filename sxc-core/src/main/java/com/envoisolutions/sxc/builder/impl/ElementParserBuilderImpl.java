@@ -43,6 +43,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
     QName name;
     private boolean valueType;
     private boolean checkXsiTypes = true;
+    private JInvocation methodInvocation;
     
     public ElementParserBuilderImpl(BuildContext buildContext) throws BuildException {
         this.buildContext = buildContext;
@@ -181,8 +182,10 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
             return createVar("getElementAsShort", Short.class, nillable);
         } else if (cls.equals(boolean.class) || cls.equals(Boolean.class)) {
             return createVar("getElementAsBoolean", Boolean.class, nillable);
+        }  else if (cls.equals(byte.class) || cls.equals(Byte.class)) {
+            return createVar("getElementAsByte", Byte.class, nillable);
         } 
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("Invalid type " + cls);
     }
 
     private JVar createVar(String value, Class<?> cls, boolean nillable) {
@@ -215,13 +218,20 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         JMethod nextMethod = b.getMethod();
         
         JInvocation invocation = JExpr.invoke(nextMethod).arg(xsrVar).arg(rtContextVar);
-        for (JVar v : b.variables) {
-            invocation.arg(v);
-        }
+        b.methodInvocation = invocation;
         
         block.add(invocation);
         
         return b;
+    }
+
+    @Override
+    public JVar passParentVariable(JVar parentVar) {
+        if (methodInvocation != null) {
+            methodInvocation.arg(parentVar);
+        }
+        
+        return super.passParentVariable(parentVar);
     }
 
     public JVar call(JType type, String varName, ElementParserBuilder builder) {

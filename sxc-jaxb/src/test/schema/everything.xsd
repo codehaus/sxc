@@ -33,7 +33,7 @@
       <element maxOccurs="1" minOccurs="1" name="anyURI" type="anyURI" />
       <element maxOccurs="1" minOccurs="1" name="base64Binary" type="base64Binary" />
       <element maxOccurs="1" minOccurs="1" name="boolean" type="boolean" />
-      <!-- element maxOccurs="1" minOccurs="1" name="byte" type="byte" / -->
+      <element maxOccurs="1" minOccurs="1" name="byte" type="byte" />
       <element maxOccurs="1" minOccurs="1" name="date" type="date" />
       <element maxOccurs="1" minOccurs="1" name="dateTime" type="dateTime" />
       <element maxOccurs="1" minOccurs="1" name="decimal" type="decimal" />
@@ -45,7 +45,7 @@
       <element maxOccurs="1" minOccurs="1" name="gMonthDay" type="gMonthDay" />
       <element maxOccurs="1" minOccurs="1" name="gYear" type="gYear" />
       <element maxOccurs="1" minOccurs="1" name="gYearMonth" type="gYearMonth" />
-      <!-- element maxOccurs="1" minOccurs="1" name="hexBinary" type="hexBinary" / -->
+      <element maxOccurs="1" minOccurs="1" name="hexBinary" type="hexBinary" />
       <element maxOccurs="1" minOccurs="1" name="int" type="int" />
       <element maxOccurs="1" minOccurs="1" name="integer" type="integer" />
       <element maxOccurs="1" minOccurs="1" name="language" type="language" />

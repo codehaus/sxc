@@ -21,7 +21,7 @@ package com.envoisolutions.sxc.jaxb;
 
 import javax.xml.namespace.QName;
 
-import org.jvnet.jaxb.reflection.model.runtime.RuntimePropertyInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimePropertyInfo;
 
 class BuilderKey {
     QName type;

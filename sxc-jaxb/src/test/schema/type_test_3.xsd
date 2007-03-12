@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xsd:schema xmlns:x3="http://apache.org/type_test/types3" xmlns:x2="http://apache.org/type_test/types2" xmlns:x1="http://apache.org/type_test/types1" xmlns:xalan="http://xml.apache.org/xslt" xmlns:jaxb="http://java.sun.com/xml/ns/jaxb" xmlns:wsse="http://schemas.xmlsoap.org/ws/2003/06/secext" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:itst="http://tests.iona.com/ittests" xmlns="http://www.w3.org/2001/XMLSchema" jaxb:version="2.0" targetNamespace="http://apache.org/type_test/types3" elementFormDefault="qualified">
+    <element name="sg01BaseElement_A" type="x3:sgBaseType_A"/>
+    <element name="sg01DerivedElement_B" type="x3:sgDerivedType_B" substitutionGroup="x3:sg01BaseElement_A" final="#all"/>
+    <element name="sg01DerivedElement_C" type="x3:sgDerivedType_C" substitutionGroup="x3:sg01BaseElement_A" final="#all"/>
+    <element name="sg02BaseElement_A" type="x3:sgBaseType_A"/>
+    <element name="sg02DerivedElement_B" type="x3:sgDerivedType_B" substitutionGroup="x3:sg02BaseElement_A" final="#all"/>
+    <element name="sg02DerivedElement_C" type="x3:sgDerivedType_C" substitutionGroup="x3:sg02BaseElement_A" final="#all"/>
+    <element name="sg03AbstractBaseElement_A" type="x3:sgBaseType_A" abstract="true"/>
+    <element name="sg03DerivedElement_B" type="x3:sgDerivedType_B" substitutionGroup="x3:sg03AbstractBaseElement_A" final="#all"/>
+    <element name="sg03DerivedElement_C" type="x3:sgDerivedType_C" substitutionGroup="x3:sg03AbstractBaseElement_A" final="#all"/>
+    <element name="sg04NillableBaseElement_A" type="x3:sgBaseType_A" nillable="true"/>
+    <element name="sg04DerivedElement_B" type="x3:sgDerivedType_B" substitutionGroup="x3:sg04NillableBaseElement_A" final="#all"/>
+    <element name="sg04DerivedElement_C" type="x3:sgDerivedType_C" substitutionGroup="x3:sg04NillableBaseElement_A" final="#all"/>
+    <element name="RecEl" type="x3:RecElType"/>
+    <element name="RecElNext" type="x3:RecElNextType"/>
+    <element name="RecOuter" type="x3:RecOuterType"/>
+    <element name="RecOuterNext" type="x3:RecOuterNextType"/>
+    <element name="RecInner" type="x3:RecInnerType"/>
+    <element name="RecInnerNext" type="x3:RecInnerNextType"/>
+    <element name="RecMostInner" type="x3:RecMostInnerType"/>
+    <element name="RecMostInnerNext" type="x3:RecMostInnerNextType"/>
+    <complexType name="OccuringStruct">
+        <sequence minOccurs="1" maxOccurs="5">
+	    <element name="varFloat" type="xsd:float"/>
+	    <element name="varInt" type="xsd:int" minOccurs="0"/>
+	    <element name="varString" type="xsd:string"/>
+	</sequence>
+        <attribute name="varAttrib" type="xsd:string"/>
+    </complexType>
+    <complexType name="OccuringStruct1">
+        <sequence minOccurs="0" maxOccurs="unbounded">
+	    <element name="varFloat" type="xsd:float" nillable="true"/>
+	    <element name="varInt" type="xsd:int" minOccurs="1" maxOccurs="10"/>
+	    <element name="varString" type="xsd:string"/>
+	</sequence>
+    </complexType>
+    <complexType name="OccuringStruct2">
+        <sequence>
+	    <element name="varFloat" type="xsd:float"/>
+	    <sequence minOccurs="2" maxOccurs="5">
+		<element name="varInt" type="xsd:int"/>
+		<element name="varString" type="xsd:string"/>
+	    </sequence>
+	</sequence>
+    </complexType>
+    <complexType name="StructWithNillableStruct">
+        <sequence>
+            <element name="varInteger" type="int"/>
+            <sequence minOccurs="0">
+                <element name="varInt" type="xsd:int"/>
+                <element name="varFloat" type="xsd:float"/>
+            </sequence>
+        </sequence>
+    </complexType>
+    <complexType name="StructWithOccuringStruct">
+        <sequence>
+            <element name="varInteger" type="int"/>
+            <sequence minOccurs="0" maxOccurs="unbounded">
+                <element name="varInt" type="xsd:int"/>
+                <element name="varFloat" type="xsd:float"/>
+            </sequence>
+        </sequence>
+    </complexType>
+    <complexType name="OccuringChoice">
+        <choice minOccurs="1" maxOccurs="5">
+	    <element name="varFloat" type="xsd:float"/>
+	    <element name="varInt" type="xsd:int"/>
+	    <element name="varString" type="xsd:string"/>
+	</choice>
+        <attribute name="varAttrib" type="xsd:string"/>
+    </complexType>
+    <complexType name="OccuringChoice1">
+        <choice minOccurs="0" maxOccurs="unbounded">
+	    <element name="varFloat" type="xsd:float" nillable="true"/>
+            <!-- Multiple occuring elements in Choice not supported in
+                 code generation for reflection - Bug #6151
+            <element name="varInt" type="xsd:int" minOccurs="1" maxOccurs="10" />
+            -->
+	    <element name="varInt" type="xsd:int"/>
+	</choice>
+    </complexType>
+    <complexType name="OccuringChoice2">
+        <choice minOccurs="0">
+	    <element name="varInt" type="xsd:int"/>
+	    <element name="varString" type="xsd:string"/>
+	</choice>
+    </complexType>
+    <complexType name="StructWithNillableChoice">
+        <sequence>
+            <element name="varInteger" type="int"/>
+            <choice minOccurs="0">
+                <element name="varInt" type="xsd:int"/>
+                <element name="varString" type="xsd:string"/>
+            </choice>
+        </sequence>
+    </complexType>
+    <complexType name="StructWithOccuringChoice">
+        <sequence>
+            <element name="varInteger" type="int"/>
+            <choice minOccurs="0" maxOccurs="unbounded">
+                <element name="varInt" type="xsd:int"/>
+                <element name="varString" type="xsd:string"/>
+            </choice>
+        </sequence>
+    </complexType>
+    <complexType name="sgBaseType_A">
+        <sequence>
+            <element name="varInt" type="unsignedLong"/>
+        </sequence>
+    </complexType>
+    <complexType name="sgDerivedType_B">
+        <complexContent>
+            <extension base="x3:sgBaseType_A">
+                <sequence>
+                    <element name="varString" type="string"/>
+                </sequence>
+            </extension>
+        </complexContent>
+    </complexType>
+    <complexType name="sgDerivedType_C">
+        <complexContent>
+            <extension base="x3:sgBaseType_A">
+                <sequence>
+                    <element name="varFloat" type="double"/>
+                </sequence>
+            </extension>
+        </complexContent>
+    </complexType>
+    <complexType name="StructWithSubstitutionGroup">
+        <sequence>
+            <element ref="x3:sg01BaseElement_A"/>
+        </sequence>
+    </complexType>
+    <complexType name="StructWithSubstitutionGroupAbstract">
+        <sequence>
+            <element ref="x3:sg03AbstractBaseElement_A"/>
+        </sequence>
+    </complexType>
+    <complexType name="StructWithSubstitutionGroupNil">
+        <sequence>
+            <element ref="x3:sg04NillableBaseElement_A"/>
+        </sequence>
+    </complexType>
+    <complexType name="StructWithMultipleSubstitutionGroups">
+        <sequence>
+            <element name="varFloat" type="double"/>
+            <element ref="x3:sg01BaseElement_A"/>
+            <element name="varInt" type="unsignedLong"/>
+            <element ref="x3:sg02BaseElement_A"/>
+            <element name="varString" type="string"/>
+        </sequence>
+    </complexType>
+    <complexType name="ChoiceWithSubstitutionGroup">
+        <choice>
+            <element ref="x3:sg01BaseElement_A"/>
+            <element name="varInt" type="unsignedLong"/>
+        </choice>
+    </complexType>
+    <complexType name="ChoiceWithSubstitutionGroupAbstract">
+        <choice>
+            <element ref="x3:sg03AbstractBaseElement_A"/>
+            <element name="varInt" type="unsignedLong"/>
+        </choice>
+    </complexType>
+    <complexType name="ChoiceWithSubstitutionGroupNil">
+        <choice>
+            <element ref="x3:sg04NillableBaseElement_A"/>
+            <element name="varInt" type="unsignedLong" nillable="true"/>
+        </choice>
+    </complexType>
+    <complexType name="RecElType">
+        <sequence>
+            <element name="varInt" type="int"/>
+            <element ref="x3:RecElNext"/>
+        </sequence>
+    </complexType>
+    <complexType name="RecElNextType">
+        <sequence>
+            <element ref="x3:RecEl" minOccurs="0" maxOccurs="unbounded"/>
+        </sequence>
+    </complexType>
+    <complexType name="RecOuterType">
+        <sequence>
+            <element name="varInt" type="int"/>
+            <element ref="x3:RecMostInner" minOccurs="0" maxOccurs="unbounded"/>
+            <element ref="x3:RecInner" minOccurs="0" maxOccurs="unbounded"/>
+            <element ref="x3:RecOuterNext"/>
+        </sequence>
+    </complexType>
+    <complexType name="RecOuterNextType">
+        <sequence>
+            <element ref="x3:RecOuter" minOccurs="0" maxOccurs="unbounded"/>
+        </sequence>
+    </complexType>
+    <complexType name="RecInnerType">
+        <sequence>
+            <element name="varInt" type="int"/>
+            <element ref="x3:RecMostInner" minOccurs="0" maxOccurs="unbounded"/>
+            <element ref="x3:RecInnerNext"/>
+        </sequence>
+    </complexType>
+    <complexType name="RecInnerNextType">
+        <sequence>
+            <element ref="x3:RecInner" minOccurs="0" maxOccurs="unbounded"/>
+        </sequence>
+    </complexType>
+    <complexType name="RecMostInnerType">
+        <sequence>
+            <element name="varInt" type="int"/>
+            <element ref="x3:RecMostInnerNext"/>
+        </sequence>
+    </complexType>
+    <complexType name="RecMostInnerNextType">
+        <sequence>
+            <element ref="x3:RecMostInner" minOccurs="0" maxOccurs="unbounded"/>
+        </sequence>
+    </complexType>
+    <complexType name="MRecSeqA">
+        <sequence>
+            <element name="varIntA" type="int"/>
+            <element name="seqB" type="x3:MRecSeqB" minOccurs="0" maxOccurs="unbounded"/>
+        </sequence>
+    </complexType>
+    <complexType name="MRecSeqB">
+        <sequence>
+            <element name="varIntB" type="int"/>
+            <element name="seqA" type="x3:MRecSeqA"/>
+        </sequence>
+    </complexType>
+    <complexType name="MRecSeqC">
+        <sequence>
+            <element name="varIntC" type="int"/>
+            <element name="seqDs" type="x3:ArrayOfMRecSeqD"/>
+        </sequence>
+    </complexType>
+    <complexType name="ArrayOfMRecSeqD">
+        <sequence>
+            <element name="seqD" type="x3:MRecSeqD" minOccurs="0" maxOccurs="unbounded"/>
+        </sequence>
+    </complexType>
+    <complexType name="MRecSeqD">
+        <sequence>
+            <element name="varIntD" type="int"/>
+            <element name="seqC" type="x3:MRecSeqC"/>
+        </sequence>
+    </complexType>
+</xsd:schema>

@@ -1,5 +1,6 @@
 package com.envoisolutions.sxc.jaxb;
 
+import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.math.BigDecimal;
@@ -13,12 +14,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
 import javax.xml.datatype.Duration;
 import javax.xml.datatype.XMLGregorianCalendar;
 import javax.xml.namespace.QName;
 
+import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.Builder;
+import com.envoisolutions.sxc.builder.CodeBody;
+import com.envoisolutions.sxc.builder.ElementParserBuilder;
 import com.envoisolutions.sxc.builder.ElementWriterBuilder;
 import com.envoisolutions.sxc.builder.WriterBuilder;
 import com.envoisolutions.sxc.util.Base64;
@@ -27,18 +32,22 @@ import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JConditional;
 import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JForEach;
+import com.sun.codemodel.JMod;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
-
-import org.jvnet.jaxb.reflection.model.runtime.RuntimeAttributePropertyInfo;
-import org.jvnet.jaxb.reflection.model.runtime.RuntimeClassInfo;
-import org.jvnet.jaxb.reflection.model.runtime.RuntimeElementInfo;
-import org.jvnet.jaxb.reflection.model.runtime.RuntimeElementPropertyInfo;
-import org.jvnet.jaxb.reflection.model.runtime.RuntimeNonElement;
-import org.jvnet.jaxb.reflection.model.runtime.RuntimePropertyInfo;
-import org.jvnet.jaxb.reflection.model.runtime.RuntimeTypeInfoSet;
-import org.jvnet.jaxb.reflection.model.runtime.RuntimeTypeRef;
+import com.sun.xml.bind.v2.model.core.Adapter;
+import com.sun.xml.bind.v2.model.runtime.RuntimeAttributePropertyInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeClassInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeElementInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeElementPropertyInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeEnumLeafInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeNonElement;
+import com.sun.xml.bind.v2.model.runtime.RuntimePropertyInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeTypeInfoSet;
+import com.sun.xml.bind.v2.model.runtime.RuntimeTypeRef;
+import com.sun.xml.bind.v2.model.runtime.RuntimeValuePropertyInfo;
 
 public class WriterIntrospector {
     private ElementWriterBuilder rootWriter;
@@ -49,6 +58,8 @@ public class WriterIntrospector {
     private Map<BuilderKey, ElementWriterBuilder> type2Writer 
         = new HashMap<BuilderKey, ElementWriterBuilder>();
     
+    private Map<Class, JVar> adapters = new HashMap<Class, JVar>();
+    private int adapterCount = 0;
     
     public WriterIntrospector(Builder b, RuntimeTypeInfoSet set) throws JAXBException {
         this.builder = b;
@@ -76,9 +87,19 @@ public class WriterIntrospector {
             
             ElementWriterBuilder instcWriter = 
                 rootWriter.newCondition(rootWriter.getObject()._instanceof(jt), jt);
-            writeSimpleTypeElement(instcWriter, rei.getContentType(), true, c, c, jt);
+            writeSimpleTypeElement(instcWriter, rei.getContentType(), null, true, c, c, jt);
 
             c2type.put(c, q);
+        }
+        
+        for (Map.Entry<Class, ? extends RuntimeEnumLeafInfo> e : set.enums().entrySet()) {
+            Class c = e.getKey();
+            RuntimeEnumLeafInfo info = e.getValue();
+            JType jt = model._ref(c);
+            
+            ElementWriterBuilder instcWriter = 
+                rootWriter.newCondition(rootWriter.getObject()._instanceof(jt), jt);
+            writeSimpleTypeElement(instcWriter, info, null, true, c, c, jt);
         }
     }
 
@@ -167,9 +188,12 @@ public class WriterIntrospector {
                 RuntimeAttributePropertyInfo propAt = (RuntimeAttributePropertyInfo) prop;
                 
                 Type rawType = propAt.getRawType();
-
                 Class c = (Class) propAt.getTarget().getType();
-                JType jt = getType(c);
+                if (rawType instanceof Class) { 
+                    c = (Class) rawType;
+                }
+                
+                JType jt = getType(rawType);
                 
                 String propName = JaxbUtil.getGetter(parentClass, propAt.getName(), rawType);
                 
@@ -178,7 +202,31 @@ public class WriterIntrospector {
                                             jt, 
                                             classBuilder.getObject().invoke(propName));
                 
-                writeSimpleTypeAttribute(atBuilder, rawType, c, jt);
+                if (propAt.isCollection()) {
+                    System.err.println("Writer: attribute lists are not supported yet!");
+                } else {
+                    writeSimpleTypeAttribute(atBuilder, rawType, c, jt);
+                }
+            } else if (prop instanceof RuntimeValuePropertyInfo) {
+                RuntimeValuePropertyInfo propv = (RuntimeValuePropertyInfo) prop;
+                
+                Type rawType = propv.getRawType();
+                Class c = (Class) propv.getTarget().getType();
+                JType jt = getType(rawType);
+
+                JVar var = classBuilder.getCurrentBlock().decl(jt, 
+                                                               prop.getName(),
+                                                               classBuilder.getObject().invoke("getValue"));
+                
+                writeSimpleTypeElement(classBuilder, 
+                                       propv.getTarget(), 
+                                       propv.getAdapter(),
+                                       var, true, rawType, c, jt);
+            } else {
+                System.err.println("Writer: Unknown Property " + prop.getName() 
+                                   + " with type " + prop.getRawType()
+                                   + " on " + parentClass
+                                   + " for " + prop.getClass().getName());
             }
         }
         
@@ -234,11 +282,15 @@ public class WriterIntrospector {
             rawJT = jt;
         }
 
-        ElementWriterBuilder valueBuilder = b.writeElement(name, jt, var);
+        ElementWriterBuilder valueBuilder = b.writeElement(name, rawJT, var);
         
         if (target.isSimpleType()) {
+            if (rawType instanceof Class) {
+                c = (Class) rawType;
+            }
             writeSimpleTypeElement(valueBuilder, 
                                    target,
+                                   propEl.getAdapter(),
                                    typeRef.isNillable(), 
                                    rawType, c, jt);
         } else if (target instanceof RuntimeClassInfo) {
@@ -265,7 +317,7 @@ public class WriterIntrospector {
                     valueBuilder.moveTo(builder2);
             }
         } else {
-            System.err.println("Unknown type " + c);
+            System.err.println("Writer: Unknown type " + c);
         }
         
         if (propEl.isCollection()) {
@@ -281,36 +333,83 @@ public class WriterIntrospector {
 
     private void writeSimpleTypeElement(ElementWriterBuilder b, 
                                         RuntimeNonElement target, 
+                                        Adapter<Type, Class> adapter,
                                         boolean nillable,
                                         Type rawType, 
                                         Class c, 
                                         JType jt) {
-        if(c.equals(String.class) 
+        writeSimpleTypeElement(b, target, adapter, b.getObject(), nillable, rawType, c, jt);
+    }
+    
+    private void writeSimpleTypeElement(ElementWriterBuilder b, 
+                                        RuntimeNonElement target, 
+                                        Adapter<Type, Class> adapter,
+                                        JVar object,
+                                        boolean nillable,
+                                        Type rawType, 
+                                        Class c, 
+                                        JType jt) {
+        
+        if (adapter != null) {
+            JVar adapterVar = getAdapter(adapter);
+            JBlock block = b.getCurrentBlock();
+            JVar valueVar = block.decl(model.ref(String.class), "value", adapterVar.invoke("marshal").arg(object));
+            
+            JBlock writeNil = block._if(object.eq(JExpr._null()))._then();
+            if (nillable) {
+                writeNil.add(b.getXSW().invoke("writeXsiNil"));
+            }
+            writeNil._return();
+            
+            block.add(b.getXSW().invoke("writeCharacters").arg(valueVar));
+        } else if(c.equals(String.class) 
             || c.equals(Integer.class)
             || c.equals(Double.class)
             || c.equals(Boolean.class)
             || c.equals(Float.class)
             || c.equals(Short.class)
             || c.equals(Long.class)
+            || c.equals(Byte.class)
             || c.isPrimitive()) {
+            JVar orig = b.getObject();
+            b.setObject(object);
             b.writeAs(c, nillable);
+            b.setObject(orig);
         } else if (c.equals(XMLGregorianCalendar.class)) {
-            writePropertyWithMethodInvoke(b, jt, "toXMLFormat", nillable);
+            writePropertyWithMethodInvoke(b, object, jt, "toXMLFormat", nillable);
         } else if (c.isEnum()) {
-            writePropertyWithMethodInvoke(b, jt, "value", nillable);
+            try {
+                Method method = c.getMethod("value", new Class[0]);
+                
+                Class<?> readAs = method.getReturnType();
+                JType valueType = model._ref(readAs);
+                
+                JBlock block = b.getCurrentBlock();
+                JBlock writeNil = block._if(object.eq(JExpr._null()))._then();
+                if (nillable) {
+                    writeNil.add(b.getXSW().invoke("writeXsiNil"));
+                }
+                writeNil._return();
+                
+                JVar valueVar = block.decl(valueType, "_enum", object.invoke("value"));
+                
+                writeSimpleTypeElement(b, target, adapter, valueVar, nillable, readAs, readAs, valueType);
+            } catch (Exception e) {
+                throw new BuildException(e);
+            }
         } else if (c.equals(BigInteger.class) || c.equals(BigDecimal.class) || c.equals(Duration.class)) {
-            writePropertyWithMethodInvoke(b, jt, "toString", nillable);
+            writePropertyWithMethodInvoke(b, object, jt, "toString", nillable);
         } else if (c.equals(byte[].class)) {
-            writeBase64Binary(b, jt, nillable);  
+            writeBase64Binary(b, object, jt, nillable);  
         } else if (c.equals(QName.class)) {
-            writeQName(b, jt, nillable);  
+            writeQName(b, object, jt, nillable);  
         } else if (target instanceof RuntimeClassInfo) {
 //            RuntimeClassInfo rci = (RuntimeClassInfo) target;
 //            
 //            writeProperties(rci, c, b);
             b.moveTo(rootWriter);
         } else {
-            System.out.println("Could not map! " + c);
+            System.err.println("Writer: Could not map! " + c);
         }
     }
     
@@ -325,6 +424,7 @@ public class WriterIntrospector {
             || c.equals(Float.class)
             || c.equals(Short.class)
             || c.equals(Long.class)
+            || c.equals(Byte.class)
             || c.isPrimitive()) {
             b.writeAs(c);
         } else if (c.equals(XMLGregorianCalendar.class)) {
@@ -338,21 +438,22 @@ public class WriterIntrospector {
         } else if (c.equals(QName.class)) {
             writeQNameAttribute(b, jt);  
         } else {
-            System.out.println("Could not map! " + c);
+            System.err.println("Writer: Could not map! " + c);
         }
     }
 
     private void writePropertyWithMethodInvoke(WriterBuilder b, 
+                                               JVar object,
                                                JType t, 
                                                String method, 
                                                boolean nillable) {
         JBlock block = b.getCurrentBlock();
 
-        JConditional cond = block._if(b.getObject().ne(JExpr._null()));
+        JConditional cond = block._if(object.ne(JExpr._null()));
         JBlock nullBlock = cond._then();
         b.setCurrentBlock(nullBlock);
         JVar var = nullBlock.decl(model._ref(String.class), "_o", 
-                                  b.getObject().invoke(method));
+                                  object.invoke(method));
         
         if (nillable) {
             JConditional cond2 = cond._then()._if(var.ne(JExpr._null()));
@@ -360,7 +461,7 @@ public class WriterIntrospector {
             JBlock elseblock = cond._else();
             JBlock elseblock2 = cond2._else();
             
-            b.setCurrentBlock(elseblock2);
+            b.setCurrentBlock(cond2._then());
             
             elseblock.add(b.getXSW().invoke("writeXsiNil"));
             elseblock2.add(b.getXSW().invoke("writeXsiNil"));
@@ -396,23 +497,23 @@ public class WriterIntrospector {
         b.setCurrentBlock(block);
     }
     private void writeBase64Binary(WriterBuilder b, 
+                                   JVar var,
                                    JType t, 
                                    boolean nillable) {
         JBlock block = b.getCurrentBlock();
 
-        JConditional cond = block._if(b.getObject().ne(JExpr._null()));
+        JConditional cond = block._if(var.ne(JExpr._null()));
         JBlock nullBlock = cond._then();
         b.setCurrentBlock(nullBlock);
         
         if (nillable) {
-            JBlock elseblock = cond._else();
-            b.setCurrentBlock(elseblock);
+            b.setCurrentBlock(cond._then());
             
-            elseblock.add(b.getXSW().invoke("writeXsiNil"));
+            cond._else().add(b.getXSW().invoke("writeXsiNil"));
         }
         
         JClass buType = (JClass) model._ref(BinaryUtils.class);
-        b.getCurrentBlock().add(buType.staticInvoke("encodeBytes").arg(b.getXSW()).arg(b.getObject()));
+        b.getCurrentBlock().add(buType.staticInvoke("encodeBytes").arg(b.getXSW()).arg(var));
         
         b.setCurrentBlock(block);
     }
@@ -438,11 +539,12 @@ public class WriterIntrospector {
     }
     
     private void writeQName(ElementWriterBuilder b,
+                            JVar var,
                             JType t, 
                             boolean nillable) {
         JBlock block = b.getCurrentBlock();
 
-        JConditional cond = block._if(b.getObject().ne(JExpr._null()));
+        JConditional cond = block._if(var.ne(JExpr._null()));
         JBlock nullBlock = cond._then();
         b.setCurrentBlock(nullBlock);
         
@@ -455,7 +557,7 @@ public class WriterIntrospector {
             elseblock.add(b.getXSW().invoke("writeXsiNil"));
         }
         
-        b.getCurrentBlock().add(b.getXSW().invoke("writeQName").arg(b.getObject()));
+        b.getCurrentBlock().add(b.getXSW().invoke("writeQName").arg(var));
         
         b.setCurrentBlock(block);
     }
@@ -477,6 +579,18 @@ public class WriterIntrospector {
         b.setCurrentBlock(block);
     }
     
+    private JVar getAdapter(Adapter<Type, Class> adapter) {
+        Class c = adapter.adapterType;
+        JVar var = adapters.get(c);
+        if (var == null) {
+            JType jt = model._ref(c);
+            var = rootWriter.getWriterClass().field(JMod.STATIC, jt, "adapter" + adapterCount++,
+                                              JExpr._new(jt));
+            adapters.put(c, var);
+        }
+        return var;
+    }
+
     private JType getType(Type t) {
         if (t instanceof Class) {
             return rootWriter.getCodeModel()._ref((Class)t);

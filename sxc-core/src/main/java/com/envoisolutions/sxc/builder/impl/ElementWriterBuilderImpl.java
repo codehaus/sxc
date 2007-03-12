@@ -121,7 +121,7 @@ public class ElementWriterBuilderImpl extends AbstractWriterBuilder implements E
     public WriterBuilder writeAttribute(QName name, JType type, JExpression var) {
         JMethod m = buildContext.getNextWriteMethod(writerClass);
         addBasicArgs(m);
-        JVar newObjectVar = m.param(type, "_" + type.name().replaceAll("\\[", "").replace("]", ""));
+        JVar newObjectVar = m.param(type, "_obj");
         
         JBlock block = attributeBlock;
         block.invoke(m).arg(xswVar).arg(rtContextVar).arg(JExpr.cast(type, var));
@@ -177,8 +177,10 @@ public class ElementWriterBuilderImpl extends AbstractWriterBuilder implements E
             writeAs("writeLong");
         } else if (cls.equals(float.class) || cls.equals(Float.class)) {
             writeAs("writeFloat");
+        } else if (cls.equals(byte.class) || cls.equals(Byte.class)) {
+            writeAs("writeByte");
         } else {
-            throw new UnsupportedOperationException();
+            throw new UnsupportedOperationException("Unsupported type " + cls.getName());
         }
     }
 

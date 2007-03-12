@@ -49,6 +49,9 @@ public class AttributeWriterBuilder extends AbstractWriterBuilder implements Wri
         } else if (cls.equals(float.class) || cls.equals(Float.class)) {
             JClass jc = (JClass) model._ref(Float.class);
             writeAs(block, jc.staticInvoke("toString").arg(objectVar));
+        } else if (cls.equals(byte.class) || cls.equals(Byte.class)) {
+            JClass jc = (JClass) model._ref(Byte.class);
+            writeAs(block, jc.staticInvoke("toString").arg(objectVar));
         } else {
             throw new UnsupportedOperationException();
         }
