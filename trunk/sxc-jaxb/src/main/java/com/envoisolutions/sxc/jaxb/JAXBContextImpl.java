@@ -6,7 +6,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -28,21 +27,19 @@ import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.Builder;
 import com.envoisolutions.sxc.builder.impl.BuilderImpl;
 import com.sun.xml.bind.v2.ContextFactory;
-
-import org.jvnet.jaxb.reflection.JAXBModelFactory;
-import org.jvnet.jaxb.reflection.model.runtime.RuntimeTypeInfoSet;
+import com.sun.xml.bind.v2.model.runtime.RuntimeTypeInfoSet;
 
 public class JAXBContextImpl extends JAXBContext {
     
     private Context context;
     private Marshaller marshaller;
     private UnmarshallerImpl unmarshaller;
-    private JAXBContext riContext;
+    private com.sun.xml.bind.v2.runtime.JAXBContextImpl riContext;
 
     private static Map<Set<Class>, WeakReference<JAXBContextImpl>> contexts
          = new HashMap<Set<Class>, WeakReference<JAXBContextImpl>>();
     
-    public static JAXBContext createContext( Class[] classes, Map<String, Object> properties ) throws JAXBException {
+    public static synchronized JAXBContextImpl createContext( Class[] classes, Map<String, Object> properties ) throws JAXBException {
         try {
             Set<Class> clsSet = new HashSet<Class>();
             for (Class c : clsSet) {
@@ -64,7 +61,7 @@ public class JAXBContextImpl extends JAXBContext {
         }
     }
     
-    public static JAXBContextImpl createContext(String contextPath, ClassLoader classLoader, Map<String, Object> properties)
+    public static synchronized JAXBContextImpl createContext(String contextPath, ClassLoader classLoader, Map<String, Object> properties)
         throws JAXBException, BuildException, IOException {
         Set<Class> classes = new HashSet<Class>();
         StringTokenizer tokens = new StringTokenizer(contextPath,":");
@@ -123,9 +120,10 @@ public class JAXBContextImpl extends JAXBContext {
     
     public JAXBContextImpl(Class[] clsArray, Map<String, Object> properties) 
         throws JAXBException {
-        this.riContext = ContextFactory.createContext(clsArray, properties);
+        this.riContext = (com.sun.xml.bind.v2.runtime.JAXBContextImpl)
+            ContextFactory.createContext(clsArray, properties);
         
-        init(JAXBModelFactory.create(clsArray));
+        init(JAXBModelFactory.create(riContext, clsArray));
     }
     
     public JAXBContextImpl(Class... classes) throws JAXBException, BuildException, IOException {
@@ -133,9 +131,10 @@ public class JAXBContextImpl extends JAXBContext {
     }
     
     public JAXBContextImpl(Map<String, Object> properties, Class... classes) throws JAXBException, BuildException, IOException {
-        this.riContext = ContextFactory.createContext(classes, properties);
+        this.riContext = (com.sun.xml.bind.v2.runtime.JAXBContextImpl)
+            ContextFactory.createContext(classes, properties);
         
-        init(JAXBModelFactory.create(classes));
+        init(JAXBModelFactory.create(riContext, classes));
     }
 
     private final void init(RuntimeTypeInfoSet set) throws JAXBException {

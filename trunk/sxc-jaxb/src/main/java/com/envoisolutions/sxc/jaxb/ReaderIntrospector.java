@@ -1,6 +1,8 @@
 package com.envoisolutions.sxc.jaxb;
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Type;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.HashMap;
@@ -9,12 +11,14 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.xml.bind.JAXBElement;
+import javax.xml.bind.annotation.adapters.CollapsedStringAdapter;
 import javax.xml.datatype.DatatypeConfigurationException;
 import javax.xml.datatype.DatatypeFactory;
 import javax.xml.datatype.Duration;
 import javax.xml.datatype.XMLGregorianCalendar;
 import javax.xml.namespace.QName;
 
+import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.Builder;
 import com.envoisolutions.sxc.builder.CodeBody;
 import com.envoisolutions.sxc.builder.ElementParserBuilder;
@@ -27,22 +31,25 @@ import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JTryBlock;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
-
-import org.jvnet.jaxb.reflection.model.runtime.RuntimeAttributePropertyInfo;
-import org.jvnet.jaxb.reflection.model.runtime.RuntimeClassInfo;
-import org.jvnet.jaxb.reflection.model.runtime.RuntimeElement;
-import org.jvnet.jaxb.reflection.model.runtime.RuntimeElementInfo;
-import org.jvnet.jaxb.reflection.model.runtime.RuntimeElementPropertyInfo;
-import org.jvnet.jaxb.reflection.model.runtime.RuntimeNonElement;
-import org.jvnet.jaxb.reflection.model.runtime.RuntimePropertyInfo;
-import org.jvnet.jaxb.reflection.model.runtime.RuntimeReferencePropertyInfo;
-import org.jvnet.jaxb.reflection.model.runtime.RuntimeTypeInfoSet;
-import org.jvnet.jaxb.reflection.model.runtime.RuntimeTypeRef;
+import com.sun.xml.bind.v2.model.core.Adapter;
+import com.sun.xml.bind.v2.model.runtime.RuntimeAttributePropertyInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeClassInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeElement;
+import com.sun.xml.bind.v2.model.runtime.RuntimeElementInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeElementPropertyInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeEnumLeafInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeNonElement;
+import com.sun.xml.bind.v2.model.runtime.RuntimePropertyInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeReferencePropertyInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeTypeInfoSet;
+import com.sun.xml.bind.v2.model.runtime.RuntimeTypeRef;
+import com.sun.xml.bind.v2.model.runtime.RuntimeValuePropertyInfo;
 
 public class ReaderIntrospector {
     private ElementParserBuilder rootReader;
@@ -56,6 +63,8 @@ public class ReaderIntrospector {
     private Map<RuntimeElementInfo, ElementParserBuilder> ref2Parser 
         = new HashMap<RuntimeElementInfo, ElementParserBuilder>();
     private RuntimeTypeInfoSet set;
+    private Map<Class, JVar> adapters = new HashMap<Class, JVar>();
+    private int adapterCount = 0;
     
     public ReaderIntrospector(Builder builder2, RuntimeTypeInfoSet set) {
         this.builder = builder2;
@@ -80,9 +89,7 @@ public class ReaderIntrospector {
             
             if (!ref2Parser.containsKey(rei)) {
                 createRefParser(rootReader, q, rei);
-            } else {
-                // return the result of the exiting parser;
-            }
+            } 
         }        
         
         Map<Class, ? extends RuntimeClassInfo> beans = set.beans();
@@ -92,13 +99,31 @@ public class ReaderIntrospector {
                 add(rootReader, cls, e.getValue());
             }
         }
-//        
-//        for (Map.Entry<Class, ? extends RuntimeEnumLeafInfo> e : set.enums().entrySet()) {
-//            Class cls = e.getKey();
-//            JType enumType = model._ref(cls);
-//            
-//            
-//        }
+        
+        for (Map.Entry<Class, ? extends RuntimeEnumLeafInfo> e : set.enums().entrySet()) {
+            Class cls = e.getKey();
+            RuntimeEnumLeafInfo info = e.getValue();
+            
+            ElementParserBuilder enumBuilder;
+            if (info.isElement()) {
+                enumBuilder = rootReader.expectElement(info.getElementName());
+            } else {
+                enumBuilder = rootReader.expectXsiType(info.getTypeName());
+            }
+            JExpression toSet = handleElement(enumBuilder, info, null, cls, true);
+            
+            CodeBody cb = enumBuilder.getBody();
+            
+            JType type = model._ref(cls);
+            JType jaxbElementType = model._ref(JAXBElement.class);
+            JType qnameType = model._ref(QName.class);
+            JVar qname = cb.decl(qnameType, "_xname", JExpr.direct("reader").invoke("getName"));
+            
+            enumBuilder.getBody()._return(jaxbElementType,
+                                          JExpr._new(jaxbElementType)
+                                          .arg(qname).arg(JExpr.dotclass((JClass) type))
+                                          .arg(toSet));
+        }
     }
 
 
@@ -107,7 +132,7 @@ public class ReaderIntrospector {
         ref2Parser.put(rei, elBuilder);
 
         Class<?> c = (Class<?>) rei.getContentType().getType();
-        JExpression expression = handleElement(elBuilder, rei.getContentType(), c, !c.isPrimitive());
+        JExpression expression = handleElement(elBuilder, rei.getContentType(), null, c, !c.isPrimitive());
         
         CodeBody cb = elBuilder.getBody();
         
@@ -192,7 +217,6 @@ public class ReaderIntrospector {
                                   ElementParserBuilder classBuilder, 
                                   JVar beanVar) {
         for (RuntimePropertyInfo prop : info.getProperties()) {
-            
             if (prop instanceof RuntimeElementPropertyInfo) {
                 // Handle an reference to a <complexType>
                 RuntimeElementPropertyInfo propEl = (RuntimeElementPropertyInfo) prop;
@@ -209,7 +233,11 @@ public class ReaderIntrospector {
                 ParserBuilder attBuilder = classBuilder.expectAttribute(propAt.getXmlName());
                 JVar propVar = attBuilder.passParentVariable(beanVar);
                 
-                handlePropertyAttribute(attBuilder, propVar, beanClass, propAt, target, set);
+                if (propAt.isCollection()) {
+                    System.err.println("Reader: attribute lists are not supported yet!");
+                } else {
+                    handlePropertyAttribute(attBuilder, propVar, beanClass, propAt, target, set);
+                }
             } else if (prop instanceof RuntimeReferencePropertyInfo) {
                 
                 // Handle a reference to an <element> or choice of elements
@@ -220,17 +248,31 @@ public class ReaderIntrospector {
                     ElementParserBuilder elBuilder = classBuilder.expectElement(rei.getElementName());
                     JVar beanVar2 = elBuilder.passParentVariable(beanVar);
                     
-                    // We should already have a builder for our element
-                    // REVISIT: in circular situations this might not be true
                     ElementParserBuilder objBuilder = ref2Parser.get(rei);
+                    if (objBuilder == null) {
+                        createRefParser(rootReader, rei.getElementName(), rei);
+                        objBuilder = ref2Parser.get(rei);
+                    } 
                     
                     JVar retVar = elBuilder.call(model._ref(rei.getType()), "_ret", objBuilder);
                     elBuilder.getBody()._return(retVar);
                     doSet(elBuilder.getBody().getBlock(), beanVar2, beanClass, propRef, retVar);
+
                 }
+            } else if (prop instanceof RuntimeValuePropertyInfo) {
+                System.err.println("Reader: Attributes on simple types are not supported yet!");
+                RuntimeValuePropertyInfo propv = (RuntimeValuePropertyInfo) prop;
+                
+                ElementParserBuilder builder2 = (ElementParserBuilder) classBuilder.newState();
+                JVar var = builder2.passParentVariable(beanVar);
+                
+                handlePropertyElement(builder2, var, beanClass, propv, propv.getTarget().getTypeName(), 
+                                      true, propv.getTarget());
             } else {
-                System.err.println("Unknown Property " + prop.getName() 
-                                   + " with type " + prop.getRawType() + " for " + prop.getClass().getName());
+                System.err.println("Reader: Unknown Property " + prop.getName() 
+                                   + " with type " + prop.getRawType()
+                                   + " on " + beanClass
+                                   + " for " + prop.getClass().getName());
             }
         }
         
@@ -304,12 +346,18 @@ public class ReaderIntrospector {
 //            builder.setRequired(true);
 //        }
         
-        Class<?> c = (Class<?>) target.getType();
+        Adapter<Type,Class> adapter = propEl.getAdapter();
+        Class c = (Class) target.getType();
 
         if (target.isSimpleType()) {
+            Type type = propEl.getRawType();
+            if (type instanceof Class) {
+                c = (Class) type;
+            }
+            
             // type to create for this property
             JBlock block = builder.getBody().getBlock();
-            JExpression toSet = handleElement(builder, target, c, nillable);
+            JExpression toSet = handleElement(builder, target, adapter, c, nillable);
 
             if (toSet != null)
                 doSet(block, bean, beanClass, propEl, toSet); 
@@ -326,36 +374,51 @@ public class ReaderIntrospector {
                 doSet(propBuilder.getBody().getBlock(), bean, beanClass, propEl, exp);
             }
         } else {
-            System.err.println("Unknown type " + c + " - " + target.getClass());
+            System.err.println("Reader: Unknown type " + c + " - " + target.getClass());
         }
-           
-        
     }
     
     private JExpression handleElement(ElementParserBuilder builder, 
                                       RuntimeNonElement target,
+                                      Adapter<Type, Class> adapter, 
                                       Class c,
                                       boolean nillable) {
         JExpression toSet;
-        if (c.equals(String.class) 
+        if (adapter != null) {
+             JVar adapterVar = getAdapter(adapter);
+             toSet = adapterVar.invoke("unmarshal").arg(builder.getXSR().invoke("getElementText"));
+        } else if ((c.equals(String.class)
             || c.equals(Integer.class)
             || c.equals(Double.class)
             || c.equals(Float.class)
             || c.equals(Short.class)
             || c.equals(Long.class)
             || c.equals(Boolean.class)
-            || c.isPrimitive()) {
+            || c.equals(Byte.class)
+            || c.isPrimitive())
+            && c != byte.class) {
             toSet = builder.as(c, nillable);
         } else if (c.equals(XMLGregorianCalendar.class)) {
             toSet = handleXMLGregorianCalendar(builder, builder.as(String.class, nillable));
         } else if (c.equals(Duration.class)) {
             toSet = handleDuration(builder, builder.as(String.class, nillable));
         } else if (c.isEnum()) {
-            toSet = handleEnum(builder, builder.as(String.class, nillable), c);
+            try {
+                Method method = c.getMethod("value", new Class[0]);
+                
+                Class<?> readAs = method.getReturnType();
+                JExpression val = handleElement(builder, target, adapter, readAs, nillable);
+                
+                toSet = handleEnum(builder, val, c);
+            } catch (Exception e) {
+                throw new BuildException(e);
+            }
         } else if (c.equals(byte[].class)) {
             JClass buType = (JClass) builder.getCodeModel()._ref(BinaryUtils.class);
             
             toSet = buType.staticInvoke("decodeAsBytes").arg(builder.getXSR());
+        } else if (c.equals(Byte.class) || c.equals(byte.class)) {
+            toSet = JExpr.cast(model.BYTE, builder.getXSR().invoke("getElementAsInt"));
         } else if (c.equals(BigDecimal.class)) {
             JType bdType = builder.getCodeModel()._ref(BigDecimal.class);
             JVar var = builder.as(String.class, nillable);
@@ -376,12 +439,24 @@ public class ReaderIntrospector {
             
             return var;
         } else {
-            
-            System.err.println("Could not map simple type " + c);
+            System.err.println("Reader: Could not map simple type " + c);
             return JExpr._null();
         }
         return toSet;
     }
+
+    private JVar getAdapter(Adapter<Type, Class> adapter) {
+        Class c = adapter.adapterType;
+        JVar var = adapters.get(c);
+        if (var == null) {
+            JType jt = model._ref(c);
+            var = rootReader.getReaderClass().field(JMod.STATIC, jt, "adapter" + adapterCount++,
+                                              JExpr._new(jt));
+            adapters.put(c, var);
+        }
+        return var;
+    }
+
 
     private void handlePropertyAttribute(ParserBuilder builder, 
                                          JVar bean, 
@@ -393,12 +468,12 @@ public class ReaderIntrospector {
             builder.setRequired(true);
         }
 
-        Class<?> c = (Class<?>)target.getType();
+        Class<?> c = (Class<?>)propEl.getRawType();
         
         if (target.isSimpleType()) {
             // type to create for this property
             JBlock block = builder.getBody().getBlock();
-            JExpression toSet = handleAttribute(builder, target, c);
+            JExpression toSet = handleAttribute(builder, target, propEl.getAdapter(), c);
 
             if (toSet != null)
                 doSet(block, bean, beanClass, propEl, toSet);
@@ -410,16 +485,22 @@ public class ReaderIntrospector {
     
     private JExpression handleAttribute(ParserBuilder builder, 
                                         RuntimeNonElement target,
+                                        Adapter<Type, Class> adapter,
                                         Class c) {
         JExpression toSet;
-        if (c.equals(String.class) 
+        if (adapter != null) {
+            JVar adapterVar = getAdapter(adapter);
+            toSet = adapterVar.invoke("unmarshal").arg(JExpr.direct("_attValue"));
+       } else if ((c.equals(String.class)
             || c.equals(Integer.class)
             || c.equals(Double.class)
             || c.equals(Float.class)
             || c.equals(Short.class)
             || c.equals(Long.class)
             || c.equals(Boolean.class)
-            || c.isPrimitive()) {
+            || c.equals(Byte.class)
+            || c.isPrimitive())
+            && c != byte.class) {
             toSet = builder.as(c);
         } else if (c.equals(XMLGregorianCalendar.class)) {
             toSet = handleXMLGregorianCalendar(builder, builder.as(String.class));
@@ -445,6 +526,7 @@ public class ReaderIntrospector {
         } else if (target instanceof RuntimeClassInfo) {
             RuntimeClassInfo rci = (RuntimeClassInfo) target;
             rci.getProperties();
+            System.err.println("Could not map attribute " + c);
             return JExpr._null();
         } else {
             
@@ -475,7 +557,7 @@ public class ReaderIntrospector {
         return dtf.invoke("newDuration").arg(value);
     }
     
-    private JExpression handleEnum(ParserBuilder builder, JVar value, Class c) {
+    private JExpression handleEnum(ParserBuilder builder, JExpression value, Class c) {
         JBlock body =  builder.getBody().getBlock();
         JClass jc = (JClass) builder.getCodeModel()._ref(c);
         

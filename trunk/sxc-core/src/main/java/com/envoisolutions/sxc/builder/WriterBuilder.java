@@ -4,6 +4,8 @@ import javax.xml.namespace.QName;
 
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 
 public interface WriterBuilder {
@@ -13,7 +15,7 @@ public interface WriterBuilder {
      * @return
      */
     JVar getObject();
-
+    
     /**
      * Get the XMLStreamWriter.
      * @return
@@ -21,6 +23,8 @@ public interface WriterBuilder {
     JVar getXSW();
 
     JCodeModel getCodeModel();
+
+    JDefinedClass getWriterClass();
 
     JBlock getCurrentBlock();
 
@@ -41,4 +45,5 @@ public interface WriterBuilder {
      * @param cls
      */
     void writeAs(Class cls);
+    
 }

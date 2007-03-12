@@ -12,6 +12,7 @@ public interface XoXMLStreamWriter extends XMLStreamWriter {
     void writeFloat(float b) throws XMLStreamException;
     void writeShort(short b) throws XMLStreamException;
     void writeDouble(double b) throws XMLStreamException;
+    void writeByte(byte b) throws XMLStreamException;
     void writeQName(QName q) throws XMLStreamException;
     String getQNameAsString(QName q) throws XMLStreamException;
     

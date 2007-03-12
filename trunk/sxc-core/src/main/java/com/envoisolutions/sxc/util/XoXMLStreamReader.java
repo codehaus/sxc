@@ -16,6 +16,7 @@ public interface XoXMLStreamReader extends XMLStreamReader {
     float getElementAsFloat() throws XMLStreamException;
     long getElementAsLong() throws XMLStreamException;
     boolean getElementAsBoolean() throws XMLStreamException;
+    byte getElementAsByte() throws XMLStreamException;
     String getElementAsString() throws XMLStreamException;
     
     QName getElementAsQName() throws XMLStreamException;
