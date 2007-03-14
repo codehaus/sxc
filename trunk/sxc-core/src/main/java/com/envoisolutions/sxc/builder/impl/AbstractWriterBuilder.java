@@ -46,7 +46,7 @@ public class AbstractWriterBuilder {
     }
 
     public void moveTo(WriterBuilder builder) {
-        method.body().add(
+        currentBlock.add(
             JExpr._this().invoke(((AbstractWriterBuilder)builder).method)
                 .arg(xswVar).arg(rtContextVar).arg(JExpr.cast(objectVar.type(), objectVar)));
     }

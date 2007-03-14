@@ -1,23 +1,18 @@
 package com.envoisolutions.sxc.compiler;
 
+import com.envoisolutions.sxc.builder.BuildException;
+import com.envoisolutions.sxc.util.Util;
+
 import java.io.File;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.net.URLEncoder;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
-
-import javax.xml.namespace.QName;
-
-import com.envoisolutions.sxc.builder.BuildException;
-import com.envoisolutions.sxc.util.Util;
-import com.sun.org.apache.xalan.internal.xsltc.compiler.CompilerException;
 
 public class JavacCompiler implements Compiler {
 
@@ -103,18 +98,19 @@ public class JavacCompiler implements Compiler {
         boolean first = true;
         for (URL u : urls) {
             if (u.getProtocol().equals("file")) {
-                try {
-                    if (first) {
-                        first = false;
-                    } else {
-                        cp.append(File.pathSeparatorChar);
-                    }
-                    String uStr = URLEncoder.encode(u.toString(), "UTF-8");
-                    System.out.println("Adding " + uStr);
-                    cp.append(new File(uStr).getAbsolutePath());
+  
+                if (first) {
+                    first = false;
+                } else {
+                    cp.append(File.pathSeparatorChar);
+                }
 
-                } catch (UnsupportedEncodingException e) {
-                    throw new BuildException("Invalid classpath URL: " + u.toString(), e);
+                String uStr = u.toString().replaceAll(" ", "%20");
+                try {
+                    File file = new File(new URI(uStr));
+                    cp.append(file.getAbsolutePath());
+                } catch (URISyntaxException e) {
+                    
                 }
             }
         }

@@ -7,6 +7,6 @@ public class Main {
         // NOTE: BE SURE TO RUN THIS WITH APPROPRIATE JVM ARGUMENTS, LIKE -server
         System.setProperty("streax-xo.output.directory", "target/tmp-jaxb");
         Japex.main(new String[] { "src/japex/write.xml" });
-        Japex.main(new String[] { "src/japex/read.xml" });
+//        Japex.main(new String[] { "src/japex/read.xml" });
     }
 }

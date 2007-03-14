@@ -1,5 +1,6 @@
 package com.envoisolutions.sxc.performance;
 
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -52,10 +53,18 @@ public abstract class AbstractDriver extends JapexDriverBase {
         String xifName = getParam("xmlInputFactory");
         if (xifName != null) {
             try {
-                System.err.println("Loading XMLInputFactory " + xifName);
                 xif = (XMLInputFactory)getClass().getClassLoader().loadClass(xifName).newInstance();
             } catch (Exception e) {
                 System.err.println("Could not load XMLInputFactory: " + e.getClass().getName());
+            }
+        }
+        
+        String xofName = getParam("xmlOutputFactory");
+        if (xofName != null) {
+            try {
+                xof = (XMLOutputFactory)getClass().getClassLoader().loadClass(xofName).newInstance();
+            } catch (Exception e) {
+                System.err.println("Could not load XMLOutputFactory: " + e.getClass().getName());
             }
         }
         
@@ -114,7 +123,8 @@ public abstract class AbstractDriver extends JapexDriverBase {
                 unmarshaller.unmarshal(xsr);
                 xsr.close();
             } else {
-                XMLStreamWriter writer = xof.createXMLStreamWriter(new ByteArrayOutputStream());
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                XMLStreamWriter writer = xof.createXMLStreamWriter(new BufferedOutputStream(bos));
                 marshaller.marshal(object, writer);
                 writer.close();
             }

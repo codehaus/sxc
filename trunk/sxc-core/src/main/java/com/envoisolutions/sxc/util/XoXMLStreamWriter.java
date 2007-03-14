@@ -18,4 +18,6 @@ public interface XoXMLStreamWriter extends XMLStreamWriter {
     
     void writeXsiNil() throws XMLStreamException; 
     void writeXsiType(String namespace, String local) throws XMLStreamException;
+    
+    void writeAndDeclareIfUndeclared(String prefix, String namespace) throws XMLStreamException ;
 }

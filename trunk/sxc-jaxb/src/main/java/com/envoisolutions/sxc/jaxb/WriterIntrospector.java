@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
 import javax.xml.datatype.Duration;
 import javax.xml.datatype.XMLGregorianCalendar;
@@ -22,7 +21,6 @@ import javax.xml.namespace.QName;
 
 import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.Builder;
-import com.envoisolutions.sxc.builder.CodeBody;
 import com.envoisolutions.sxc.builder.ElementParserBuilder;
 import com.envoisolutions.sxc.builder.ElementWriterBuilder;
 import com.envoisolutions.sxc.builder.WriterBuilder;
@@ -32,7 +30,6 @@ import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JConditional;
 import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JForEach;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JType;
@@ -60,11 +57,13 @@ public class WriterIntrospector {
     
     private Map<Class, JVar> adapters = new HashMap<Class, JVar>();
     private int adapterCount = 0;
+    private RuntimeTypeInfoSet set;
     
     public WriterIntrospector(Builder b, RuntimeTypeInfoSet set) throws JAXBException {
         this.builder = b;
         rootWriter = this.builder.getWriterBuilder();
         this.model = rootWriter.getCodeModel();
+        this.set = set;
         
         // TODO sort classes by hierarchy
         List<Class> classes = getSortedClasses(set.beans().keySet());
@@ -73,9 +72,13 @@ public class WriterIntrospector {
         for (Class cls : classes) {
             JType jt = getType(cls);
             ElementWriterBuilder instcWriter = rootWriter.newCondition(rootWriter.getObject()._instanceof(jt), jt);
-            
-            add(instcWriter, cls, beans.get(cls));
+            RuntimeClassInfo rci = beans.get(cls);
+            add(instcWriter, cls, rci);
             instcWriter.getCurrentBlock()._return();
+            
+            if (!beans.get(cls).isElement()) {
+                c2type.put(cls, rci.getTypeName());
+            }
         }
 
         Map<QName, ? extends RuntimeElementInfo> elementMappings = set.getElementMappings(null);
@@ -100,6 +103,10 @@ public class WriterIntrospector {
             ElementWriterBuilder instcWriter = 
                 rootWriter.newCondition(rootWriter.getObject()._instanceof(jt), jt);
             writeSimpleTypeElement(instcWriter, info, null, true, c, c, jt);
+            
+            if (!info.isElement()) {
+                c2type.put(c, info.getTypeName());
+            }
         }
     }
 
@@ -131,7 +138,7 @@ public class WriterIntrospector {
             return;
         }
         
-        add(b, info.getElementName(), cls, info, false);
+        add(b, info.getElementName(), cls, info, false, false);
     }
     
     private void addComplexType(ElementWriterBuilder b, Class<?> cls, RuntimeClassInfo info) {
@@ -139,15 +146,15 @@ public class WriterIntrospector {
         
         addedXsiTypes.add(cls);
         
-        add(b, info.getTypeName(), cls, info, true);
+        add(b, info.getTypeName(), cls, info, true, true);
     }
 
     private void add(ElementWriterBuilder b, 
                      QName name, 
                      Class cls, 
                      RuntimeClassInfo info,
-                     boolean wrap) {
-        addType(cls, info.getTypeName());
+                     boolean wrap,
+                     boolean writeXsiType) {
         
         JType type = b.getCodeModel()._ref(cls);
         ElementWriterBuilder classBuilder;
@@ -161,11 +168,12 @@ public class WriterIntrospector {
 
             b.setCurrentBlock(block);
         } else {
-            if (info.getTypeName() != null) {
+            if (info.getTypeName() != null && writeXsiType) {
                 QName typeName = info.getTypeName();
                 b.getCurrentBlock().add(
                     b.getXSW().invoke("writeXsiType").arg(typeName.getNamespaceURI()).arg(typeName.getLocalPart()));
             }
+            
             classBuilder = b;
         }
         
@@ -182,7 +190,7 @@ public class WriterIntrospector {
                 RuntimeElementPropertyInfo propEl = (RuntimeElementPropertyInfo) prop;
                 
                 for (RuntimeTypeRef typeRef : propEl.getTypes()) {
-                    handleProperty(classBuilder, parentClass, propEl, typeRef);
+                    handlePropertyTypeRef(classBuilder, parentClass, propEl, typeRef);
                 }
             } else if (prop instanceof RuntimeAttributePropertyInfo) {
                 RuntimeAttributePropertyInfo propAt = (RuntimeAttributePropertyInfo) prop;
@@ -235,10 +243,12 @@ public class WriterIntrospector {
         }
     }
 
-    private void handleProperty(ElementWriterBuilder b, 
+    private void handlePropertyTypeRef(ElementWriterBuilder b, 
                                 Class parentClass, 
                                 RuntimeElementPropertyInfo propEl, 
                                 RuntimeTypeRef typeRef) {
+
+        
         RuntimeNonElement target = typeRef.getTarget();
         
         Type rawType = propEl.getRawType();
@@ -296,26 +306,25 @@ public class WriterIntrospector {
         } else if (target instanceof RuntimeClassInfo) {
             RuntimeClassInfo rci = (RuntimeClassInfo)target;
 
-            BuilderKey key = new BuilderKey();
-            key.parentClass = parentClass;
-            key.type = rci.getTypeName();
+            List<Class<?>> substTypes = getSubstitutionTypes(c);
+            JBlock origBlck = valueBuilder.getCurrentBlock();
             
-            if (key.type == null || !type2Writer.containsKey(key)) {
-                if (typeRef.isNillable()) {
-                    valueBuilder.writeNilIfNull();
-                }
-                
-                if (propEl.parent() != null) {
-                    valueBuilder.moveTo(rootWriter);
-                } else {
-                    type2Writer.put(key, valueBuilder);
-                    add(valueBuilder, name, c, rci, false);
+            if (typeRef.isNillable()) {
+                valueBuilder.writeNilIfNull();
+            }
+            
+            if (substTypes.size() > 1) {
+                for (Class<?> subCls : substTypes) {
+                    ElementWriterBuilder b2 = 
+                        (ElementWriterBuilder) valueBuilder.newCondition(valueBuilder.getObject()._instanceof(model._ref(subCls)), model._ref(subCls));
+                    
+                    writeClassWriter(parentClass, name, rci, subCls, b2);
                 }
             } else {
-                    WriterBuilder builder2 = type2Writer.get(key);
-                    
-                    valueBuilder.moveTo(builder2);
+                writeClassWriter(parentClass, name, rci, c, valueBuilder);
             }
+            
+            valueBuilder.setCurrentBlock(origBlck);
         } else {
             System.err.println("Writer: Unknown type " + c);
         }
@@ -325,6 +334,43 @@ public class WriterIntrospector {
         }
         
         b.setCurrentBlock(origBlock);
+    }
+
+    private void writeClassWriter(Class parentClass, QName name, RuntimeClassInfo rci, Class<?> subCls, ElementWriterBuilder b2) {
+        BuilderKey key = new BuilderKey();
+        key.parentClass = parentClass;
+        key.typeClass = subCls;
+        
+        if (!type2Writer.containsKey(key)) {
+            RuntimeClassInfo substRCI = set.beans().get(subCls);
+            type2Writer.put(key, b2);
+            add(b2, name, subCls, substRCI, false, subCls != rci.getClazz());
+        } else {
+            WriterBuilder builder2 = type2Writer.get(key);
+            
+            b2.moveTo(builder2);
+        }
+    }
+
+    private List<Class<?>> getSubstitutionTypes(Class<?> c) {
+        List<Class<?>> types = new ArrayList<Class<?>>();
+        Map<Class, ? extends RuntimeClassInfo> beans = set.beans();
+        for (Class c2 : beans.keySet()) {
+            if (c.isAssignableFrom(c2)) {
+                types.add(c2);
+            }
+        }
+        Collections.sort(types, new Comparator<Class<?>>() {
+
+            public int compare(Class<?> o1, Class<?> o2) {
+                if (o1 == o2) return 0;
+                
+                if (o1.isAssignableFrom(o2)) return 1;
+                
+                return -1;
+            }
+        });
+        return types;
     }
 
     private String javify(String localPart) {
@@ -403,11 +449,6 @@ public class WriterIntrospector {
             writeBase64Binary(b, object, jt, nillable);  
         } else if (c.equals(QName.class)) {
             writeQName(b, object, jt, nillable);  
-        } else if (target instanceof RuntimeClassInfo) {
-//            RuntimeClassInfo rci = (RuntimeClassInfo) target;
-//            
-//            writeProperties(rci, c, b);
-            b.moveTo(rootWriter);
         } else {
             System.err.println("Writer: Could not map! " + c);
         }

@@ -27,23 +27,46 @@ class BuilderKey {
     QName type;
     Class parentClass;
     RuntimePropertyInfo property;
-    
-    @Override
-    public boolean equals(Object obj) {
-        BuilderKey key = (BuilderKey) obj;
-        
-        if (key.type == null) return false;
-        
-        return key.type.equals(type) && key.parentClass.equals(parentClass) 
-            && property == key.property;
-    }
-    
+    public Class<?> typeClass;
+
     @Override
     public int hashCode() {
-        if (type != null) {
-            return type.hashCode() ^ parentClass.hashCode();
-        } else {
-            return parentClass.hashCode();
-        }
+        final int PRIME = 31;
+        int result = 1;
+        result = PRIME * result + ((parentClass == null) ? 0 : parentClass.hashCode());
+        result = PRIME * result + ((property == null) ? 0 : property.hashCode());
+        result = PRIME * result + ((type == null) ? 0 : type.hashCode());
+        result = PRIME * result + ((typeClass == null) ? 0 : typeClass.hashCode());
+        return result;
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        
+        final BuilderKey other = (BuilderKey)obj;
+        if (parentClass == null) {
+            if (other.parentClass != null)
+                return false;
+        } else if (!parentClass.equals(other.parentClass))
+            return false;
+        if (property == null) {
+            if (other.property != null)
+                return false;
+        } else if (!property.equals(other.property))
+            return false;
+        if (type == null) {
+            if (other.type != null)
+                return false;
+        } else if (!type.equals(other.type))
+            return false;
+        if (typeClass == null) {
+            if (other.typeClass != null)
+                return false;
+        } else if (!typeClass.equals(other.typeClass))
+            return false;
+        return true;
+    }
+
 }
