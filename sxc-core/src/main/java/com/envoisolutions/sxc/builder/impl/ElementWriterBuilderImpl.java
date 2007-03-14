@@ -73,7 +73,7 @@ public class ElementWriterBuilderImpl extends AbstractWriterBuilder implements E
         block._return();
         return new ElementWriterBuilderImpl(this, name, m, newObjectVar);
     }
-    
+
     public ElementWriterBuilder writeElement(QName name) {
         return writeElement(name, objectVar.type(), objectVar);
     }
@@ -90,7 +90,7 @@ public class ElementWriterBuilderImpl extends AbstractWriterBuilder implements E
 
         if (getParent() == null || getName() == null ||  
             !getName().getNamespaceURI().equals(name.getNamespaceURI())) {
-            block.add(xswVar.invoke("writeDefaultNamespace").arg(name.getNamespaceURI()));
+            block.add(xswVar.invoke("writeAndDeclareIfUndeclared").arg(JExpr.lit("")).arg(name.getNamespaceURI()));
         }
         
         JMethod m = buildContext.getNextWriteMethod(writerClass);

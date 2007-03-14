@@ -20,6 +20,14 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
         writeAttribute(prefix, XSI_NS, "nil", "true");
     }
     
+    public void writeAndDeclareIfUndeclared(String prefix, String namespace) throws XMLStreamException {
+        String ns = getPrefix(namespace);
+        if (ns == null) {
+            writeNamespace(prefix, namespace);
+            setPrefix(prefix, namespace);
+        }
+    }
+
     public void writeQName(QName q) throws XMLStreamException {
         String prefix = getUniquePrefix(q.getNamespaceURI(), true);
         if (prefix != "") {

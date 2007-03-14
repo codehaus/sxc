@@ -34,6 +34,4 @@ public interface ElementWriterBuilder extends WriterBuilder {
     void writeAs(Class cls, boolean nillable);
 
     void setObject(JVar object);
-
-
 }

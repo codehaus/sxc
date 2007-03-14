@@ -294,7 +294,7 @@ public class ReaderIntrospector {
         key.parentClass = beanClass;
         key.type = name;
         
-        if (beanClass != null && type2Parser.containsKey(key)) {
+        if (key.type != null && type2Parser.containsKey(key)) {
             ElementParserBuilder child = type2Parser.get(key);
             classBuilder.expectElement(name, child, beanVar);
             return;
