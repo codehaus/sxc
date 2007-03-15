@@ -117,6 +117,8 @@
         <directory>src/test/java</directory>
         <includes>
           <include>**/*.xml</include>
+          <include>**/*.index</include>
+          <include>**/*.drl</include>
         </includes>
       </testResource>
     </testResources>

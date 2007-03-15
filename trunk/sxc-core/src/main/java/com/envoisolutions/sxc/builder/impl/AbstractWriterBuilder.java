@@ -1,5 +1,8 @@
 package com.envoisolutions.sxc.builder.impl;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamException;
 
@@ -13,7 +16,7 @@ import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JVar;
 
-public class AbstractWriterBuilder {
+public abstract class AbstractWriterBuilder implements WriterBuilder {
 
     protected BuildContext buildContext;
     protected JCodeModel model;
@@ -25,7 +28,8 @@ public class AbstractWriterBuilder {
     protected JBlock currentBlock;
     protected ElementWriterBuilderImpl parent;
     protected QName name;
-
+    protected List<Class> exceptions = new ArrayList<Class>();
+    
     public AbstractWriterBuilder() {
         super();
     }
@@ -34,11 +38,20 @@ public class AbstractWriterBuilder {
         return "generated.sxc.Writer";
     }
 
-    protected void addBasicArgs(JMethod method) {
+    public void declareException(Class cls) {
+		exceptions.add(cls);
+		method._throws(cls);
+	}
+
+	protected void addBasicArgs(JMethod method) {
         xswVar = method.param(XoXMLStreamWriter.class, "writer");
         rtContextVar = method.param(Context.class, "context");
     
         method._throws(XMLStreamException.class);
+        
+        for (Class c : exceptions) {
+        	method._throws(c);
+        }
     }
 
     public JCodeModel getCodeModel() {

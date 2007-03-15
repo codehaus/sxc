@@ -1,7 +1,5 @@
 package com.envoisolutions.sxc.builder;
 
-import java.util.List;
-
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;

@@ -32,7 +32,6 @@ import javax.xml.validation.Schema;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
-
 import org.xml.sax.ContentHandler;
 
 import com.envoisolutions.sxc.Context;
@@ -42,6 +41,7 @@ import com.envoisolutions.sxc.util.XoXMLStreamWriterImpl;
 
 public class MarshallerImpl implements Marshaller {
 
+	public static final String MARSHALLER = "sxc.marshaller"; 
     JAXBContext jaxbContext;
     Context context;
     XMLOutputFactory xof = XMLOutputFactory.newInstance();
@@ -57,6 +57,7 @@ public class MarshallerImpl implements Marshaller {
         this.jaxbContext = jaxbContext;
         this.context = context;
         this.introspector = jaxbContext.createJAXBIntrospector();
+        context.put(MARSHALLER, this);
     }
 
     public <A extends XmlAdapter> A getAdapter(Class<A> arg0) {
@@ -190,6 +191,8 @@ public class MarshallerImpl implements Marshaller {
                     w.writeCharacters((String) o);
                 } else if (c == Boolean.class) {
                     w.writeBoolean((Boolean) o);
+                } else if (c == Byte.class) {
+                    w.writeByte((Byte) o);
                 } else if (c == Double.class) {
                     w.writeDouble((Double) o);
                 } else if (c == Float.class) {

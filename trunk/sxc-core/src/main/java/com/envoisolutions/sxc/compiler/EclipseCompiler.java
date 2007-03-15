@@ -5,8 +5,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import com.envoisolutions.sxc.builder.BuildException;
-
 import org.apache.commons.jci.compilers.AbstractJavaCompiler;
 import org.apache.commons.jci.compilers.CompilationResult;
 import org.apache.commons.jci.compilers.EclipseJavaCompiler;
@@ -17,6 +15,8 @@ import org.apache.commons.jci.stores.MemoryResourceStore;
 import org.apache.commons.jci.stores.ResourceStore;
 import org.apache.commons.jci.stores.ResourceStoreClassLoader;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+
+import com.envoisolutions.sxc.builder.BuildException;
 
 public class EclipseCompiler implements Compiler {
     /* (non-Javadoc)

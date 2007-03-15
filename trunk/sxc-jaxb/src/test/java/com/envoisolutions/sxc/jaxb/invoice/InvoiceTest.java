@@ -7,16 +7,15 @@ import javax.xml.bind.JAXBContext;
 import javax.xml.bind.Marshaller;
 import javax.xml.datatype.XMLGregorianCalendar;
 
+import org.apache.cxf.courseware.invoice.Customer;
+import org.apache.cxf.courseware.invoice.Invoice;
+import org.apache.cxf.courseware.invoice.InvoiceLine;
+import org.apache.cxf.courseware.invoice.SupportLevel;
 import org.w3c.dom.Document;
 
 import com.envoisolutions.sxc.jaxb.JAXBContextImpl;
 import com.envoisolutions.sxc.util.XoTestCase;
 import com.sun.xml.bind.v2.ContextFactory;
-
-import org.apache.cxf.courseware.invoice.Customer;
-import org.apache.cxf.courseware.invoice.Invoice;
-import org.apache.cxf.courseware.invoice.InvoiceLine;
-import org.apache.cxf.courseware.invoice.SupportLevel;
 
 public class InvoiceTest extends XoTestCase {
     public void testNoHeader() throws Exception {

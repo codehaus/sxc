@@ -1,13 +1,7 @@
 package com.envoisolutions.sxc.util;
 
-import java.beans.BeanInfo;
-import java.beans.IntrospectionException;
-import java.beans.Introspector;
-import java.beans.PropertyDescriptor;
 import java.io.File;
 import java.lang.reflect.Type;
-
-import com.sun.codemodel.JMethod;
 
 public class Util {
 

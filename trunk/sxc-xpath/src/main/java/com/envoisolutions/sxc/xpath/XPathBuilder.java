@@ -7,20 +7,6 @@ import java.util.Map;
 
 import javax.xml.namespace.QName;
 
-import com.envoisolutions.sxc.Context;
-import com.envoisolutions.sxc.builder.Builder;
-import com.envoisolutions.sxc.builder.CodeBody;
-import com.envoisolutions.sxc.builder.ElementParserBuilder;
-import com.envoisolutions.sxc.builder.ParserBuilder;
-import com.envoisolutions.sxc.builder.impl.BuilderImpl;
-import com.envoisolutions.sxc.xpath.impl.XPathEvaluatorImpl;
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JPrimitiveType;
-import com.sun.codemodel.JType;
-import com.sun.codemodel.JVar;
-
 import org.jaxen.JaxenHandler;
 import org.jaxen.expr.AllNodeStep;
 import org.jaxen.expr.EqualityExpr;
@@ -36,6 +22,19 @@ import org.jaxen.expr.XPathExpr;
 import org.jaxen.saxpath.Axis;
 import org.jaxen.saxpath.SAXPathException;
 import org.jaxen.saxpath.helpers.XPathReaderFactory;
+
+import com.envoisolutions.sxc.Context;
+import com.envoisolutions.sxc.builder.Builder;
+import com.envoisolutions.sxc.builder.CodeBody;
+import com.envoisolutions.sxc.builder.ElementParserBuilder;
+import com.envoisolutions.sxc.builder.ParserBuilder;
+import com.envoisolutions.sxc.builder.impl.BuilderImpl;
+import com.envoisolutions.sxc.xpath.impl.XPathEvaluatorImpl;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JPrimitiveType;
+import com.sun.codemodel.JType;
+import com.sun.codemodel.JVar;
 
 public class XPathBuilder {
     private Map<String,String> namespaceContext;

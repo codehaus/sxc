@@ -1,6 +1,7 @@
 package com.envoisolutions.sxc;
 
 import java.io.OutputStream;
+import java.util.Map;
 
 import javax.xml.stream.XMLOutputFactory;
 import javax.xml.stream.XMLStreamWriter;
@@ -27,5 +28,13 @@ public abstract class Writer {
         write(new XoXMLStreamWriterImpl(xsr), o);
     }
     
-    public abstract void write(XoXMLStreamWriter xw, Object o) throws Exception;
+    public void write(XMLStreamWriter xsr, Object o,  Map<String, Object> properties) throws Exception {
+        write(new XoXMLStreamWriterImpl(xsr), o, properties);
+    }    
+    
+    public void write(XoXMLStreamWriter xw, Object o) throws Exception {
+    	write(xw, o, null);
+    }
+    
+    public abstract void write(XoXMLStreamWriter xw, Object o, Map<String, Object> properties) throws Exception;
 }

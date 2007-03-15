@@ -1,8 +1,9 @@
 package com.envoisolutions.sxc.xpath;
 
+import java.io.InputStream;
+
 import javax.xml.stream.XMLStreamReader;
 import javax.xml.transform.Source;
-import java.io.InputStream;
 
 public interface XPathEvaluator {
     public void evaluate(XMLStreamReader reader) throws Exception;

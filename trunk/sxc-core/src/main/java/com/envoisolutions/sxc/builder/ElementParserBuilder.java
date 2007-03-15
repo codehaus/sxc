@@ -2,7 +2,6 @@ package com.envoisolutions.sxc.builder;
 
 import javax.xml.namespace.QName;
 
-import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;

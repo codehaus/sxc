@@ -33,7 +33,6 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.validation.Schema;
 
 import org.w3c.dom.Node;
-
 import org.xml.sax.InputSource;
 
 import com.envoisolutions.sxc.Context;

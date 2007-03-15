@@ -9,9 +9,6 @@ import org.w3c.dom.Document;
 
 import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.Writer;
-import com.envoisolutions.sxc.builder.Builder;
-import com.envoisolutions.sxc.builder.ElementWriterBuilder;
-import com.envoisolutions.sxc.builder.WriterBuilder;
 import com.envoisolutions.sxc.builder.impl.BuilderImpl;
 import com.envoisolutions.sxc.util.XoTestCase;
 import com.sun.codemodel.JCodeModel;

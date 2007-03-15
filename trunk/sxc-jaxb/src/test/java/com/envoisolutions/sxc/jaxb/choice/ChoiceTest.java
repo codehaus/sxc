@@ -1,19 +1,12 @@
 package com.envoisolutions.sxc.jaxb.choice;
 
-import java.io.ByteArrayOutputStream;
 import java.util.List;
 
 import javax.xml.bind.JAXBElement;
-import javax.xml.bind.Marshaller;
 
-import org.w3c.dom.Document;
-
-import com.envoisolutions.node.NamedNode;
-import com.envoisolutions.node.Node;
 import com.envoisolutions.sxc.choice.Parent;
 import com.envoisolutions.sxc.jaxb.JAXBContextImpl;
 import com.envoisolutions.sxc.util.XoTestCase;
-import com.sun.japex.testsuite.TestSuiteElement;
 
 public class ChoiceTest extends XoTestCase {
     
