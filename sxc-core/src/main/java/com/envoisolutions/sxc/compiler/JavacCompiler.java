@@ -3,8 +3,10 @@ package com.envoisolutions.sxc.compiler;
 import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.util.Util;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URI;
@@ -30,8 +32,8 @@ public class JavacCompiler implements Compiler {
 
             URLClassLoader newCL = createNewClassLoader();
             
-            String[] args = {srcDir.getAbsolutePath() + "/streax/generated/Reader.java",
-                             srcDir.getAbsolutePath() + "/streax/generated/Writer.java", 
+            String[] args = {srcDir.getAbsolutePath() + "/generated/sxc/Reader.java",
+                             srcDir.getAbsolutePath() + "/generated/sxc/Writer.java", 
                              "-g", 
                              "-d", classDir.getAbsolutePath(), 
                              "-classpath", classpath,
@@ -39,11 +41,13 @@ public class JavacCompiler implements Compiler {
 
             // System.out.println("Args: " + Arrays.toString(args));
 
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            PrintWriter writer = new PrintWriter(bos);
             int i;
             try {
                 Class<?> main = newCL.loadClass("com.sun.tools.javac.Main");
-                Method method = main.getMethod("compile", new Class[] {String[].class});
-                i = (Integer)method.invoke(null, new Object[] {args});
+                Method method = main.getMethod("compile", new Class[] {String[].class, PrintWriter.class});
+                i = (Integer)method.invoke(null, new Object[] {args, writer});
             } catch (ClassNotFoundException e1) {
                 throw new BuildException("Could not find javac compiler!", e1);
             } catch (Exception e) {
@@ -51,14 +55,18 @@ public class JavacCompiler implements Compiler {
             }
 
             if (i != 0) {
+                writer.close();
+                
+                System.out.println(bos.toString());
+                
                 throw new BuildException("Could not compile generated files! Code: " + i);
             }
 
             Thread.currentThread().setContextClassLoader(oldCl);
             URLClassLoader cl = new URLClassLoader(new URL[] {classDir.toURL()}, oldCl);
             try {
-                cl.loadClass("streax.generated.Reader");
-                cl.loadClass("streax.generated.Writer");
+                cl.loadClass("generated.sxc.Reader");
+                cl.loadClass("generated.sxc.Writer");
             } catch (ClassNotFoundException e) {
                 throw new BuildException("Could not load generated classes.", e);
             }

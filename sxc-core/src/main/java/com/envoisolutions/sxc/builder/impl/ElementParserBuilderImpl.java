@@ -567,7 +567,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
     }
     
     private String getContextClassName() {
-        return "streax.generated.Reader";
+        return "generated.sxc.Reader";
     }
 
     private void setReturnType(JType type) {

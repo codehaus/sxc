@@ -1,7 +1,10 @@
 package com.envoisolutions.sxc.builder.impl;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintStream;
+import java.io.PrintWriter;
 
 import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.builder.BuildException;
@@ -48,7 +51,12 @@ public class BuilderImpl implements Builder {
         parserBuilder.write();
         writerBuilder.write();
         
-        buildContext.getCodeModel().build(file);
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        PrintStream stream = new PrintStream(bos);
+        buildContext.getCodeModel().build(file, stream);
+        
+        // todo: someday maybe print error messages 
+        // (but its really just annoying data about what file was outputted)
     }
     
     public Context compile() {
@@ -56,7 +64,7 @@ public class BuilderImpl implements Builder {
         File dir = null;
         if (file == null) {
             try {
-                String cdir = System.getProperty("streax-xo.output.directory");
+                String cdir = System.getProperty("com.envoisolutions.sxc.output.directory");
                 
                 if (cdir == null) {
                     dir = File.createTempFile("compile", "");

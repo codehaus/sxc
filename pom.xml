@@ -26,7 +26,6 @@
     <module>sxc-xpath</module>
     <module>sxc-jaxb</module>
     <module>sxc-drools</module>
-    <module>sxc-jaxb-bundle</module>
   </modules>
 <profiles>
   <profile>
@@ -91,11 +90,6 @@
       <url>https://maven-repository.dev.java.net/nonav/repository/</url>
       <layout>legacy</layout>
     </repository>
-    <repository>
-      <id>local</id>
-      <name>Local filesystem</name>
-      <url>file:///${basedir}/repo/</url>
-    </repository>
   </repositories>
 
   <!--  needed for plugin snapshots (i.e. jdepend) -->
@@ -136,18 +130,6 @@
       </plugin>
     </plugins>
   </build>
-  <reporting>
-    <plugins>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-project-info-reports-plugin</artifactId>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-javadoc-plugin</artifactId>
-      </plugin>
-    </plugins>
-  </reporting>
 
   <distributionManagement>
     <repository>
@@ -165,5 +147,38 @@
       <url>dav:https://dav.codehaus.org/sxc/</url>
     </site>
   </distributionManagement>
+  <reporting>
+  <plugins>
+    <plugin>
+      <artifactId>maven-javadoc-plugin</artifactId>
+      <configuration>
+        <minmemory>128m</minmemory>
+        <maxmemory>512m</maxmemory>
+        <verbose>false</verbose>
+      </configuration>
+    </plugin>
+    <plugin>
+      <artifactId>maven-project-info-reports-plugin</artifactId>
+      <reportSets>
+        <reportSet>
+          <reports>
+            <report>jdepend-maven-plugin</report>
+            <report>jxr-maven-plugin</report>
+            <report>surefire-report-maven-plugin</report>
+            <report>maven-javadoc-plugin</report>
+          </reports>
+        </reportSet>
+      </reportSets>
+    </plugin>
+    <plugin>
+      <groupId>org.codehaus.mojo</groupId>
+      <artifactId>jdepend-maven-plugin</artifactId>
+    </plugin>
+    <plugin>
+      <groupId>org.codehaus.mojo</groupId>
+      <artifactId>jxr-maven-plugin</artifactId>
+    </plugin>
+  </plugins>
+</reporting>
 </project>
 

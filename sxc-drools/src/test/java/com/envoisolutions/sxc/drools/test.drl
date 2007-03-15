@@ -1,4 +1,4 @@
-// START SNIPPET: rules
+/* START SNIPPET: rules */
 package com.envoisolutions.sxc.drools;
 
 import com.envoisolutions.sxc.xpath.XPathEvent;
@@ -9,4 +9,4 @@ rule "AddresTest"
     then
         System.out.println("Success! - " + drools.getRule().getName());
 end
-// END SNIPPET: rules
+/* END SNIPPET: rules */

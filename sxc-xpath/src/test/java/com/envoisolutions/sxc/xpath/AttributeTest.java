@@ -8,7 +8,7 @@ public class AttributeTest extends TestCase {
     String value = null;
     
     public void testSimpleNamespaces() throws Exception {
-        System.setProperty("streax-xo.output.directory", "target/tmp-xpath");
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-xpath");
         
         XPathEventHandler idHandler = new XPathEventHandler() {
 

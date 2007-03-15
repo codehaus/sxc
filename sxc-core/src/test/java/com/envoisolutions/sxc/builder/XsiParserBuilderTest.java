@@ -20,7 +20,7 @@ public class XsiParserBuilderTest extends TestCase {
     private ElementParserBuilder childNamedNodeBuilder;
     
     public void testBuilder() throws Exception {
-        System.setProperty("streax-xo.output.directory", "target/tmp-jaxb");
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
         Builder builder = new BuilderImpl();
         ElementParserBuilder b = builder.getParserBuilder();
         

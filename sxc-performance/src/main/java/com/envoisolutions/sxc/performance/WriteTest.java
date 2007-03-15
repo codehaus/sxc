@@ -11,7 +11,7 @@ import com.envoisolutions.sxc.jaxb.JAXBContextImpl;
 
 public class WriteTest extends TestCase {
     public void testWrite() throws Exception {
-        System.setProperty("streax-xo.output.directory", "target/tmp-jaxb");
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
         JAXBContextImpl impl = new JAXBContextImpl(IntCollection.class, StringCollection.class, SimpleTypes.class);
         
         IntCollection c = new IntCollection();

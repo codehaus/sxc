@@ -20,7 +20,7 @@ import com.sun.codemodel.JType;
 public class WriterBuilderTest extends XoTestCase {
 
     public void testBuilder() throws Exception {
-        System.setProperty("streax-xo.output.directory", "target/tmp-jaxb");
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
         Builder builder = new BuilderImpl();
         JCodeModel model = builder.getCodeModel();
         JType cusClass = model._ref(Customer.class);

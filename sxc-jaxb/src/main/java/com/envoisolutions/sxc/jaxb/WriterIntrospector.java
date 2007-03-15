@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Logger;
 
 import javax.xml.bind.JAXBException;
 import javax.xml.datatype.Duration;
@@ -21,7 +22,6 @@ import javax.xml.namespace.QName;
 
 import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.Builder;
-import com.envoisolutions.sxc.builder.ElementParserBuilder;
 import com.envoisolutions.sxc.builder.ElementWriterBuilder;
 import com.envoisolutions.sxc.builder.WriterBuilder;
 import com.envoisolutions.sxc.util.Base64;
@@ -47,7 +47,9 @@ import com.sun.xml.bind.v2.model.runtime.RuntimeTypeRef;
 import com.sun.xml.bind.v2.model.runtime.RuntimeValuePropertyInfo;
 
 public class WriterIntrospector {
-    private ElementWriterBuilder rootWriter;
+	private static final Logger logger = Logger.getLogger(WriterIntrospector.class.getName());
+	
+	private ElementWriterBuilder rootWriter;
     private Set<Class<?>> addedXsiTypes = new HashSet<Class<?>>();
     private Builder builder;
     private JCodeModel model;
@@ -211,7 +213,7 @@ public class WriterIntrospector {
                                             classBuilder.getObject().invoke(propName));
                 
                 if (propAt.isCollection()) {
-                    System.err.println("Writer: attribute lists are not supported yet!");
+                    logger.info("(JAXB Writer) Attribute lists are not supported yet!");
                 } else {
                     writeSimpleTypeAttribute(atBuilder, rawType, c, jt);
                 }
@@ -231,7 +233,7 @@ public class WriterIntrospector {
                                        propv.getAdapter(),
                                        var, true, rawType, c, jt);
             } else {
-                System.err.println("Writer: Unknown Property " + prop.getName() 
+            	logger.info("(JAXB Writer) Cannot map property " + prop.getName() 
                                    + " with type " + prop.getRawType()
                                    + " on " + parentClass
                                    + " for " + prop.getClass().getName());
@@ -326,7 +328,7 @@ public class WriterIntrospector {
             
             valueBuilder.setCurrentBlock(origBlck);
         } else {
-            System.err.println("Writer: Unknown type " + c);
+        	logger.info("(JAXB Writer) Cannot map type yet: " + c);
         }
         
         if (propEl.isCollection()) {
@@ -450,7 +452,7 @@ public class WriterIntrospector {
         } else if (c.equals(QName.class)) {
             writeQName(b, object, jt, nillable);  
         } else {
-            System.err.println("Writer: Could not map! " + c);
+        	logger.info("(JAXB Writer) Cannot map type yet: " + c);
         }
     }
     
@@ -479,7 +481,7 @@ public class WriterIntrospector {
         } else if (c.equals(QName.class)) {
             writeQNameAttribute(b, jt);  
         } else {
-            System.err.println("Writer: Could not map! " + c);
+            logger.info("(JAXB Writer) Cannot map type yet: " + c);
         }
     }
 

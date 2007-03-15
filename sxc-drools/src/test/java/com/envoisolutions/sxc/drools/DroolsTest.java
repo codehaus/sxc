@@ -1,17 +1,13 @@
 package com.envoisolutions.sxc.drools;
 
-import java.io.InputStreamReader;
-
 import junit.framework.TestCase;
 
-import com.envoisolutions.sxc.xpath.XPathBuilder;
 import com.envoisolutions.sxc.xpath.XPathEvaluator;
-import com.envoisolutions.sxc.xpath.XPathEventHandler;
 
 public class DroolsTest extends TestCase {
 
     public void testDan() throws Exception {
-        System.setProperty("streax-xo.output.directory", "target/tmp-xpath");
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-xpath");
 
         // START SNIPPET: rules
         final DroolsXPathEvaluatorFactory evaluatorFactory = 
@@ -23,6 +19,4 @@ public class DroolsTest extends TestCase {
         evaluator.evaluate(getClass().getResourceAsStream("test.xml"));
         // END SNIPPET: rules
     }
-
-
 }

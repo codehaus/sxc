@@ -21,7 +21,7 @@ import com.everything.SimpleTypes;
 public class EverythingTest extends XoTestCase {
     
     public void testJAXBContextUnmarshal() throws Exception {
-        System.setProperty("streax-xo.output.directory", "target/tmp-jaxb");
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
         JAXBContextImpl ctx = new JAXBContextImpl(Everything.class);
         
         Everything e = (Everything) ctx.createUnmarshaller().unmarshal(getClass().getResourceAsStream("everything.xml"));
@@ -79,7 +79,7 @@ public class EverythingTest extends XoTestCase {
     }
     
     public void testJAXBContextUnmarshalWithSpecifiedClass() throws Exception {
-        System.setProperty("streax-xo.output.directory", "target/tmp-jaxb");
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
         JAXBContextImpl ctx = new JAXBContextImpl(Everything.class);
         
         XMLStreamReader xsr = getXSR(getClass().getResourceAsStream("everything.xml"));

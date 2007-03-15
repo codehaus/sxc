@@ -20,7 +20,7 @@ import org.apache.cxf.courseware.invoice.SupportLevel;
 
 public class InvoiceTest extends XoTestCase {
     public void testNoHeader() throws Exception {
-        System.setProperty("streax-xo.output.directory", "target/tmp-jaxb");
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
         JAXBContextImpl ctx = new JAXBContextImpl(Invoice.class);
         
         Invoice i = (Invoice) ctx.createUnmarshaller().unmarshal(
@@ -29,7 +29,7 @@ public class InvoiceTest extends XoTestCase {
     }
     
     public void testInvoiceHeader() throws Exception {
-        System.setProperty("streax-xo.output.directory", "target/tmp-jaxb");
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
         JAXBContextImpl ctx = new JAXBContextImpl(Invoice.class);
         
         Invoice i = (Invoice) ctx.createUnmarshaller().unmarshal(

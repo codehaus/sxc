@@ -1,5 +1,5 @@
 <assembly>
-  <id>jar-with-dependencies</id>
+  <id>bundle</id>
   <formats>
     <format>jar</format>
   </formats>
@@ -8,9 +8,12 @@
     <dependencySet>
       <unpack>true</unpack>
       <scope>runtime</scope>
+      <includes>
+        <include>com.envoisolutions.sxc:sxc-core</include>
+        <include>com.envoisolutions.sxc:sxc-jaxb</include>
+      </includes>
       <excludes>
-        <exclude>com.sun.xml.bind:jaxb-impl:jar</exclude>
-        <exclude>com.sun.xml.bind:jaxb-xjc:jar</exclude>
+        <exclude>*:jar</exclude>
       </excludes>
     </dependencySet>
   </dependencySets>

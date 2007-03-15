@@ -13,7 +13,7 @@ import customer.Customer;
 public class CustomerTest extends XoTestCase {
     
     public void testJAXBContextUnmarshal() throws Exception {
-        System.setProperty("streax-xo.output.directory", "target/tmp-jaxb");
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
         JAXBContextImpl ctx = new JAXBContextImpl(Customer.class);
         
         Customer c = (Customer) ctx.createUnmarshaller().unmarshal(getClass().getResourceAsStream("customer.xml"));
