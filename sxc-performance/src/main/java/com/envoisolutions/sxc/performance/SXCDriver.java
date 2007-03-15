@@ -1,7 +1,5 @@
 package com.envoisolutions.sxc.performance;
 
-import javax.xml.bind.JAXBContext;
-
 import com.envoisolutions.sxc.jaxb.JAXBContextImpl;
 import com.sun.japex.TestCase;
 
