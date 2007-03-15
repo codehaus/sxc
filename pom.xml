@@ -1,11 +1,9 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.envoisolutions.sxc</groupId>
   <artifactId>sxc</artifactId>
   <name>Simple XML Compiler</name>
-  <version>0.5-SNAPSHOT</version>
+  <version>0.5</version>
   <inceptionYear>2006</inceptionYear>
   <packaging>pom</packaging>
   
@@ -41,9 +39,9 @@
   </profile>
 </profiles>
   <scm>
-    <connection>scm:svn:https://svn.codehaus.org/sxc/trunk</connection>
-    <developerConnection>scm:svn:https://svn.codehaus.org/sxc/trunk</developerConnection>
-    <url>https://svn.sxc.codehaus.org</url>
+    <connection>scm:svn:https://svn.codehaus.org/sxc/tags/sxc-0.5</connection>
+    <developerConnection>scm:svn:https://svn.codehaus.org/sxc/tags/sxc-0.5</developerConnection>
+    <url>https://svn.sxc.codehaus.org/tags/sxc-0.5</url>
   </scm>
   <dependencyManagement>
     <dependencies>
@@ -187,4 +185,3 @@
   </plugins>
 </reporting>
 </project>
-
