@@ -1,16 +1,14 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <artifactId>sxc-jaxb</artifactId>
   <name>SXC JAXB</name>
-  <version>0.5-SNAPSHOT</version>
+  <version>0.5</version>
   <inceptionYear>2006</inceptionYear>
 
   <parent>
     <groupId>com.envoisolutions.sxc</groupId>
     <artifactId>sxc</artifactId>
-    <version>0.5-SNAPSHOT</version>
+    <version>0.5</version>
   </parent>
 
 
@@ -44,8 +42,7 @@
             </goals>
             <configuration>
               <tasks>
-                <taskdef classname="com.sun.tools.xjc.XJCTask" classpathref="maven.test.classpath"
-                  name="xjc" />
+                <taskdef classname="com.sun.tools.xjc.XJCTask" classpathref="maven.test.classpath" name="xjc" />
                 <mkdir dir="${project.build.directory}/generated-source" />
                 <xjc target="2.1" destdir="${basedir}/target/generated-source">
                   <schema includes="**/*.xsd" dir="${basedir}/src/test/schema" />
