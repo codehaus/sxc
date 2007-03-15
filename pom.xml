@@ -40,7 +40,11 @@
     </modules>
   </profile>
 </profiles>
-
+  <scm>
+    <connection>scm:svn:https://svn.codehaus.org/sxc/trunk</connection>
+    <developerConnection>scm:svn:https://svn.codehaus.org/sxc/trunk</developerConnection>
+    <url>https://svn.sxc.codehaus.org</url>
+  </scm>
   <dependencyManagement>
     <dependencies>
       <dependency>
