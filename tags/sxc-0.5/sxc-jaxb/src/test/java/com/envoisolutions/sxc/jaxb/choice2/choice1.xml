@@ -1,0 +1,6 @@
+<Parent xmlns="http://sxc.envoisolutions.com/choice2" 
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <choice1>
+    <foo>bar</foo>
+  </choice1>
+</Parent>

@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xsd:schema xmlns:x3="http://apache.org/type_test/types3" xmlns:x2="http://apache.org/type_test/types2" xmlns:x1="http://apache.org/type_test/types1" xmlns:xalan="http://xml.apache.org/xslt" xmlns:jaxb="http://java.sun.com/xml/ns/jaxb" xmlns:wsse="http://schemas.xmlsoap.org/ws/2003/06/secext" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:itst="http://tests.iona.com/ittests" xmlns="http://www.w3.org/2001/XMLSchema" jaxb:version="2.0" targetNamespace="http://apache.org/type_test/types2" elementFormDefault="qualified">
+    <attributeGroup name="AttrGrp">
+        <attribute name="attrInt" type="integer"/>
+        <attribute name="attrString" type="string"/>
+    </attributeGroup>
+    <attributeGroup name="AttrGrp1">
+        <attribute name="attrFloat" type="float"/>
+        <attributeGroup ref="x2:AttrGrp"/>
+    </attributeGroup>
+    <group name="BatchElementsSeq">
+        <sequence>
+	    <element name="varFloat" type="xsd:float"/>
+	    <element name="varInt" type="xsd:int"/>
+	    <element name="varString" type="xsd:string"/>
+        </sequence>
+    </group>
+    <group name="BatchElementsSeq1">
+        <sequence>
+	    <element name="varOtherFloat" type="xsd:float"/>
+	    <element name="varOtherInt" type="xsd:int"/>
+	    <element name="varOtherString" type="xsd:string"/>
+        </sequence>
+    </group>
+    <group name="BatchElementsChoice">
+        <choice>
+	    <element name="varFloat" type="xsd:float"/>
+	    <element name="varInt" type="xsd:int"/>
+	    <element name="varString" type="xsd:string"/>
+        </choice>
+    </group>
+    <group name="BatchElementsChoice1">
+        <choice>
+	    <element name="varOtherFloat" type="xsd:float"/>
+	    <element name="varOtherInt" type="xsd:int"/>
+	    <element name="varOtherString" type="xsd:string"/>
+        </choice>
+    </group>
+    <complexType name="ComplexTypeWithAttributeGroup">
+        <sequence/>
+        <attributeGroup ref="x2:AttrGrp"/>
+    </complexType>
+    <complexType name="ComplexTypeWithAttributeGroup1">
+        <sequence/>
+        <attributeGroup ref="x2:AttrGrp1"/>
+    </complexType>
+    <complexType name="SequenceWithGroupSeq">
+        <sequence>
+            <group ref="x2:BatchElementsSeq"/>
+            <group ref="x2:BatchElementsSeq1"/>
+        </sequence>
+    </complexType>
+    <complexType name="SequenceWithGroupChoice">
+        <sequence>
+            <group ref="x2:BatchElementsChoice"/>
+            <group ref="x2:BatchElementsChoice1"/>
+        </sequence>
+    </complexType>
+    <complexType name="SequenceWithGroups">
+        <sequence>
+            <group ref="x2:BatchElementsSeq"/>
+            <group ref="x2:BatchElementsChoice1"/>
+        </sequence>
+    </complexType>
+    <complexType name="SequenceWithOccuringGroup">
+        <sequence>
+            <group ref="x2:BatchElementsSeq" minOccurs="0" maxOccurs="3"/>
+        </sequence>
+    </complexType>
+    <complexType name="ChoiceWithGroupSeq">
+        <choice>
+            <group ref="x2:BatchElementsSeq"/>
+            <group ref="x2:BatchElementsSeq1"/>
+        </choice>
+    </complexType>
+    <complexType name="ChoiceWithGroupChoice">
+        <choice>
+            <group ref="x2:BatchElementsChoice"/>
+            <group ref="x2:BatchElementsChoice1"/>
+        </choice>
+    </complexType>
+    <complexType name="ChoiceWithGroups">
+        <choice>
+            <group ref="x2:BatchElementsSeq"/>
+            <group ref="x2:BatchElementsChoice1"/>
+        </choice>
+    </complexType>
+    <complexType name="GroupDirectlyInComplexType">
+        <group ref="x2:BatchElementsSeq"/>
+        <attribute name="attr1" type="xsd:int"/>
+    </complexType>
+    <complexType name="ChoiceOfSeq">
+        <choice>
+            <sequence>
+	        <element name="varFloat" type="xsd:float"/>
+	        <element name="varInt" type="xsd:int"/>
+            </sequence>
+            <sequence>
+	        <element name="varOtherInt" type="xsd:int"/>
+	        <element name="varString" type="xsd:string"/>
+            </sequence>
+        </choice>
+    </complexType>
+    <complexType name="ChoiceOfChoice">
+        <choice>
+            <choice>
+                <element name="varFloat" type="xsd:float"/>
+                <element name="varInt" type="xsd:int"/>
+            </choice>
+            <choice>
+                <element name="varOtherInt" type="xsd:int"/>
+                <element name="varString" type="xsd:string"/>
+            </choice>
+        </choice>
+    </complexType>
+    <complexType name="ComplexTypeWithAttributes">
+        <attribute name="attrInt" type="integer"/>
+        <attribute name="attrString" type="string"/>
+    </complexType>
+    <complexType name="StructWithAny">
+        <sequence>
+            <element name="name" type="string"/>
+            <element name="address" type="string"/>
+            <any namespace="##any" processContents="skip"/>
+        </sequence>
+    </complexType>
+    <complexType name="StructWithAnyArray">
+        <sequence>
+            <element name="name" type="string"/>
+            <element name="address" type="string"/>
+            <any namespace="##any" processContents="skip" minOccurs="0" maxOccurs="10"/>
+        </sequence>
+    </complexType>
+    <complexType name="StructWithAnyStrict">
+        <sequence>
+            <element name="name" type="string"/>
+            <element name="address" type="string"/>
+            <any namespace="##any" processContents="strict"/>
+        </sequence>
+    </complexType>
+    <complexType name="StructWithAnyArrayLax">
+        <sequence>
+            <element name="name" type="string"/>
+            <element name="address" type="string"/>
+            <any namespace="##any" processContents="lax" minOccurs="0" maxOccurs="10"/>
+        </sequence>
+    </complexType>
+    <complexType name="IDTypeAttribute">
+        <attribute name="Id" type="xsd:ID"/>
+    </complexType>
+    <complexType name="MultipleOccursSequenceInSequence">
+        <sequence minOccurs="0" maxOccurs="unbounded">
+            <sequence>
+                <element name="value" type="xsd:integer"/>
+            </sequence>
+        </sequence>
+    </complexType>
+    <complexType name="StructWithBinary">
+        <sequence>
+	    <element name="hex" type="hexBinary"/>
+	    <element name="base64" type="base64Binary"/>
+	</sequence>
+    </complexType>
+    <complexType name="ChoiceWithBinary">
+        <choice>
+	    <element name="hex" type="hexBinary"/>
+	    <element name="base64" type="base64Binary"/>
+	</choice>
+    </complexType>
+    <complexType name="ExtBase64Binary">
+        <simpleContent>
+        <extension base="base64Binary">
+          <attribute name="Id" type="int" use="optional"/>
+        </extension>
+      </simpleContent>
+    </complexType>
+    <complexType name="StructWithAnyAttribute">
+        <sequence>
+            <element name="varString" type="xsd:string"/>
+            <element name="varInt" type="xsd:int"/>
+        </sequence>
+        <attribute name="AtString" type="xsd:string"/>
+        <attribute name="AtInt" type="xsd:int"/>
+        <anyAttribute processContents="skip"/>
+    </complexType>
+    <complexType name="ChoiceWithAnyAttribute">
+        <choice>
+            <element name="varString" type="xsd:string"/>
+            <element name="varInt" type="xsd:int"/>
+        </choice>
+        <attribute name="AtString" type="xsd:string"/>
+        <attribute name="AtInt" type="xsd:int"/>
+        <anyAttribute processContents="skip"/>
+    </complexType>
+    <complexType name="SimpleContentExtWithAnyAttribute">
+        <simpleContent>
+            <extension base="xsd:string">
+                <attribute name="attrib" type="xsd:int"/>
+                <anyAttribute processContents="skip"/>
+            </extension>
+        </simpleContent>
+    </complexType>
+    <complexType name="OccuringStructWithAnyAttribute">
+        <sequence minOccurs="1" maxOccurs="5">
+            <element name="varString" type="xsd:string"/>
+            <element name="varInt" type="xsd:int"/>
+        </sequence>
+        <attribute name="AtString" type="xsd:string"/>
+        <attribute name="AtInt" type="xsd:int"/>
+        <anyAttribute processContents="skip"/>
+    </complexType>
+    <complexType name="OccuringChoiceWithAnyAttribute">
+        <choice minOccurs="1" maxOccurs="5">
+            <element name="varString" type="xsd:string"/>
+            <element name="varInt" type="xsd:int"/>
+        </choice>
+        <attribute name="AtString" type="xsd:string"/>
+        <attribute name="AtInt" type="xsd:int"/>
+        <anyAttribute processContents="skip"/>
+    </complexType>
+</xsd:schema>

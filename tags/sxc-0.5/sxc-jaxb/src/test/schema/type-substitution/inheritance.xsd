@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<s:schema xmlns:s="http://www.w3.org/2001/XMLSchema" xmlns:tns="urn:xfire:inheritance"
+  elementFormDefault="qualified" targetNamespace="urn:xfire:inheritance">
+
+
+  <s:complexType abstract="true" name="BaseUser">
+    <s:sequence>
+      <s:element name="name" type="s:string" />
+    </s:sequence>
+  </s:complexType>
+
+  <s:complexType name="Employee">
+    <s:complexContent mixed="false">
+      <s:extension base="tns:BaseUser">
+        <s:sequence>
+          <s:element name="division" type="s:string" />
+        </s:sequence>
+      </s:extension>
+    </s:complexContent>
+  </s:complexType>
+
+</s:schema>

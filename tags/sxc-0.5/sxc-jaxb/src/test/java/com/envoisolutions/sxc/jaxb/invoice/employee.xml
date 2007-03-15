@@ -1,0 +1,11 @@
+<Invoice xmlns="http://cxf.apache.org/courseware/Invoice">
+  <header>
+    <shippingDate>2002-10-10</shippingDate>
+    <customer>
+      <customerNumber>123</customerNumber>
+      <supportLevel>Silver</supportLevel>
+    </customer>
+  </header>
+  <invoiceLine>
+  </invoiceLine>
+</Invoice>
