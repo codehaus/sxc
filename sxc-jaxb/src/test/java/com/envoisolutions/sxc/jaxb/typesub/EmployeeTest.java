@@ -11,12 +11,12 @@ import javax.xml.stream.XMLStreamWriter;
 
 import org.w3c.dom.Document;
 
+import xfire.inheritance.Employee;
+
 import com.ctc.wstx.stax.WstxInputFactory;
 import com.ctc.wstx.stax.WstxOutputFactory;
 import com.envoisolutions.sxc.jaxb.JAXBContextImpl;
 import com.envoisolutions.sxc.util.XoTestCase;
-
-import xfire.inheritance.Employee;
 
 public class EmployeeTest extends XoTestCase {
     private WstxInputFactory xif = new WstxInputFactory();

@@ -30,6 +30,7 @@ import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JConditional;
 import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JForEach;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JType;
@@ -37,11 +38,13 @@ import com.sun.codemodel.JVar;
 import com.sun.xml.bind.v2.model.core.Adapter;
 import com.sun.xml.bind.v2.model.runtime.RuntimeAttributePropertyInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeClassInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeElement;
 import com.sun.xml.bind.v2.model.runtime.RuntimeElementInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeElementPropertyInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeEnumLeafInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeNonElement;
 import com.sun.xml.bind.v2.model.runtime.RuntimePropertyInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeReferencePropertyInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeTypeInfoSet;
 import com.sun.xml.bind.v2.model.runtime.RuntimeTypeRef;
 import com.sun.xml.bind.v2.model.runtime.RuntimeValuePropertyInfo;
@@ -64,6 +67,7 @@ public class WriterIntrospector {
     public WriterIntrospector(Builder b, RuntimeTypeInfoSet set) throws JAXBException {
         this.builder = b;
         rootWriter = this.builder.getWriterBuilder();
+        rootWriter.declareException(JAXBException.class);
         this.model = rootWriter.getCodeModel();
         this.set = set;
         
@@ -92,8 +96,12 @@ public class WriterIntrospector {
             
             ElementWriterBuilder instcWriter = 
                 rootWriter.newCondition(rootWriter.getObject()._instanceof(jt), jt);
-            writeSimpleTypeElement(instcWriter, rei.getContentType(), null, true, c, c, jt);
-
+            if (rei.getContentType().isSimpleType()) {
+            	writeSimpleTypeElement(instcWriter, rei.getContentType(), null, true, c, c, jt);
+            } else {
+            	add(rootWriter, c, (RuntimeClassInfo) rei.getContentType());
+            }
+            
             c2type.put(c, q);
         }
         
@@ -232,6 +240,32 @@ public class WriterIntrospector {
                                        propv.getTarget(), 
                                        propv.getAdapter(),
                                        var, true, rawType, c, jt);
+            } else if (prop instanceof RuntimeReferencePropertyInfo) {
+            	RuntimeReferencePropertyInfo propRef = (RuntimeReferencePropertyInfo) prop;
+//                
+//            	Set<? extends RuntimeElement> elements = propRef.getElements();
+//            	for (RuntimeElement re : elements) {
+//            		RuntimeElementInfo rei = (RuntimeElementInfo) re;
+//                    
+            		// This is all probably less than ideal
+            		Type rawType = propRef.getRawType();
+            		String propName = JaxbUtil.getGetter(parentClass, propRef.getName(), rawType);
+                    
+            		JBlock block = classBuilder.getCurrentBlock().block();
+            		JType mtype = model._ref(MarshallerImpl.class);
+            		JVar marshaller = block.decl(mtype, "marsh", 
+            				JExpr.cast(mtype, JExpr.direct("context").invoke("get").arg(JExpr.lit(MarshallerImpl.MARSHALLER))));
+            		
+            		JExpression propValue = classBuilder.getObject().invoke(propName);
+            		if (prop.isCollection()) {
+                        JForEach each = block.forEach(getGenericType(rawType), "_o", propValue);
+                        JBlock newBody = each.body();
+                        block = newBody;
+                        propValue = each.var();
+                    }
+            		
+            		block.add(marshaller.invoke("marshal").arg(propValue).arg(classBuilder.getXSW()));
+//            	}
             } else {
             	logger.info("(JAXB Writer) Cannot map property " + prop.getName() 
                                    + " with type " + prop.getRawType()
@@ -440,7 +474,6 @@ public class WriterIntrospector {
                 writeNil._return();
                 
                 JVar valueVar = block.decl(valueType, "_enum", object.invoke("value"));
-                
                 writeSimpleTypeElement(b, target, adapter, valueVar, nillable, readAs, readAs, valueType);
             } catch (Exception e) {
                 throw new BuildException(e);
@@ -452,7 +485,7 @@ public class WriterIntrospector {
         } else if (c.equals(QName.class)) {
             writeQName(b, object, jt, nillable);  
         } else {
-        	logger.info("(JAXB Writer) Cannot map type yet: " + c);
+        	logger.info("(JAXB Writer) Cannot map simple type yet: " + c);
         }
     }
     
@@ -481,7 +514,7 @@ public class WriterIntrospector {
         } else if (c.equals(QName.class)) {
             writeQNameAttribute(b, jt);  
         } else {
-            logger.info("(JAXB Writer) Cannot map type yet: " + c);
+            logger.info("(JAXB Writer) Cannot map simple attribute type yet: " + c);
         }
     }
 

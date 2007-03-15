@@ -5,20 +5,15 @@ import java.util.Map;
 
 import javax.xml.namespace.QName;
 
+import junit.framework.TestCase;
+
 import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.Reader;
-import com.envoisolutions.sxc.builder.Builder;
-import com.envoisolutions.sxc.builder.CodeBody;
-import com.envoisolutions.sxc.builder.ElementParserBuilder;
-import com.envoisolutions.sxc.builder.ParserBuilder;
 import com.envoisolutions.sxc.builder.impl.BuilderImpl;
-import com.envoisolutions.sxc.builder.impl.ElementParserBuilderImpl;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
-
-import junit.framework.TestCase;
 
 public class GlobalElementTest extends TestCase {
 

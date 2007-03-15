@@ -32,7 +32,6 @@ import javax.xml.stream.XMLStreamWriter;
 import org.w3c.dom.Attr;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
-import org.w3c.dom.Node;
 
 public class W3CDOMStreamWriter implements XMLStreamWriter {
     static final String XML_NS = "http://www.w3.org/2000/xmlns/";

@@ -36,11 +36,11 @@ import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathFactory;
 
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
-
 import junit.framework.Assert;
 import junit.framework.AssertionFailedError;
+
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
 /**
  * XPath test assertions.

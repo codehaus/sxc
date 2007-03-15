@@ -44,7 +44,7 @@ public class CompiledContext extends Context {
             
             this.writer = new Writer(this) {
                 @Override
-                public void write(XoXMLStreamWriter xw, Object o) throws Exception {
+                public void write(XoXMLStreamWriter xw, Object o, Map<String, Object> properties) throws Exception {
                     gw.write(xw, ctx, o);
                 }
                 

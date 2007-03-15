@@ -1,8 +1,5 @@
 package com.envoisolutions.sxc.compiler;
 
-import com.envoisolutions.sxc.builder.BuildException;
-import com.envoisolutions.sxc.util.Util;
-
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
@@ -15,6 +12,9 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.HashSet;
 import java.util.Set;
+
+import com.envoisolutions.sxc.builder.BuildException;
+import com.envoisolutions.sxc.util.Util;
 
 public class JavacCompiler implements Compiler {
 

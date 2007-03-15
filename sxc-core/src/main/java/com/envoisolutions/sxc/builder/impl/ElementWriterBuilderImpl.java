@@ -1,19 +1,14 @@
 package com.envoisolutions.sxc.builder.impl;
 
 import javax.xml.namespace.QName;
-import javax.xml.stream.XMLStreamException;
 
-import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.ElementWriterBuilder;
 import com.envoisolutions.sxc.builder.GeneratedWriter;
 import com.envoisolutions.sxc.builder.WriterBuilder;
-import com.envoisolutions.sxc.util.XoXMLStreamWriter;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClassAlreadyExistsException;
-import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JConditional;
-import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JMethod;
@@ -52,6 +47,8 @@ public class ElementWriterBuilderImpl extends AbstractWriterBuilder implements E
         this.rtContextVar = parent.rtContextVar;
         this.writerClass = parent.writerClass;
         this.model = parent.model;
+        exceptions.addAll(parent.exceptions);
+        
         currentBlock = method.body();
         attributeBlock = method.body().block();
     }

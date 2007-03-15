@@ -4,7 +4,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.io.PrintWriter;
 
 import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.builder.BuildException;

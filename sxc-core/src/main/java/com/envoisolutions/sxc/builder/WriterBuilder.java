@@ -5,7 +5,6 @@ import javax.xml.namespace.QName;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
-import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 
 public interface WriterBuilder {
@@ -45,5 +44,6 @@ public interface WriterBuilder {
      * @param cls
      */
     void writeAs(Class cls);
-    
+
+    void declareException(Class cls);
 }

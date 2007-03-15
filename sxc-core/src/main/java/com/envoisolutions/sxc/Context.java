@@ -13,7 +13,6 @@
  */
 package com.envoisolutions.sxc;
 
-import java.lang.reflect.Method;
 import java.util.HashMap;
 
 public abstract class Context extends HashMap<String, Object> {
