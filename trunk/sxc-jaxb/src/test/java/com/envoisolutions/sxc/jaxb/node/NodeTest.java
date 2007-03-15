@@ -16,7 +16,7 @@ public class NodeTest extends XoTestCase {
     
     @SuppressWarnings("unchecked")
     public void xtestNode1() throws Exception {
-        System.setProperty("streax-xo.output.directory", "target/tmp-jaxb");
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
         JAXBContextImpl ctx = new JAXBContextImpl(Node.class);
         
         JAXBElement<Node> jn = (JAXBElement<Node>) 
@@ -51,7 +51,7 @@ public class NodeTest extends XoTestCase {
     
     @SuppressWarnings("unchecked")
     public void testNestedNodes() throws Exception {
-        System.setProperty("streax-xo.output.directory", "target/tmp-jaxb");
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
         JAXBContextImpl ctx = new JAXBContextImpl(Node.class);
         
         JAXBElement<Node> jn = (JAXBElement<Node>) 

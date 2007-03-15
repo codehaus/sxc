@@ -19,7 +19,7 @@ public class EverythingAttributeTest extends XoTestCase {
     
     @SuppressWarnings("unchecked")
     public void testJAXBContextUnmarshal() throws Exception {
-        System.setProperty("streax-xo.output.directory", "target/tmp-jaxb");
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
         JAXBContextImpl ctx = JAXBContextImpl.createContext("com.everything", getClass().getClassLoader(), null);
 
         JAXBElement<AttributesType> a = (JAXBElement<AttributesType>) 

@@ -16,7 +16,7 @@ import com.envoisolutions.sxc.util.XoTestCase;
 public class SimpleGlobalTest extends XoTestCase {
     
     public void testJAXBContextUnmarshal() throws Exception {
-        System.setProperty("streax-xo.output.directory", "target/tmp-jaxb");
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
         JAXBContext ctx = JAXBContextImpl.newInstance("com.everything", getClass().getClassLoader(), null);
         
         XMLStreamReader reader = getXSR("<string xmlns=\"http://everything.com\">Dan</string>");

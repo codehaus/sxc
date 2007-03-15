@@ -23,7 +23,7 @@ public class EmployeeTest extends XoTestCase {
     private XMLOutputFactory xof = new WstxOutputFactory();
     
     public void testEmployee() throws Exception {
-        System.setProperty("streax-xo.output.directory", "target/tmp-jaxb");
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
         
         JAXBContext ctx = new JAXBContextImpl(new Class[] { Employee.class } );
         

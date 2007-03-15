@@ -9,9 +9,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Logger;
 
 import javax.xml.bind.JAXBElement;
-import javax.xml.bind.annotation.adapters.CollapsedStringAdapter;
 import javax.xml.datatype.DatatypeConfigurationException;
 import javax.xml.datatype.DatatypeFactory;
 import javax.xml.datatype.Duration;
@@ -31,7 +31,6 @@ import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldVar;
-import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JTryBlock;
@@ -52,6 +51,8 @@ import com.sun.xml.bind.v2.model.runtime.RuntimeTypeRef;
 import com.sun.xml.bind.v2.model.runtime.RuntimeValuePropertyInfo;
 
 public class ReaderIntrospector {
+	private static final Logger logger = Logger.getLogger(ReaderIntrospector.class.getName());
+	
     private ElementParserBuilder rootReader;
     private JType type_dtFactory;
     private Set<Class<?>> addedXsiTypes = new HashSet<Class<?>>();
@@ -234,7 +235,7 @@ public class ReaderIntrospector {
                 JVar propVar = attBuilder.passParentVariable(beanVar);
                 
                 if (propAt.isCollection()) {
-                    System.err.println("Reader: attribute lists are not supported yet!");
+                	logger.info("Reader: attribute lists are not supported yet!");
                 } else {
                     handlePropertyAttribute(attBuilder, propVar, beanClass, propAt, target, set);
                 }
@@ -260,7 +261,7 @@ public class ReaderIntrospector {
 
                 }
             } else if (prop instanceof RuntimeValuePropertyInfo) {
-                System.err.println("Reader: Attributes on simple types are not supported yet!");
+            	logger.info("Reader: Attributes on simple types are not supported yet!");
                 RuntimeValuePropertyInfo propv = (RuntimeValuePropertyInfo) prop;
                 
                 ElementParserBuilder builder2 = (ElementParserBuilder) classBuilder.newState();
@@ -269,7 +270,7 @@ public class ReaderIntrospector {
                 handlePropertyElement(builder2, var, beanClass, propv, propv.getTarget().getTypeName(), 
                                       true, propv.getTarget());
             } else {
-                System.err.println("Reader: Unknown Property " + prop.getName() 
+            	logger.info("(JAXB Reader) Cannot yet map property " + prop.getName() 
                                    + " with type " + prop.getRawType()
                                    + " on " + beanClass
                                    + " for " + prop.getClass().getName());
@@ -374,7 +375,7 @@ public class ReaderIntrospector {
                 doSet(propBuilder.getBody().getBlock(), bean, beanClass, propEl, exp);
             }
         } else {
-            System.err.println("Reader: Unknown type " + c + " - " + target.getClass());
+        	logger.info("(JAXB Reader) Cannot map type " + c + " yet on " + beanClass);
         }
     }
     
@@ -439,7 +440,7 @@ public class ReaderIntrospector {
             
             return var;
         } else {
-            System.err.println("Reader: Could not map simple type " + c);
+        	logger.info("(JAXB Reader) Can not map simple type yet: " + c);
             return JExpr._null();
         }
         return toSet;

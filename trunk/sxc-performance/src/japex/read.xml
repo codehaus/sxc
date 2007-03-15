@@ -1,15 +1,9 @@
 <testSuite name="JAXB Read Performance" xmlns="http://www.sun.com/japex/testSuite">
 
   <param name="japex.classPath" value="target/classes;target/test-classes;target/dependency/*.jar" />
-  <param name="japex.warmupTime" value="20" />
-  <param name="japex.runTime" value="20" />
+  <param name="japex.warmupTime" value="30" />
+  <param name="japex.runTime" value="30" />
   <param name="japex.numberOfThreads" value="10" />
-  
-  <driver name="SXC w/ Streax">
-    <param name="Description" value="SXC w/ Streax" />
-    <param name="japex.driverClass" value="com.envoisolutions.sxc.performance.SXCDriver" />
-    <param name="xmlInputFactory" value="org.codehaus.wool.stax.WoolInputFactory"/>
-  </driver>
   
   <driver name="SXC">
     <param name="Description" value="SXC" />
@@ -29,24 +23,17 @@
   <testCase name="intCollection-1000.xml">
     <param name="inputFile" value="src/test/intCollection-1000.xml" />
     <param name="jaxbPackage" value="com.envoisolutions.caserta" />
-<!--    <param name="schema" value="src/test/schema/intCollection.xsd" />-->
   </testCase>
 
-<!--  <testCase name="intCollection-100.xml">-->
-<!--    <param name="inputFile" value="src/test/intCollection-100.xml" />-->
-<!--    <param name="jaxbPackage" value="com.envoisolutions.caserta" />-->
-<!--    <param name="schema" value="src/test/schema/intCollection.xsd" />-->
-<!--  </testCase>-->
+  <testCase name="intCollection-100.xml">
+    <param name="inputFile" value="src/test/intCollection-100.xml" />
+    <param name="jaxbPackage" value="com.envoisolutions.caserta" />
+  </testCase>
 
   <testCase name="stringCollection-100.xml">
     <param name="inputFile" value="src/test/stringCollection-100.xml" />
     <param name="jaxbPackage" value="com.envoisolutions.caserta" />
   </testCase>
-<!---->
-<!--  <testCase name="intCollection-1.xml">-->
-<!--    <param name="inputFile" value="src/test/intCollection-1.xml" />-->
-<!--    <param name="jaxbPackage" value="com.envoisolutions.caserta" />-->
-<!--  </testCase>-->
 
   <testCase name="stringCollection-1.xml">
     <param name="inputFile" value="src/test/stringCollection-1.xml" />

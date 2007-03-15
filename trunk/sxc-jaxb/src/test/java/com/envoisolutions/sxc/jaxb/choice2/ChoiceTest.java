@@ -18,7 +18,7 @@ public class ChoiceTest extends XoTestCase {
     
     @SuppressWarnings("unchecked")
     public void testComplexChoices() throws Exception {
-        System.setProperty("streax-xo.output.directory", "target/tmp-jaxb");
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
         JAXBContextImpl ctx = new JAXBContextImpl(Parent.class);
         
         Parent p = (Parent) 

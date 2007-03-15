@@ -15,7 +15,7 @@ import com.envoisolutions.sxc.util.XoTestCase;
 public class SimpleReadWriteTest extends XoTestCase {
     
     public void testJAXBContextUnmarshal() throws Exception {
-        System.setProperty("streax-xo.output.directory", "target/tmp-jaxb");
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
         JAXBContext ctx = new JAXBContextImpl();
         
         XMLStreamReader reader = getXSR("<name>Dan</name>");

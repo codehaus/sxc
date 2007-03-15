@@ -31,7 +31,7 @@ public class AbstractWriterBuilder {
     }
 
     protected String getContextClassName() {
-        return "streax.generated.Writer";
+        return "generated.sxc.Writer";
     }
 
     protected void addBasicArgs(JMethod method) {
