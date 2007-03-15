@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schema targetNamespace="http://sxc.envoisolutions.com/picture"
+	xmlns="http://www.w3.org/2001/XMLSchema"
+	xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+	xmlns:tns="http://sxc.envoisolutions.com/picture"
+	xmlns:xmime="http://www.w3.org/2005/05/xmlmime"
+	xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+	elementFormDefault="qualified">
+	<element name="BinaryData">
+		<complexType>
+			<sequence>
+				<element maxOccurs="1" minOccurs="1" name="octetStream"
+					nillable="true" type="base64Binary"
+					xmime:expectedContentTypes="application/octet-stream" />
+				<element maxOccurs="1" minOccurs="1" name="image"
+					nillable="true" type="base64Binary"
+					xmime:expectedContentTypes="image/jpeg" />
+			</sequence>
+		</complexType>
+	</element>
+</schema>
