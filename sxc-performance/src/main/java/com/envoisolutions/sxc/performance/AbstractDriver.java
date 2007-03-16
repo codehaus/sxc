@@ -46,6 +46,7 @@ public abstract class AbstractDriver extends JapexDriverBase {
 //    }
     
     public void prepare(TestCase tc) {
+        
         pckg = tc.getParam("package");
         write = tc.getBooleanParam("write");
         createContext(tc);
@@ -98,7 +99,6 @@ public abstract class AbstractDriver extends JapexDriverBase {
             
             unmarshaller = context.createUnmarshaller();
             marshaller = context.createMarshaller();
-            
             String schema = tc.getParam("schema");
             if (schema != null) {
                 SchemaFactory factory = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
