@@ -51,6 +51,7 @@ public class MarshallerImpl implements Marshaller {
     private ValidationEventHandler eventHandler;
     private Schema schema;
     private JAXBIntrospector introspector;
+    private boolean writeStartAndEnd = true;
     
     public MarshallerImpl(JAXBContext jaxbContext, Context context) {
         super();
@@ -162,10 +163,8 @@ public class MarshallerImpl implements Marshaller {
                 throw new MarshalException("Object must be annotated with @XmlRootElement or be a JAXBElement!");
             }
             
-            Boolean frag = (Boolean) getProperty(Marshaller.JAXB_FRAGMENT);
-            
             XoXMLStreamWriter w = new XoXMLStreamWriterImpl(xsw);
-            if (frag == null || !frag) {
+            if (writeStartAndEnd) {
                 w.writeStartDocument();
             }
             
@@ -218,7 +217,7 @@ public class MarshallerImpl implements Marshaller {
                 w.writeEndElement();
             }
             
-            if (frag == null || !frag) {
+            if (writeStartAndEnd) {
                 w.writeEndDocument();
             }
         } catch (Exception e) {
@@ -255,7 +254,12 @@ public class MarshallerImpl implements Marshaller {
     }
 
     public void setProperty(String key, Object value) throws PropertyException {
+        if (key.equals(Marshaller.JAXB_FRAGMENT)) {
+            writeStartAndEnd = !((Boolean) value).booleanValue();
+        }
+        
         properties.put(key, value);
+        
     }
 
     public void setSchema(Schema schema) {

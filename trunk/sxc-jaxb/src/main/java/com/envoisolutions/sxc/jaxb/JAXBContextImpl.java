@@ -1,5 +1,12 @@
 package com.envoisolutions.sxc.jaxb;
 
+import com.envoisolutions.sxc.Context;
+import com.envoisolutions.sxc.builder.BuildException;
+import com.envoisolutions.sxc.builder.Builder;
+import com.envoisolutions.sxc.builder.impl.BuilderImpl;
+import com.sun.xml.bind.v2.ContextFactory;
+import com.sun.xml.bind.v2.model.runtime.RuntimeTypeInfoSet;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -12,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringTokenizer;
+import java.util.logging.Logger;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -22,15 +30,9 @@ import javax.xml.bind.Unmarshaller;
 import javax.xml.bind.Validator;
 import javax.xml.namespace.QName;
 
-import com.envoisolutions.sxc.Context;
-import com.envoisolutions.sxc.builder.BuildException;
-import com.envoisolutions.sxc.builder.Builder;
-import com.envoisolutions.sxc.builder.impl.BuilderImpl;
-import com.sun.xml.bind.v2.ContextFactory;
-import com.sun.xml.bind.v2.model.runtime.RuntimeTypeInfoSet;
-
 public class JAXBContextImpl extends JAXBContext {
-    
+    private static final Logger logger = Logger.getLogger(JAXBContextImpl.class.getName());
+        
     private Context context;
     private Marshaller marshaller;
     private UnmarshallerImpl unmarshaller;
@@ -146,6 +148,7 @@ public class JAXBContextImpl extends JAXBContext {
         context = builder.compile();
         marshaller = new MarshallerImpl(this, context);
         unmarshaller = new UnmarshallerImpl(this, c2type, context);
+        logger.info("Created SXC JAXB Context.");
     }
     
     @Override

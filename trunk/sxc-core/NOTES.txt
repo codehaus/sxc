@@ -1,9 +1,7 @@
 JAXB TODO
-0.5 Release
+0.6 Release
 - Attachments
 - ObjectFactorys
-
-BETA 2
 - IDRef
 - mixed content
 - Unsupported types: URI, xs:any, Document

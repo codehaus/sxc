@@ -51,7 +51,7 @@ import com.sun.xml.bind.v2.model.runtime.RuntimeTypeRef;
 import com.sun.xml.bind.v2.model.runtime.RuntimeValuePropertyInfo;
 
 public class ReaderIntrospector {
-	private static final Logger logger = Logger.getLogger(ReaderIntrospector.class.getName());
+    private static final Logger logger = Logger.getLogger(ReaderIntrospector.class.getName());
 	
     private ElementParserBuilder rootReader;
     private JType type_dtFactory;

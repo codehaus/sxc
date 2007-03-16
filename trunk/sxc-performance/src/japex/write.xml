@@ -13,7 +13,7 @@
 
   <driver name="com.envoisolutions.caserta.performance.JAXBRIDriver">
     <param name="Description" value="JAXB RI" />
-   <param name="japex.driverClass" value="com.envoisolutions.sxc.performance.JAXBRIDriver" />
+    <param name="japex.driverClass" value="com.envoisolutions.sxc.performance.JAXBRIDriver" />
   </driver>
 
   <testCase name="invoice.xml">
@@ -21,6 +21,11 @@
     <param name="jaxbPackage" value="org.apache.cxf.courseware.invoice" />
   </testCase>
 
+  <testCase name="intCollection-1000.xml">
+    <param name="inputFile" value="src/test/intCollection-1000.xml" />
+    <param name="jaxbPackage" value="com.envoisolutions.caserta" />
+  </testCase>
+  
   <testCase name="intCollection-100.xml">
     <param name="inputFile" value="src/test/intCollection-100.xml" />
     <param name="jaxbPackage" value="com.envoisolutions.caserta" />

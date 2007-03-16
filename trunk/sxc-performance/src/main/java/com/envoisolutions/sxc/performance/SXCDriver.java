@@ -8,7 +8,7 @@ public class SXCDriver extends AbstractDriver {
    
     @Override
     protected void createContext(TestCase tc) {
-        System.setProperty("streax-xo.output.directory", "target/tmp-jaxb");
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
         
         try {
             context = JAXBContextImpl.createContext(tc.getParam("jaxbPackage"), 
