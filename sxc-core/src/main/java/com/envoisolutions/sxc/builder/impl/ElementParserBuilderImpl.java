@@ -36,6 +36,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
     Map<QName, AttributeParserBuilderImpl> attributes = new HashMap<QName, AttributeParserBuilderImpl>();
     Map<QName, ElementParserBuilderImpl> xsiTypes = new HashMap<QName, ElementParserBuilderImpl>();
     List<ElementParserBuilderImpl> states = new ArrayList<ElementParserBuilderImpl>();
+    int varCount = 0;
     
     ElementParserBuilderImpl anyElement;
     boolean root;
@@ -191,13 +192,13 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
     private JVar createVar(String value, Class<?> cls, boolean nillable) {
         JVar var;
         if (nillable) {
-            var = method.body().decl(model._ref(cls), "value", JExpr._null());
+            var = method.body().decl(model._ref(cls), "value" + varCount++, JExpr._null());
             JConditional cond = method.body()._if(xsrVar.invoke("isXsiNil").not());
             
             JInvocation invocation = xsrVar.invoke(value);
             cond._then().assign(var, invocation);
         } else {
-            var = method.body().decl(model._ref(cls), "value", xsrVar.invoke(value));
+            var = method.body().decl(model._ref(cls), "value" + varCount++, xsrVar.invoke(value));
         }
         
         return var;
