@@ -8,6 +8,7 @@ import javax.xml.stream.XMLStreamReader;
 
 public class XoXMLStreamReaderImpl implements XoXMLStreamReader {
     XMLStreamReader reader;
+    String text;
 
     private int depth = 0;
     private final static String XSI_NS = "http://www.w3.org/2001/XMLSchema-instance";
@@ -134,8 +135,11 @@ public class XoXMLStreamReaderImpl implements XoXMLStreamReader {
     }
 
     public String getElementText() throws XMLStreamException {
-        depth--;
-        return reader.getElementText();
+        if (text == null) {
+            depth--;
+            text = reader.getElementText();
+        }
+        return text;
     }
 
     public String getEncoding() {
@@ -269,6 +273,7 @@ public class XoXMLStreamReaderImpl implements XoXMLStreamReader {
     }
 
     public int next() throws XMLStreamException {
+        text = null;
         int next = reader.next();
 
         if (next == START_ELEMENT) {
