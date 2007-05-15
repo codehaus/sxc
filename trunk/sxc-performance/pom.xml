@@ -47,7 +47,6 @@
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
       <version>3.8.1</version>
-      <scope>test</scope>
     </dependency>
     
   </dependencies>
@@ -58,7 +57,7 @@
         <artifactId>maven-antrun-plugin</artifactId>
         <executions>
           <execution>
-            <phase>generate-test-sources</phase>
+            <phase>generate-sources</phase>
             <goals>
               <goal>run</goal>
             </goals>
@@ -72,7 +71,7 @@
                   <schema includes="**/*.xsd" dir="${basedir}/src/test/schema" />
                 </xjc>
               </tasks>
-              <testSourceRoot>${project.build.directory}/generated-source</testSourceRoot>
+              <sourceRoot>${project.build.directory}/generated-sources</sourceRoot>
             </configuration>
           </execution>
         </executions>
@@ -96,10 +95,10 @@
         <version>1.0</version>
         <executions>
           <execution>
-            <id>add-test-source</id>
+            <id>add--source</id>
             <phase>generate-sources</phase>
             <goals>
-              <goal>add-test-source</goal>
+              <goal>add-source</goal>
             </goals>
             <configuration>
               <sources>
