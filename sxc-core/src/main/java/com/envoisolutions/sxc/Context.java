@@ -15,8 +15,25 @@ package com.envoisolutions.sxc;
 
 import java.util.HashMap;
 
-public abstract class Context extends HashMap<String, Object> {
-    
+/**
+ * Entry point to SXC runtime.
+ *
+ * <p>
+ * {@link Context} serves as the factory of {@link Reader} and {@link Writer},
+ * as well as the generic configuration mechanism ({@link HashMap}) 
+ */
+public abstract class Context extends HashMap<String,Object> {
+
+    /**
+     * Obtains an instance of {@link Reader}.
+     *
+     * <p>
+     * Stateless {@link Reader} implementation may return the same reader
+     * for multiple invocations.
+     *
+     * @return
+     *      null if the reader was not generated for this {@link Context}.
+     */
     public abstract Reader createReader();
     
     public abstract Writer createWriter();
