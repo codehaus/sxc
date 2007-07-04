@@ -20,12 +20,12 @@ public class ElementWriterBuilderImpl extends AbstractWriterBuilder implements E
     
     private JBlock attributeBlock;
 
-    public ElementWriterBuilderImpl(BuildContext buildContext) {
+    public ElementWriterBuilderImpl(BuildContext buildContext,String className) {
         this.buildContext = buildContext;
         this.model = buildContext.getCodeModel();
         
         try {
-            writerClass = model._class(getContextClassName());
+            writerClass = model._class(className);
             writerClass._implements(GeneratedWriter.class);
         } catch (JClassAlreadyExistsException e) {
             throw new BuildException(e);

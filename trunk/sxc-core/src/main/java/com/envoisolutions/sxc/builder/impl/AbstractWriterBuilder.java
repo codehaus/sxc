@@ -34,10 +34,6 @@ public abstract class AbstractWriterBuilder implements WriterBuilder {
         super();
     }
 
-    protected String getContextClassName() {
-        return "generated.sxc.Writer";
-    }
-
     public void declareException(Class cls) {
 		exceptions.add(cls);
 		method._throws(cls);
