@@ -10,17 +10,17 @@ import com.envoisolutions.sxc.builder.ElementWriterBuilder;
 import com.envoisolutions.sxc.compiler.Compiler;
 import com.envoisolutions.sxc.compiler.JavacCompiler;
 import com.envoisolutions.sxc.util.Util;
-import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JDefinedClass;
-import com.sun.codemodel.JMod;
-import com.sun.codemodel.JExpr;
+import com.sun.codemodel.CodeWriter;
 import com.sun.codemodel.JClassAlreadyExistsException;
+import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JMod;
+import com.sun.codemodel.writer.FileCodeWriter;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.PrintStream;
 
 public class BuilderImpl implements Builder {
 
@@ -93,21 +93,20 @@ public class BuilderImpl implements Builder {
 
     public void write(File dir) throws IOException, BuildException {
         this.file = dir;
-        
+
         // file = new File(file, new Long(System.currentTimeMillis()).toString());
         file.mkdirs();
 
+        write(new FileCodeWriter(file));
+    }
+
+    public void write(CodeWriter writer) throws IOException, BuildException {
         if(parserBuilder!=null)
             parserBuilder.write();
         if(writerBuilder!=null)
             writerBuilder.write();
         
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        PrintStream stream = new PrintStream(bos);
-        buildContext.getCodeModel().build(file, stream);
-        
-        // todo: someday maybe print error messages 
-        // (but its really just annoying data about what file was outputted)
+        buildContext.getCodeModel().build(writer);
     }
     
     public Context compile() {
