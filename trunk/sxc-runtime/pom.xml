@@ -12,29 +12,9 @@
   
   <dependencies>
     <dependency>
-      <groupId>org.codehaus.woodstox</groupId>
-      <artifactId>wstx-asl</artifactId>
-      <version>3.2.0</version>
-    </dependency>
-
-    <!--dependency>
-      <groupId>org.apache.commons</groupId>
-      <artifactId>commons-jci-eclipse</artifactId>
-      <version>3.2.0.666</version>
-      <optional>true</optional>
-    </dependency>
-
-    <dependency>
-      <groupId>com.sun.xml.bind</groupId>
-      <artifactId>jaxb-xjc</artifactId>
-      <version>2.1.2</version>
-    </dependency-->
-
-    <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <version>3.8.1</version>
-      <optional>true</optional>
+      <groupId>stax</groupId>
+      <artifactId>stax-api</artifactId>
+      <version>1.0.1</version>
     </dependency>
   </dependencies>
 </project>
