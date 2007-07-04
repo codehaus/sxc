@@ -20,6 +20,7 @@
   </organization>
   
   <modules>
+    <module>sxc-runtime</module>
     <module>sxc-core</module>
     <module>sxc-xpath</module>
     <module>sxc-jaxb</module>
