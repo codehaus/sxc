@@ -1,7 +1,5 @@
 package com.envoisolutions.sxc.builder.impl;
 
-import javax.xml.namespace.QName;
-
 import com.envoisolutions.sxc.builder.WriterBuilder;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
@@ -9,6 +7,8 @@ import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JVar;
+
+import javax.xml.namespace.QName;
 
 public class AttributeWriterBuilder extends AbstractWriterBuilder implements WriterBuilder {
 

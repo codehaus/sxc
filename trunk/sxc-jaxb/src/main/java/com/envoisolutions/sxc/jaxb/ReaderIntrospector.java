@@ -77,7 +77,7 @@ public class ReaderIntrospector {
         
         JDefinedClass readerCls = rootReader.getReaderClass();
         dtf = readerCls.field(JMod.STATIC, type_dtFactory, "dtFactory");
-        JMethod constructor = readerCls.constructor(JMod.PUBLIC);
+        JMethod constructor = builder.getParserConstructor();
         JTryBlock tb = constructor.body()._try();
         JBlock body = tb.body();
         body.assign(dtf, JExpr.direct(DatatypeFactory.class.getName()+".newInstance()"));

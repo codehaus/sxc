@@ -5,6 +5,7 @@ import java.io.IOException;
 
 import com.envoisolutions.sxc.Context;
 import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JMethod;
 
 
 public interface Builder {
@@ -18,5 +19,6 @@ public interface Builder {
     void write(File file) throws BuildException, IOException;
 
     JCodeModel getCodeModel();
-    
+
+    JMethod getParserConstructor();
 }

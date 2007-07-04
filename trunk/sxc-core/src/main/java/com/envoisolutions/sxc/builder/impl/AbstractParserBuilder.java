@@ -1,13 +1,5 @@
 package com.envoisolutions.sxc.builder.impl;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import javax.xml.stream.XMLStreamException;
-
-import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.CodeBody;
 import com.envoisolutions.sxc.builder.ParserBuilder;
@@ -19,6 +11,12 @@ import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
+
+import javax.xml.stream.XMLStreamException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public abstract class AbstractParserBuilder implements ParserBuilder {
 
@@ -87,7 +85,7 @@ public abstract class AbstractParserBuilder implements ParserBuilder {
 
     protected void addBasicArgs(JMethod method) {
         xsrVar = method.param(XoXMLStreamReader.class, "reader");
-        rtContextVar = method.param(Context.class, "context");
+        rtContextVar = method.param(buildContext.getStringToObjectMap(), "properties");
 
         method._throws(XMLStreamException.class);
     }

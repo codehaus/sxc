@@ -12,18 +12,24 @@ import com.envoisolutions.sxc.util.XoXMLStreamReader;
 import com.envoisolutions.sxc.util.XoXMLStreamReaderImpl;
 
 public abstract class Reader {
-    Context context;
+    protected Context context;
     XMLInputFactory xif = new WstxInputFactory();
-    
-    public Reader(Context context) {
+
+    protected Reader(Context context) {
         this.context = context;
     }
 
-    public Object read(InputStream is) throws Exception {
+    public Object read(InputStream is, Map<String,Object> properties) throws Exception {
         XMLStreamReader r = xif.createXMLStreamReader(is);
-        Object o = read(r, null);
-        r.close();
-        return o;
+        try {
+            return read(r, properties);
+        } finally {
+            r.close();
+        }
+    }
+
+    public Object read(InputStream is) throws Exception {
+        return read(is,null);
     }
     
     public Object read(XMLStreamReader xsr) throws Exception {

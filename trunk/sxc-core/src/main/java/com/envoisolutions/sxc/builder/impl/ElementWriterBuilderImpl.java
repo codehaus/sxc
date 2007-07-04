@@ -1,10 +1,9 @@
 package com.envoisolutions.sxc.builder.impl;
 
-import javax.xml.namespace.QName;
-
+import com.envoisolutions.sxc.Writer;
+import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.ElementWriterBuilder;
-import com.envoisolutions.sxc.builder.GeneratedWriter;
 import com.envoisolutions.sxc.builder.WriterBuilder;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClassAlreadyExistsException;
@@ -16,6 +15,8 @@ import com.sun.codemodel.JMod;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 
+import javax.xml.namespace.QName;
+
 public class ElementWriterBuilderImpl extends AbstractWriterBuilder implements ElementWriterBuilder {
     
     private JBlock attributeBlock;
@@ -26,14 +27,16 @@ public class ElementWriterBuilderImpl extends AbstractWriterBuilder implements E
         
         try {
             writerClass = model._class(className);
-            writerClass._implements(GeneratedWriter.class);
+            writerClass._extends(Writer.class);
         } catch (JClassAlreadyExistsException e) {
             throw new BuildException(e);
         }
+
+        JMethod ctr = writerClass.constructor(JMod.PUBLIC);
+        ctr.body().invoke("super").arg(ctr.param(Context.class,"context"));
         
         method = writerClass.method(JMod.PUBLIC | JMod.FINAL, void.class, "write");
-        addBasicArgs(method);
-        objectVar = method.param(Object.class, "o");
+        objectVar = addBasicArgs(method, model.ref(Object.class), "o");
         currentBlock = method.body();
     }
     
@@ -62,10 +65,10 @@ public class ElementWriterBuilderImpl extends AbstractWriterBuilder implements E
         JBlock block = conditional._then();
         
         JMethod m = buildContext.getNextWriteMethod(writerClass);
-        addBasicArgs(m);
-        JVar newObjectVar = m.param(type, "_" + type.name().replaceAll("\\[", "").replace("]", ""));
-        
-        block.invoke(m).arg(xswVar).arg(rtContextVar).arg(JExpr.cast(type, objectVar));
+        JVar newObjectVar = addBasicArgs(m,
+            type, "_" + type.name().replaceAll("\\[", "").replace("]", ""));
+
+        block.invoke(m).arg(xswVar).arg(JExpr.cast(type, objectVar)).arg(rtContextVar);
         
         block._return();
         return new ElementWriterBuilderImpl(this, name, m, newObjectVar);
@@ -91,10 +94,9 @@ public class ElementWriterBuilderImpl extends AbstractWriterBuilder implements E
         }
         
         JMethod m = buildContext.getNextWriteMethod(writerClass);
-        addBasicArgs(m);
-        JVar newObjectVar = m.param(type, "_" + type.name().replaceAll("\\[", "").replace("]", ""));
+        JVar newObjectVar = addBasicArgs(m, type, "_" + type.name().replaceAll("\\[", "").replace("]", ""));
         
-        block.invoke(m).arg(xswVar).arg(rtContextVar).arg(JExpr.cast(type, var));
+        block.invoke(m).arg(xswVar).arg(JExpr.cast(type, var)).arg(rtContextVar);
 
         block.add(xswVar.invoke("writeEndElement"));
         
@@ -117,11 +119,10 @@ public class ElementWriterBuilderImpl extends AbstractWriterBuilder implements E
 
     public WriterBuilder writeAttribute(QName name, JType type, JExpression var) {
         JMethod m = buildContext.getNextWriteMethod(writerClass);
-        addBasicArgs(m);
-        JVar newObjectVar = m.param(type, "_obj");
-        
+        JVar newObjectVar = addBasicArgs(m, type, "_obj");
+
         JBlock block = attributeBlock;
-        block.invoke(m).arg(xswVar).arg(rtContextVar).arg(JExpr.cast(type, var));
+        block.invoke(m).arg(xswVar).arg(JExpr.cast(type, var)).arg(rtContextVar);
 
         return new AttributeWriterBuilder(this, name, m, newObjectVar);
     }

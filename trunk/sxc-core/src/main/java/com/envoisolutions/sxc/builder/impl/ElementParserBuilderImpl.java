@@ -1,20 +1,10 @@
 package com.envoisolutions.sxc.builder.impl;
 
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import javax.xml.namespace.QName;
-import javax.xml.stream.XMLStreamConstants;
-import javax.xml.stream.XMLStreamException;
-
+import com.envoisolutions.sxc.Reader;
 import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.CodeBody;
 import com.envoisolutions.sxc.builder.ElementParserBuilder;
-import com.envoisolutions.sxc.builder.GeneratedReader;
 import com.envoisolutions.sxc.builder.ParserBuilder;
 import com.envoisolutions.sxc.util.XoXMLStreamReader;
 import com.sun.codemodel.JBlock;
@@ -28,6 +18,15 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
+
+import javax.xml.namespace.QName;
+import javax.xml.stream.XMLStreamConstants;
+import javax.xml.stream.XMLStreamException;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class ElementParserBuilderImpl extends AbstractParserBuilder implements ElementParserBuilder {
 
@@ -45,17 +44,21 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
     private boolean valueType;
     private boolean checkXsiTypes = true;
     private JInvocation methodInvocation;
-    
+    JMethod constructor;
+
     public ElementParserBuilderImpl(BuildContext buildContext, String className) throws BuildException {
         this.buildContext = buildContext;
         model = buildContext.getCodeModel();
         try {
             readerClass = model._class(className);
-            readerClass._implements(GeneratedReader.class);
+            readerClass._extends(Reader.class);
         } catch (JClassAlreadyExistsException e) {
             throw new BuildException(e);
         }
-        
+
+        constructor = readerClass.constructor(JMod.PUBLIC);
+        constructor.body().invoke("super").arg(constructor.param(Context.class,"context"));
+
         method = readerClass.method(JMod.PUBLIC | JMod.FINAL, Object.class, "read");
         
         addBasicArgs(method);
@@ -294,7 +297,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
     protected void writeReadAsType() {
         JMethod m = getReaderClass().method(JMod.PUBLIC, Object.class, "read");
         m.param(XoXMLStreamReader.class, "reader");
-        m.param(Context.class, "context");
+        m.param(buildContext.getStringToObjectMap(), "properties");
         JVar typeVar = m.param(QName.class, "type");
         m._throws(XMLStreamException.class);
         
