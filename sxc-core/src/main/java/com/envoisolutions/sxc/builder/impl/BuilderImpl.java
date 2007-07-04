@@ -1,10 +1,5 @@
 package com.envoisolutions.sxc.builder.impl;
 
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.PrintStream;
-
 import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.Builder;
@@ -14,6 +9,12 @@ import com.envoisolutions.sxc.compiler.Compiler;
 import com.envoisolutions.sxc.compiler.JavacCompiler;
 import com.envoisolutions.sxc.util.Util;
 import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JMethod;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintStream;
 
 public class BuilderImpl implements Builder {
 
@@ -46,7 +47,11 @@ public class BuilderImpl implements Builder {
     public JCodeModel getCodeModel() {
         return buildContext.getCodeModel();
     }
-    
+
+    public JMethod getParserConstructor() {
+        return parserBuilder.constructor;
+    }
+
     public void write(File dir) throws IOException, BuildException {
         this.file = dir;
         

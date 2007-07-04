@@ -11,9 +11,9 @@ import com.envoisolutions.sxc.util.XoXMLStreamWriter;
 import com.envoisolutions.sxc.util.XoXMLStreamWriterImpl;
 
 public abstract class Writer {
-    Context context;
+    protected Context context;
     XMLOutputFactory xof = new WstxOutputFactory();
-    
+
     public Writer(Context context) {
         this.context = context;
     }

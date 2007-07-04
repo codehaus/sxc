@@ -1,14 +1,14 @@
 package com.envoisolutions.sxc.builder.impl;
 
-import java.util.HashMap;
-import java.util.Map;
-
-import javax.xml.namespace.QName;
-
+import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
+
+import javax.xml.namespace.QName;
+import java.util.HashMap;
+import java.util.Map;
 
 public class BuildContext {
     private JCodeModel model = new JCodeModel();
@@ -16,14 +16,23 @@ public class BuildContext {
     
     private int readCount;
     private int writeCount;
+
+    /**
+     * {@code Map<String,Object>} type.
+     */
+    private JClass stringToObjectMap = model.ref(Map.class).narrow(String.class,Object.class);
     
     public JCodeModel getCodeModel() {
         return model;
     }
 
+    JClass getStringToObjectMap() {
+        return stringToObjectMap;
+    }
+
     JMethod getNextReadMethod(JDefinedClass contextClass) {
         readCount++;
-        return contextClass.method(JMod.PUBLIC | JMod.FINAL | JMod.STATIC, void.class, "read" + readCount);
+        return contextClass.method(JMod.PUBLIC | JMod.FINAL, void.class, "read" + readCount);
     }
 
 

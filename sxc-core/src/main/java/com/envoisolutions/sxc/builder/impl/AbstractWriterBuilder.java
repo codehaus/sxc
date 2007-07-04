@@ -1,12 +1,5 @@
 package com.envoisolutions.sxc.builder.impl;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import javax.xml.namespace.QName;
-import javax.xml.stream.XMLStreamException;
-
-import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.builder.WriterBuilder;
 import com.envoisolutions.sxc.util.XoXMLStreamWriter;
 import com.sun.codemodel.JBlock;
@@ -15,6 +8,12 @@ import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JVar;
+import com.sun.codemodel.JType;
+
+import javax.xml.namespace.QName;
+import javax.xml.stream.XMLStreamException;
+import java.util.ArrayList;
+import java.util.List;
 
 public abstract class AbstractWriterBuilder implements WriterBuilder {
 
@@ -39,15 +38,19 @@ public abstract class AbstractWriterBuilder implements WriterBuilder {
 		method._throws(cls);
 	}
 
-	protected void addBasicArgs(JMethod method) {
+	protected JVar addBasicArgs(JMethod method, JType sourceObjectType, String sourceVariableName) {
         xswVar = method.param(XoXMLStreamWriter.class, "writer");
-        rtContextVar = method.param(Context.class, "context");
+        JVar var = method.param(sourceObjectType, sourceVariableName);
+
+        rtContextVar = method.param(buildContext.getStringToObjectMap(), "properties");
     
         method._throws(XMLStreamException.class);
         
         for (Class c : exceptions) {
         	method._throws(c);
         }
+
+        return var;
     }
 
     public JCodeModel getCodeModel() {
@@ -57,7 +60,7 @@ public abstract class AbstractWriterBuilder implements WriterBuilder {
     public void moveTo(WriterBuilder builder) {
         currentBlock.add(
             JExpr._this().invoke(((AbstractWriterBuilder)builder).method)
-                .arg(xswVar).arg(rtContextVar).arg(JExpr.cast(objectVar.type(), objectVar)));
+                .arg(xswVar).arg(JExpr.cast(objectVar.type(), objectVar)).arg(rtContextVar));
     }
 
     protected String getGetter(String name) {
