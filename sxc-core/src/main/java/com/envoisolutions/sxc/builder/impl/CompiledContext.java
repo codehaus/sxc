@@ -20,12 +20,22 @@ public class CompiledContext extends Context {
     
     public CompiledContext(ClassLoader cl, String readerClsName, String writerClsName) {   
         try {
-            Class<?> readerCls = cl.loadClass(readerClsName);
-            Class<?> writerCls = cl.loadClass(writerClsName);
-            
-            final GeneratedReader gr = (GeneratedReader) readerCls.newInstance();
-            final GeneratedWriter gw = (GeneratedWriter) writerCls.newInstance();
-            
+            final GeneratedReader gr;
+            final GeneratedWriter gw;
+
+            if(readerClsName!=null) {
+                Class<?> readerCls = cl.loadClass(readerClsName);
+                gr = (GeneratedReader) readerCls.newInstance();
+            } else {
+                gr = null;
+            }
+            if(writerClsName!=null) {
+                Class<?> writerCls = cl.loadClass(writerClsName);
+                gw = (GeneratedWriter) writerCls.newInstance();
+            } else {
+                gw = null;
+            }
+
             final CompiledContext ctx = this;
             this.reader = new Reader(this) {
                 @Override

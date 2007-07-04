@@ -46,11 +46,11 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
     private boolean checkXsiTypes = true;
     private JInvocation methodInvocation;
     
-    public ElementParserBuilderImpl(BuildContext buildContext) throws BuildException {
+    public ElementParserBuilderImpl(BuildContext buildContext, String className) throws BuildException {
         this.buildContext = buildContext;
         model = buildContext.getCodeModel();
         try {
-            readerClass = model._class(getContextClassName());
+            readerClass = model._class(className);
             readerClass._implements(GeneratedReader.class);
         } catch (JClassAlreadyExistsException e) {
             throw new BuildException(e);
@@ -565,10 +565,6 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         // TODO: throw exception if unknown elements are encountered and allowUnknown == false
         if (builder != this)
             builder.write();
-    }
-    
-    private String getContextClassName() {
-        return "generated.sxc.Reader";
     }
 
     private void setReturnType(JType type) {

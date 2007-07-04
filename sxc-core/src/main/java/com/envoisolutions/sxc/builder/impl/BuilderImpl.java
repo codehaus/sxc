@@ -23,12 +23,18 @@ public class BuilderImpl implements Builder {
     private ElementWriterBuilderImpl writerBuilder;
     private Compiler compiler = new JavacCompiler();
     
-    public BuilderImpl() {
+    public BuilderImpl(String readerClassName, String writerClassName) {
         this.buildContext = new BuildContext();
-        parserBuilder = new ElementParserBuilderImpl(buildContext);
-        writerBuilder = new ElementWriterBuilderImpl(buildContext);
+        if(readerClassName!=null)
+            parserBuilder = new ElementParserBuilderImpl(buildContext,readerClassName);
+        if(writerClassName!=null)
+            writerBuilder = new ElementWriterBuilderImpl(buildContext,writerClassName);
     }
-    
+
+    public BuilderImpl() {
+        this("generated.sxc.Reader","generated.sxc.Writer");
+    }
+
     public ElementParserBuilder getParserBuilder() {
         return parserBuilder;
     }
@@ -46,9 +52,11 @@ public class BuilderImpl implements Builder {
         
         // file = new File(file, new Long(System.currentTimeMillis()).toString());
         file.mkdirs();
-        
-        parserBuilder.write();
-        writerBuilder.write();
+
+        if(parserBuilder!=null)
+            parserBuilder.write();
+        if(writerBuilder!=null)
+            writerBuilder.write();
         
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         PrintStream stream = new PrintStream(bos);
@@ -90,7 +98,9 @@ public class BuilderImpl implements Builder {
             Util.delete(dir);
         }
         
-        return new CompiledContext(cl, parserBuilder.readerClass.fullName(), writerBuilder.getWriterClass().fullName());
+        return new CompiledContext(cl,
+            parserBuilder!=null ? parserBuilder.readerClass.fullName() : null,
+            writerBuilder!=null ? writerBuilder.getWriterClass().fullName() : null);
     }
     
     public Compiler getCompiler() {
