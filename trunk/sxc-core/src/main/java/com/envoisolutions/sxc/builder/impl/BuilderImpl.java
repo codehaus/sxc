@@ -23,7 +23,16 @@ public class BuilderImpl implements Builder {
     private BuildContext buildContext;
     private ElementWriterBuilderImpl writerBuilder;
     private Compiler compiler = new JavacCompiler();
-    
+
+    /**
+     *
+     * @param readerClassName
+     *      Fully qualified class name of the reader to be generated.
+     *      null to not generate the reader.
+     * @param writerClassName
+     *      Fully qualified class name of the writer to be generated.
+     *      null to not generate the writer.
+     */
     public BuilderImpl(String readerClassName, String writerClassName) {
         this.buildContext = new BuildContext();
         if(readerClassName!=null)
@@ -32,6 +41,9 @@ public class BuilderImpl implements Builder {
             writerBuilder = new ElementWriterBuilderImpl(buildContext,writerClassName);
     }
 
+    /**
+     * Generates both reader and writer by using default names. 
+     */
     public BuilderImpl() {
         this("generated.sxc.Reader","generated.sxc.Writer");
     }
