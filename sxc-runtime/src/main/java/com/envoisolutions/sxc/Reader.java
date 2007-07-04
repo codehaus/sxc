@@ -1,19 +1,17 @@
 package com.envoisolutions.sxc;
 
-import java.io.InputStream;
-import java.util.Map;
+import com.envoisolutions.sxc.util.XoXMLStreamReader;
+import com.envoisolutions.sxc.util.XoXMLStreamReaderImpl;
 
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamReader;
-
-import com.ctc.wstx.stax.WstxInputFactory;
-import com.envoisolutions.sxc.util.XoXMLStreamReader;
-import com.envoisolutions.sxc.util.XoXMLStreamReaderImpl;
+import java.io.InputStream;
+import java.util.Map;
 
 public abstract class Reader {
     protected Context context;
-    XMLInputFactory xif = new WstxInputFactory();
+    XMLInputFactory xif = XMLInputFactory.newInstance();
 
     protected Reader(Context context) {
         this.context = context;

@@ -19,16 +19,15 @@
 
 package com.envoisolutions.sxc.util;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-
-import javax.xml.namespace.NamespaceContext;
-
 import org.w3c.dom.Attr;
 import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
+
+import javax.xml.namespace.NamespaceContext;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 public class W3CNamespaceContext implements NamespaceContext {
     private Element currentNode;

@@ -1,18 +1,16 @@
 package com.envoisolutions.sxc;
 
-import java.io.OutputStream;
-import java.util.Map;
-
-import javax.xml.stream.XMLOutputFactory;
-import javax.xml.stream.XMLStreamWriter;
-
-import com.ctc.wstx.stax.WstxOutputFactory;
 import com.envoisolutions.sxc.util.XoXMLStreamWriter;
 import com.envoisolutions.sxc.util.XoXMLStreamWriterImpl;
 
+import javax.xml.stream.XMLOutputFactory;
+import javax.xml.stream.XMLStreamWriter;
+import java.io.OutputStream;
+import java.util.Map;
+
 public abstract class Writer {
     protected Context context;
-    XMLOutputFactory xof = new WstxOutputFactory();
+    XMLOutputFactory xof = XMLOutputFactory.newInstance();
 
     public Writer(Context context) {
         this.context = context;
