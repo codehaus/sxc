@@ -22,7 +22,16 @@ public interface ParserBuilder {
      * @return
      */
     JVar getXSR();
-    
+
+    /**
+     * Pass a variable in the parent {@link ParserBuilder} to this parser builder.
+     *
+     * @param parentVar
+     *      Variable used in the parent's {@link ParserBuilder} scope.
+     *
+     * @return
+     *      Variable that represents the local variable in the current {@link ParserBuilder}'s scope.
+     */
     JVar passParentVariable(JVar parentVar);
 
     boolean isRequired();
