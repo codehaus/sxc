@@ -18,6 +18,7 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
+import com.sun.codemodel.JClass;
 
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamConstants;
@@ -46,12 +47,17 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
     private JInvocation methodInvocation;
     JMethod constructor;
 
+    /**
+     * Base class to extend from. Only used when root.
+     */
+    JClass baseClass;
+
     public ElementParserBuilderImpl(BuildContext buildContext, String className) throws BuildException {
         this.buildContext = buildContext;
         model = buildContext.getCodeModel();
         try {
             readerClass = model._class(className);
-            readerClass._extends(Reader.class);
+            baseClass = model.ref(Reader.class);
         } catch (JClassAlreadyExistsException e) {
             throw new BuildException(e);
         }
@@ -291,6 +297,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
 
         if (root) {
             writeReadAsType();
+            readerClass._extends(baseClass);
         }
     }
     
