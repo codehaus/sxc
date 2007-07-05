@@ -50,7 +50,7 @@ public abstract class AbstractParserBuilder implements ParserBuilder {
 
 
     public void setAllowUnkown(boolean allow) {
-        allow = true;
+        allowUnknown = allow;
     }
 
     public JVar asInteger(int min, int max) {
