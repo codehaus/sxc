@@ -15,6 +15,9 @@ public interface ParserBuilder {
     
     JCodeModel getCodeModel();
 
+    /**
+     * Reads the value of the attribute/element into a variable of the given type.
+     */
     JVar as(Class<?> cls);
     
     /**
