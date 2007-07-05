@@ -17,6 +17,7 @@ import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
+import com.sun.codemodel.JClass;
 import com.sun.codemodel.writer.FileCodeWriter;
 
 import java.io.File;
@@ -81,6 +82,14 @@ public class BuilderImpl implements Builder {
 
     public ElementWriterBuilder getWriterBuilder() {
         return writerBuilder;
+    }
+
+    public void setReaderBaseClass(Class<? extends Reader> c) {
+        setReaderBaseClass(getCodeModel().ref(c));
+    }
+
+    public void setReaderBaseClass(JClass c) {
+        parserBuilder.baseClass = c;
     }
 
     public JCodeModel getCodeModel() {
