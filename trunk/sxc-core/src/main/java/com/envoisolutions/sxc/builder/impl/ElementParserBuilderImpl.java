@@ -326,7 +326,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         JBlock b = method.body();
         
         // Add XSI checks
-        if (!valueType && xsiTypes.size() > 0 && depth > 1) {
+        if (!valueType && depth > 1) {
             writeXsiChecks(b);
         }
         
@@ -440,6 +440,9 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
     }
 
     private void writeXsiChecks(JBlock b) {
+        if(getXsiTypes().isEmpty())
+            return; // no @xsi:type to look for.
+
         JVar xsiType = b.decl(model._ref(QName.class), "xsiType", xsrVar.invoke("getXsiType"));
         JConditional cond = b._if(xsiType.ne(JExpr._null())); 
         
