@@ -287,6 +287,8 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         
         // Add return statement to the end of the block
         if (returnType != null) {
+            if(root)
+                throw new IllegalStateException("root builder is not allowed to have the return type");
             setReturnType(returnType);
             codeBlock._return(_return);
         } 
