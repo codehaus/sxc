@@ -1,0 +1,6 @@
+<root>
+  <test>
+    <global>global1</global>
+  </test>
+  <global>global2</global>
+</root>
