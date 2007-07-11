@@ -3,7 +3,7 @@
   <groupId>com.envoisolutions.sxc</groupId>
   <artifactId>sxc</artifactId>
   <name>Simple XML Compiler</name>
-  <version>0.6-SNAPSHOT</version>
+  <version>0.7-SNAPSHOT</version>
   <inceptionYear>2006</inceptionYear>
   <packaging>pom</packaging>
   
