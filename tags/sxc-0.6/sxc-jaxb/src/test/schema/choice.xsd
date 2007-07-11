@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    targetNamespace="http://sxc.envoisolutions.com/choice"
+    xmlns:tns="http://sxc.envoisolutions.com/choice"
+    elementFormDefault="qualified"        
+    xmlns:jxb="http://java.sun.com/xml/ns/jaxb"
+    jxb:version="2.0">
+            
+
+    <xsd:group id="ChoiceGroup" name="ChoiceGroup">
+        <xsd:choice>
+            <xsd:element ref="tns:choice1"/>
+            <xsd:element ref="tns:choice2"/>
+        </xsd:choice>
+    </xsd:group> 
+        
+    <xsd:element name="choice1" type="xsd:string"/>
+    <xsd:element name="choice2" type="xsd:string"/>
+        
+    <xsd:element name="Parent">
+        <xsd:complexType>
+            <xsd:sequence>
+                <xsd:group ref="tns:ChoiceGroup" minOccurs="0" maxOccurs="unbounded"/>
+            </xsd:sequence>
+        </xsd:complexType>
+    </xsd:element>
+
+</xsd:schema>

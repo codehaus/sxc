@@ -1,0 +1,23 @@
+<testSuite name="JAXB Read Performance" xmlns="http://www.sun.com/japex/testSuite">
+
+    <param name="japex.classPath" value="target/classes;target/test-classes;target/dependency/*.jar"/>
+    <param name="japex.warmupTime" value="3"/>
+    <param name="japex.runTime" value="2"/>
+    <param name="japex.numberOfThreads" value="10"/>
+                          
+    <driver name="Caserta">
+        <param name="Description" value="Caserta"/>
+        <param name="japex.driverClass" value="com.envoisolutions.sxc.performance.SXCDriver"/>
+    </driver>
+                
+    <driver name="JAXB RI">
+        <param name="Description" value="JAXB RI"/>
+        <param name="japex.driverClass" value="com.envoisolutions.sxc.performance.JAXBRIDriver"/>
+    </driver>
+    
+    <testCase name="invoice.xml">
+        <param name="inputFile" value="src/test/invoice.xml"/>
+        <param name="jaxbPackage" value="org.apache.cxf.courseware.invoice"/>
+    </testCase>
+
+</testSuite>

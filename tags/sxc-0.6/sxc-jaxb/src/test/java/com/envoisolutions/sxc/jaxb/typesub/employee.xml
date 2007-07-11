@@ -1,0 +1,6 @@
+<i:in0 xmlns:i="urn:xfire:inheritance" 
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:type="i:Employee">
+  <i:division>foo</i:division>
+  <i:name>bar</i:name>
+</i:in0>

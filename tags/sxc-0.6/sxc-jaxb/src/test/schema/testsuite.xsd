@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    targetNamespace="http://www.sun.com/japex/testSuite"
+    xmlns:tns="http://www.sun.com/japex/testSuite"
+    elementFormDefault="qualified"        
+    xmlns:jxb="http://java.sun.com/xml/ns/jaxb"
+    jxb:version="2.0">
+            
+    <!-- Adds the suffix Element to avoid name clashes -->
+    <xsd:annotation>
+        <xsd:appinfo>
+            <jxb:schemaBindings>
+                <jxb:nameXmlTransform>
+                    <jxb:elementName suffix="Element"/>
+                </jxb:nameXmlTransform> 
+            </jxb:schemaBindings>
+        </xsd:appinfo>
+    </xsd:annotation>
+
+    <!-- Description element - typically HTML content -->
+    <xsd:element name="description">
+        <xsd:complexType mixed="true">
+            <xsd:complexContent>
+                <xsd:restriction base="xsd:anyType">
+                    <xsd:sequence>
+                        <xsd:any processContents="skip" minOccurs="0" 
+                            maxOccurs="unbounded" namespace="##other"/>
+                    </xsd:sequence>
+                </xsd:restriction>
+            </xsd:complexContent>
+        </xsd:complexType>
+    </xsd:element>
+    
+    <!-- Parameter and parameter groups -->
+    <xsd:element name="param">
+        <xsd:complexType>
+            <xsd:complexContent>
+                <xsd:restriction base="xsd:anyType">
+                    <xsd:attribute name="name"  type="xsd:string" use="required"/>
+                    <xsd:attribute name="value" type="xsd:string" use="required"/>
+                </xsd:restriction>
+            </xsd:complexContent>
+        </xsd:complexType>
+    </xsd:element>
+
+    <xsd:element name="paramGroup">
+        <xsd:complexType>
+            <xsd:sequence>
+                <xsd:group ref="tns:ParamOrParamGroup" minOccurs="1" maxOccurs="unbounded"/>
+            </xsd:sequence>
+            <xsd:attribute name="name" type="xsd:string" use="required"/>
+        </xsd:complexType>
+    </xsd:element>
+    
+    <xsd:group id="ParamOrParamGroup" name="ParamOrParamGroup">
+        <xsd:choice>
+            <xsd:element ref="tns:param"/>
+            <xsd:element ref="tns:paramGroup"/>
+        </xsd:choice>         
+    </xsd:group>
+    
+    <!-- Test cases and test case groups -->
+    <xsd:element name="testCase">
+        <xsd:complexType>
+            <xsd:sequence>
+                <xsd:group ref="tns:ParamOrParamGroup" minOccurs="0"
+                    maxOccurs="unbounded"/>
+            </xsd:sequence>
+            <xsd:attribute name="name" type="xsd:string" use="required"/>
+        </xsd:complexType>
+    </xsd:element>
+
+    <xsd:element name="testCaseGroup">
+        <xsd:complexType>
+            <xsd:sequence>
+                <xsd:group ref="tns:ParamOrParamGroup" minOccurs="0" maxOccurs="unbounded"/>
+                <xsd:group ref="tns:TestCaseOrTestCaseGroup" minOccurs="1" maxOccurs="unbounded"/>
+            </xsd:sequence>
+            <xsd:attribute name="name" type="xsd:string" use="required"/>
+        </xsd:complexType>
+    </xsd:element>
+
+    <xsd:group id="TestCaseOrTestCaseGroup" name="TestCaseOrTestCaseGroup">
+        <xsd:choice>
+            <xsd:element ref="tns:testCase"/>
+            <xsd:element ref="tns:testCaseGroup"/>
+        </xsd:choice>
+    </xsd:group> 
+        
+    <!-- Drivers and driver groups -->
+    <xsd:element name="driver">
+        <xsd:complexType>
+            <xsd:sequence>
+                <!-- Optional description for the driver -->
+                <xsd:element ref="tns:description" minOccurs="0"/>
+                <xsd:group ref="tns:ParamOrParamGroup" minOccurs="0" maxOccurs="unbounded"/>
+            </xsd:sequence>
+            <xsd:attribute name="name" type="xsd:string" use="required"/>
+            <xsd:attribute name="normal" type="xsd:boolean" default="false"/>
+            <xsd:attribute name="extends" type="xsd:string" use="optional"/>
+        </xsd:complexType>
+    </xsd:element>
+        
+    <xsd:element name="driverGroup">
+        <xsd:complexType>
+            <xsd:sequence>
+                <xsd:group ref="tns:ParamOrParamGroup" minOccurs="0" maxOccurs="unbounded"/>
+                <xsd:group ref="tns:DriverOrDriverGroup" minOccurs="1" maxOccurs="unbounded"/>
+            </xsd:sequence>
+            <xsd:attribute name="name" type="xsd:string" use="required"/>
+        </xsd:complexType>
+    </xsd:element>
+    
+    <xsd:group id="DriverOrDriverGroup" name="DriverOrDriverGroup">
+        <xsd:choice>
+            <xsd:element ref="tns:driver"/> 
+            <xsd:element ref="tns:driverGroup"/>
+        </xsd:choice>         
+    </xsd:group>
+    
+    <!-- Test suite -->
+    <xsd:element name="testSuite">
+        <xsd:complexType>
+            <xsd:sequence>
+                <!-- Optional description for the testsuite -->
+                <xsd:element ref="tns:description" minOccurs="0"/>
+                
+                <!-- Zero or more params groups or params -->
+                <xsd:group ref="tns:ParamOrParamGroup" minOccurs="0" maxOccurs="unbounded"/>
+
+                <!-- One or more driver groups or drivers -->
+                <xsd:group ref="tns:DriverOrDriverGroup" minOccurs="1" maxOccurs="unbounded"/>
+                
+                <!-- One or more test case groups or test cases -->        
+                <xsd:group ref="tns:TestCaseOrTestCaseGroup" minOccurs="1" maxOccurs="unbounded"/>
+            </xsd:sequence>      
+            <xsd:attribute name="name" type="xsd:string" use="required"/>
+        </xsd:complexType>
+    </xsd:element>
+
+</xsd:schema>

@@ -1,0 +1,8 @@
+<BinaryData xmlns="http://sxc.envoisolutions.com/binary"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	<octetStream>
+		xmlmime:contentType='image/png'>
+		<xop:Include xmlns:xop='http://www.w3.org/2004/08/xop/include'
+			href='cid:inline-octet-stream' />
+	</octetStream>
+</BinaryData>
