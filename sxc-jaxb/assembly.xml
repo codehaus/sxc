@@ -10,6 +10,7 @@
       <scope>runtime</scope>
       <includes>
         <include>com.envoisolutions.sxc:sxc-core</include>
+        <include>com.envoisolutions.sxc:sxc-runtime</include>
         <include>com.envoisolutions.sxc:sxc-jaxb</include>
       </includes>
       <excludes>
