@@ -3,8 +3,8 @@
   <groupId>com.envoisolutions.sxc</groupId>
   <artifactId>sxc</artifactId>
   <name>Simple XML Compiler</name>
-  <version>0.6</version>
-  <inceptionYear>2006</inceptionYear>
+  <version>0.7-SNAPSHOT</version>
+  <inceptionYear>20.7-SNAPSHOT</inceptionYear>
   <packaging>pom</packaging>
   
   <licenses>
@@ -40,9 +40,9 @@
   </profile>
 </profiles>
   <scm>
-    <connection>scm:svn:https://svn.codehaus.org/sxc/tags/sxc-0.6</connection>
-    <developerConnection>scm:svn:https://svn.codehaus.org/sxc/tags/sxc-0.6</developerConnection>
-    <url>https://svn.sxc.codehaus.org/tags/sxc-0.6</url>
+    <connection>scm:svn:https://svn.codehaus.org/sxc/tags/sxc-0.7-SNAPSHOT</connection>
+    <developerConnection>scm:svn:https://svn.codehaus.org/sxc/tags/sxc-0.7-SNAPSHOT</developerConnection>
+    <url>https://svn.sxc.codehaus.org/tags/sxc-0.7-SNAPSHOT</url>
   </scm>
   <dependencyManagement>
     <dependencies>
