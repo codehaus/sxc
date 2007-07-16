@@ -52,6 +52,8 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
      */
     JClass baseClass;
 
+    JBlock tailBlock = new JBlock();
+
     public ElementParserBuilderImpl(BuildContext buildContext, String className) throws BuildException {
         this.buildContext = buildContext;
         model = buildContext.getCodeModel();
@@ -261,7 +263,11 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
     public CodeBody getBody() {
         return new CodeBodyImpl(this);
     }
-    
+
+    public JBlock getTailBlock() {
+        return tailBlock;
+    }
+
     protected void write() {
         if (written) return;
         
@@ -285,6 +291,9 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
             e.write();
         }
         
+        if(!tailBlock.getContents().isEmpty())
+            codeBlock.add(tailBlock);
+
         // Add return statement to the end of the block
         if (returnType != null) {
             if(root)
