@@ -5,6 +5,7 @@ import javax.xml.namespace.QName;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
+import com.sun.codemodel.JBlock;
 
 public interface ElementParserBuilder extends ParserBuilder {
 
@@ -38,4 +39,15 @@ public interface ElementParserBuilder extends ParserBuilder {
      * @return
      */
     JVar call(JType type, String varName, ElementParserBuilder builder);
+
+    /**
+     * Optional code to be generated right before the return statement,
+     * after the main loop.
+     *
+     * <p>
+     * This can be used to perform the post-construction to be executed
+     * when all the child elements are read and processed.
+     */
+    JBlock getTailBlock();
+
 }
