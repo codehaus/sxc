@@ -8,8 +8,7 @@ import org.drools.RuleBase;
 import org.drools.RuleBaseFactory;
 import org.drools.WorkingMemory;
 import org.drools.compiler.PackageBuilder;
-import org.drools.rule.And;
-import org.drools.rule.Column;
+import org.drools.rule.Pattern;
 import org.drools.rule.EvalCondition;
 import org.drools.rule.GroupElement;
 import org.drools.rule.LiteralConstraint;
@@ -86,11 +85,11 @@ public class DroolsXPathEvaluatorFactory {
             final PackageBuilder packageBuilder = new PackageBuilder();
             packageBuilder.addPackageFromDrl(new InputStreamReader(packageStream));
             ruleBase.addPackage(packageBuilder.getPackage());
-            workingMemory = ruleBase.newWorkingMemory(true);
+            workingMemory = ruleBase.newStatefulSession(true);
         } else {
             if (ruleBase != null) {
                 // process rule base
-                workingMemory = ruleBase.newWorkingMemory(true);
+                workingMemory = ruleBase.newStatefulSession(true);
             } else {
                 // process working memory
                 ruleBase = workingMemory.getRuleBase();
@@ -104,7 +103,7 @@ public class DroolsXPathEvaluatorFactory {
         for (final org.drools.rule.Package aPackage : packages) {
             final Rule[] rules = aPackage.getRules();
             for (final Rule rule : rules) {
-                final And lhs = rule.getLhs();
+                final GroupElement lhs = rule.getLhs();
                 final List list = lhs.getChildren();
                 processList(list, xPathStrings);
             }
@@ -123,9 +122,9 @@ public class DroolsXPathEvaluatorFactory {
 
     private void processList(List list, Set<String> xPathStrings) {
         for (Object ruleElement : list) {
-            if (ruleElement instanceof Column) {
-                final Column column = (Column) ruleElement;
-                processColumn(column, xPathStrings);
+            if (ruleElement instanceof Pattern) {
+                final Pattern pattern = (Pattern) ruleElement;
+                processPattern(pattern, xPathStrings);
             } else if (ruleElement instanceof GroupElement) {
                 final GroupElement groupElement = (GroupElement) ruleElement;
                 final List children = groupElement.getChildren();
@@ -138,11 +137,11 @@ public class DroolsXPathEvaluatorFactory {
         }
     }
 
-    private void processColumn(Column column, Set<String> xPathStrings) {
-        final List constraints = column.getConstraints();
+    private void processPattern(Pattern pattern, Set<String> xPathStrings) {
+        final List constraints = pattern.getConstraints();
         for (Object constraint : constraints) {
             final LiteralConstraint literalConstraint = (LiteralConstraint) constraint;
-            if (columnContainsXPathEvent(literalConstraint)) {
+            if (patternContainsXPathEvent(literalConstraint)) {
                 final String fieldValue = (String) literalConstraint.getField().getValue();
                 xPathStrings.add(fieldValue);
             }
@@ -156,7 +155,7 @@ public class DroolsXPathEvaluatorFactory {
      * @param literalConstraint
      * @return
      */
-    private boolean columnContainsXPathEvent(LiteralConstraint literalConstraint) {
+    private boolean patternContainsXPathEvent(LiteralConstraint literalConstraint) {
         return literalConstraint.toString().indexOf("com.envoisolutions.sxc.xpath.XPathEvent") > -1;
     }
 
