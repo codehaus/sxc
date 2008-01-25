@@ -1,18 +1,22 @@
 package com.envoisolutions.sxc.drools;
 
-import com.envoisolutions.sxc.xpath.XPathEvent;
-import com.envoisolutions.sxc.xpath.XPathEventHandler;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
+import javax.xml.stream.XMLStreamException;
 
 import org.drools.FactException;
 import org.drools.FactHandle;
-import org.drools.NoSuchFactObjectException;
+import org.drools.ObjectFilter;
 import org.drools.QueryResults;
 import org.drools.WorkingMemory;
+import org.drools.base.ClassObjectFilter;
 import org.drools.event.WorkingMemoryEventListener;
 import org.drools.spi.AgendaFilter;
 
-import javax.xml.stream.XMLStreamException;
-import java.util.List;
+import com.envoisolutions.sxc.xpath.XPathEvent;
+import com.envoisolutions.sxc.xpath.XPathEventHandler;
 
 class DroolsXPathEventHandler extends XPathEventHandler {
     private final WorkingMemory workingMemory;
@@ -25,7 +29,7 @@ class DroolsXPathEventHandler extends XPathEventHandler {
 
     @Override
     public void onMatch(XPathEvent event) throws XMLStreamException {
-        workingMemory.assertObject(event);
+        workingMemory.insert(event);
         if (fireAllInOnMatch) {
             workingMemory.fireAllRules();
         }
@@ -60,16 +64,23 @@ class DroolsXPathEventHandler extends XPathEventHandler {
         return workingMemory.getGlobal(name);
     }
 
-    public Object getObject(FactHandle handle) throws NoSuchFactObjectException {
+    public Object getObject(FactHandle handle) throws FactException {
         return workingMemory.getObject(handle);
     }
 
     public List getObjects(Class objectClass) {
-        return workingMemory.getObjects(objectClass);
+	ObjectFilter objectFilter = new ClassObjectFilter(objectClass);
+	List objects = new ArrayList();
+	Iterator iter = workingMemory.iterateObjects(objectFilter);
+	while (iter.hasNext()) {
+	    objects.add(iter.next());
+	}
+        return objects;
+        
     }
 
     public FactHandle assertObject(Object object) throws FactException {
-        return workingMemory.assertObject(object);
+        return workingMemory.insert(object);
     }
 
     public QueryResults getQueryResults(String query) {
@@ -77,14 +88,14 @@ class DroolsXPathEventHandler extends XPathEventHandler {
     }
 
     public FactHandle assertObject(Object object, boolean dynamic) throws FactException {
-        return workingMemory.assertObject(object, dynamic);
+        return workingMemory.insert(object, dynamic);
     }
 
     public void retractObject(FactHandle handle) throws FactException {
-        workingMemory.retractObject(handle);
+        workingMemory.retract(handle);
     }
 
     public void modifyObject(FactHandle handle, Object object) throws FactException {
-        workingMemory.modifyObject(handle, object);
+        workingMemory.update(handle, object);
     }
 }
