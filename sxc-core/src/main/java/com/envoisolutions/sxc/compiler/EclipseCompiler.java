@@ -14,6 +14,7 @@ import org.apache.commons.jci.readers.FileResourceReader;
 import org.apache.commons.jci.stores.MemoryResourceStore;
 import org.apache.commons.jci.stores.ResourceStore;
 import org.apache.commons.jci.stores.ResourceStoreClassLoader;
+import org.apache.commons.jci.utils.ConversionUtils;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 
 import com.envoisolutions.sxc.builder.BuildException;
@@ -25,8 +26,7 @@ public class EclipseCompiler implements Compiler {
     @SuppressWarnings("unchecked")
     public ClassLoader compile(File dir) {
         EclipseJavaCompilerSettings settings = new EclipseJavaCompilerSettings();
-        Map<Object, Object> map = settings.getMap();
-        map.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_1_5);
+        settings.setSourceVersion(CompilerOptions.VERSION_1_5);
         
         EclipseJavaCompiler compiler = new EclipseJavaCompiler(settings);
          
@@ -38,7 +38,7 @@ public class EclipseCompiler implements Compiler {
         
         List<String> classes = new ArrayList<String>();
         for (String s : reader.list()) {
-            String name = AbstractJavaCompiler.convertResourceNameToClassName(s);
+            String name = ConversionUtils.convertResourceToClassName(s);
             name = name.replace('/', '.');
             name = name.replace('\\', '.');
             

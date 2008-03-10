@@ -37,6 +37,7 @@ import com.sun.codemodel.JTryBlock;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 import com.sun.xml.bind.v2.model.core.Adapter;
+import com.sun.xml.bind.v2.model.core.ElementInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeAttributePropertyInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeClassInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeElement;
@@ -83,10 +84,10 @@ public class ReaderIntrospector {
         body.assign(dtf, JExpr.direct(DatatypeFactory.class.getName()+".newInstance()"));
         tb._catch((JClass) rootReader.getCodeModel()._ref(DatatypeConfigurationException.class));
         
-        Map<QName, ? extends RuntimeElementInfo> elementMappings = set.getElementMappings(null);
-        for (Map.Entry<QName, ? extends RuntimeElementInfo> e : elementMappings.entrySet()) {
+        Map<QName, ? extends ElementInfo<Type, Class>> elementMappings = set.getElementMappings(null);
+        for (Map.Entry<QName, ? extends ElementInfo<Type, Class>> e : elementMappings.entrySet()) {
             QName q = e.getKey();
-            RuntimeElementInfo rei = e.getValue();
+            RuntimeElementInfo rei = (RuntimeElementInfo) e.getValue();
             
             if (!ref2Parser.containsKey(rei)) {
                 createRefParser(rootReader, q, rei);

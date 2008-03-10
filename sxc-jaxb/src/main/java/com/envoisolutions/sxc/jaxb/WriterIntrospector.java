@@ -1,5 +1,34 @@
 package com.envoisolutions.sxc.jaxb;
 
+import com.envoisolutions.sxc.builder.BuildException;
+import com.envoisolutions.sxc.builder.Builder;
+import com.envoisolutions.sxc.builder.ElementWriterBuilder;
+import com.envoisolutions.sxc.builder.WriterBuilder;
+import com.envoisolutions.sxc.util.Base64;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JConditional;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JForEach;
+import com.sun.codemodel.JMod;
+import com.sun.codemodel.JType;
+import com.sun.codemodel.JVar;
+import com.sun.xml.bind.v2.model.core.Adapter;
+import com.sun.xml.bind.v2.model.core.ElementInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeAttributePropertyInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeClassInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeElementInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeElementPropertyInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeEnumLeafInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeNonElement;
+import com.sun.xml.bind.v2.model.runtime.RuntimePropertyInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeReferencePropertyInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeTypeInfoSet;
+import com.sun.xml.bind.v2.model.runtime.RuntimeTypeRef;
+import com.sun.xml.bind.v2.model.runtime.RuntimeValuePropertyInfo;
+
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
@@ -19,35 +48,6 @@ import javax.xml.bind.JAXBException;
 import javax.xml.datatype.Duration;
 import javax.xml.datatype.XMLGregorianCalendar;
 import javax.xml.namespace.QName;
-
-import com.envoisolutions.sxc.builder.BuildException;
-import com.envoisolutions.sxc.builder.Builder;
-import com.envoisolutions.sxc.builder.ElementWriterBuilder;
-import com.envoisolutions.sxc.builder.WriterBuilder;
-import com.envoisolutions.sxc.util.Base64;
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JConditional;
-import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JExpression;
-import com.sun.codemodel.JForEach;
-import com.sun.codemodel.JMod;
-import com.sun.codemodel.JType;
-import com.sun.codemodel.JVar;
-import com.sun.xml.bind.v2.model.core.Adapter;
-import com.sun.xml.bind.v2.model.runtime.RuntimeAttributePropertyInfo;
-import com.sun.xml.bind.v2.model.runtime.RuntimeClassInfo;
-import com.sun.xml.bind.v2.model.runtime.RuntimeElement;
-import com.sun.xml.bind.v2.model.runtime.RuntimeElementInfo;
-import com.sun.xml.bind.v2.model.runtime.RuntimeElementPropertyInfo;
-import com.sun.xml.bind.v2.model.runtime.RuntimeEnumLeafInfo;
-import com.sun.xml.bind.v2.model.runtime.RuntimeNonElement;
-import com.sun.xml.bind.v2.model.runtime.RuntimePropertyInfo;
-import com.sun.xml.bind.v2.model.runtime.RuntimeReferencePropertyInfo;
-import com.sun.xml.bind.v2.model.runtime.RuntimeTypeInfoSet;
-import com.sun.xml.bind.v2.model.runtime.RuntimeTypeRef;
-import com.sun.xml.bind.v2.model.runtime.RuntimeValuePropertyInfo;
 
 public class WriterIntrospector {
 	private static final Logger logger = Logger.getLogger(WriterIntrospector.class.getName());
@@ -87,10 +87,10 @@ public class WriterIntrospector {
             }
         }
 
-        Map<QName, ? extends RuntimeElementInfo> elementMappings = set.getElementMappings(null);
-        for (Map.Entry<QName, ? extends RuntimeElementInfo> e : elementMappings.entrySet()) {
+        Map<QName, ? extends ElementInfo<Type, Class>> elementMappings = set.getElementMappings(null);
+        for (Map.Entry<QName, ? extends ElementInfo<Type, Class>> e : elementMappings.entrySet()) {
             QName q = e.getKey();
-            RuntimeElementInfo rei = e.getValue();
+            RuntimeElementInfo rei = (RuntimeElementInfo) e.getValue();
             Class<?> c = (Class<?>) rei.getContentType().getType();
             JType jt = model._ref(c);
             
