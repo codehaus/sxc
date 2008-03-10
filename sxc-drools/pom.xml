@@ -25,22 +25,22 @@
     <dependency>
       <groupId>org.drools</groupId>
       <artifactId>drools-core</artifactId>
-      <version>3.0.5</version>
+      <version>4.0.4</version>
     </dependency>
     <dependency>
       <groupId>org.drools</groupId>
       <artifactId>drools-compiler</artifactId>
-      <version>3.0.5</version>
+      <version>4.0.4</version>
     </dependency>
     <dependency>
       <groupId>org.drools</groupId>
       <artifactId>drools-decisiontables</artifactId>
-      <version>3.0.5</version>
+      <version>4.0.4</version>
     </dependency>
     <dependency>
       <groupId>org.drools</groupId>
       <artifactId>drools-jsr94</artifactId>
-      <version>3.0.5</version>
+      <version>4.0.4</version>
     </dependency>
   </dependencies>
 </project>
