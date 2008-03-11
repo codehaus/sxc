@@ -36,6 +36,7 @@ import com.sun.codemodel.JMod;
 import com.sun.codemodel.JTryBlock;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
+import com.sun.codemodel.JConditional;
 import com.sun.xml.bind.v2.model.core.Adapter;
 import com.sun.xml.bind.v2.model.core.ElementInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeAttributePropertyInfo;
@@ -50,6 +51,8 @@ import com.sun.xml.bind.v2.model.runtime.RuntimeReferencePropertyInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeTypeInfoSet;
 import com.sun.xml.bind.v2.model.runtime.RuntimeTypeRef;
 import com.sun.xml.bind.v2.model.runtime.RuntimeValuePropertyInfo;
+import com.sun.xml.bind.v2.runtime.Transducer;
+import com.sun.xml.bind.api.AccessorException;
 
 public class ReaderIntrospector {
     private static final Logger logger = Logger.getLogger(ReaderIntrospector.class.getName());
@@ -77,13 +80,17 @@ public class ReaderIntrospector {
         type_dtFactory = model._ref(DatatypeFactory.class);
         
         JDefinedClass readerCls = rootReader.getReaderClass();
+        // static DatatypeFactory dtFactory;
         dtf = readerCls.field(JMod.STATIC, type_dtFactory, "dtFactory");
+
+        // add code to constructor which initializes the static dtFactory field
+        // todo why do this in the constructor instead of a static block
         JMethod constructor = builder.getParserConstructor();
         JTryBlock tb = constructor.body()._try();
         JBlock body = tb.body();
         body.assign(dtf, JExpr.direct(DatatypeFactory.class.getName()+".newInstance()"));
         tb._catch((JClass) rootReader.getCodeModel()._ref(DatatypeConfigurationException.class));
-        
+
         Map<QName, ? extends ElementInfo<Type, Class>> elementMappings = set.getElementMappings(null);
         for (Map.Entry<QName, ? extends ElementInfo<Type, Class>> e : elementMappings.entrySet()) {
             QName q = e.getKey();
@@ -406,12 +413,8 @@ public class ReaderIntrospector {
             toSet = handleDuration(builder, builder.as(String.class, nillable));
         } else if (c.isEnum()) {
             try {
-                Method method = c.getMethod("value", new Class[0]);
-                
-                Class<?> readAs = method.getReturnType();
-                JExpression val = handleElement(builder, target, adapter, readAs, nillable);
-                
-                toSet = handleEnum(builder, val, c);
+                JExpression val = handleElement(builder, target, adapter, String.class, nillable);
+                toSet = handleEnum(builder, val, (Transducer) target, c);
             } catch (Exception e) {
                 throw new BuildException(e);
             }
@@ -509,7 +512,7 @@ public class ReaderIntrospector {
         } else if (c.equals(Duration.class)) {
             toSet = handleDuration(builder, builder.as(String.class));
         } else if (c.isEnum()) {
-            toSet = handleEnum(builder, builder.as(String.class), c);
+            toSet = handleEnum(builder, builder.as(String.class), (Transducer) target, c);
         } else if (c.equals(byte[].class)) {
             JClass b64Type = (JClass) builder.getCodeModel()._ref(Base64.class);
             
@@ -559,11 +562,47 @@ public class ReaderIntrospector {
         return dtf.invoke("newDuration").arg(value);
     }
     
-    private JExpression handleEnum(ParserBuilder builder, JExpression value, Class c) {
+    private JExpression handleEnum(ParserBuilder builder, JExpression value, Transducer transducer, Class c) {
         JBlock body =  builder.getBody().getBlock();
+
         JClass jc = (JClass) builder.getCodeModel()._ref(c);
-        
-        return body.staticInvoke(jc, "fromValue").arg(value);
+        JVar targetValue = body.decl(jc, "enumValue");
+
+        JConditional xsiCond = null;
+        Enum[] enumValues;
+        try {
+            Method method = c.getMethod("values");
+            enumValues = (Enum[]) method.invoke(null);
+        } catch (Exception e) {
+            throw new BuildException("Class is not an enumeration " + c.getName());
+        }
+
+        if (enumValues.length == 0) {
+            throw new BuildException("Enum contains no values " + c.getName());
+        }
+        for (Enum enumValue : enumValues) {
+            String enumText;
+            try {
+                enumText = transducer.print(enumValue).toString();
+            } catch (AccessorException e) {
+                throw new BuildException(e);
+            }
+
+            JExpression textCompare = JExpr.lit(enumText).invoke("equals").arg(value);
+            if (xsiCond == null) {
+                xsiCond = body._if(textCompare);
+            } else {
+                xsiCond = xsiCond._else()._if(textCompare);
+            }
+            JBlock block = xsiCond._then();
+            block.assign(targetValue, jc.staticRef(enumValue.name()));
+        }
+
+        // java.lang.IllegalArgumentException: No enum const class com.envoisolutions.sxc.jaxb.enums.AnnotatedEnum.ssssss
+        xsiCond._else()._throw(JExpr._new(builder.getCodeModel()._ref(IllegalArgumentException.class))
+                .arg(JExpr.lit("No enum const " + c + ".").plus(value)));
+
+        return targetValue;
     }
 
     public Builder getBuilder() {

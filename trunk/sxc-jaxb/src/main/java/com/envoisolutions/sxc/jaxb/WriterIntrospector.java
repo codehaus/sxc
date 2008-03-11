@@ -28,6 +28,8 @@ import com.sun.xml.bind.v2.model.runtime.RuntimeReferencePropertyInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeTypeInfoSet;
 import com.sun.xml.bind.v2.model.runtime.RuntimeTypeRef;
 import com.sun.xml.bind.v2.model.runtime.RuntimeValuePropertyInfo;
+import com.sun.xml.bind.v2.runtime.Transducer;
+import com.sun.xml.bind.api.AccessorException;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
@@ -460,24 +462,19 @@ public class WriterIntrospector {
         } else if (c.equals(XMLGregorianCalendar.class)) {
             writePropertyWithMethodInvoke(b, object, jt, "toXMLFormat", nillable);
         } else if (c.isEnum()) {
-            try {
-                Method method = c.getMethod("value", new Class[0]);
-                
-                Class<?> readAs = method.getReturnType();
-                JType valueType = model._ref(readAs);
-                
-                JBlock block = b.getCurrentBlock();
-                JBlock writeNil = block._if(object.eq(JExpr._null()))._then();
-                if (nillable) {
-                    writeNil.add(b.getXSW().invoke("writeXsiNil"));
-                }
-                writeNil._return();
-                
-                JVar valueVar = block.decl(valueType, "_enum", object.invoke("value"));
-                writeSimpleTypeElement(b, target, adapter, valueVar, nillable, readAs, readAs, valueType);
-            } catch (Exception e) {
-                throw new BuildException(e);
+            JBlock block = b.getCurrentBlock();
+
+            // if null, possibly write xsiNul and then return
+            JBlock writeNil = block._if(object.eq(JExpr._null()))._then();
+            if (nillable) {
+                writeNil.add(b.getXSW().invoke("writeXsiNil"));
             }
+            writeNil._return();
+
+            // convert the enum value to a string (handles @XmlEnumValue conversion)
+            JVar textVar = convertEnumToText(target, object, c, block);
+
+            writeSimpleTypeElement(b, target, adapter, textVar, nillable, String.class, String.class, model._ref(String.class));
         } else if (c.equals(BigInteger.class) || c.equals(BigDecimal.class) || c.equals(Duration.class)) {
             writePropertyWithMethodInvoke(b, object, jt, "toString", nillable);
         } else if (c.equals(byte[].class)) {
@@ -488,8 +485,8 @@ public class WriterIntrospector {
         	logger.info("(JAXB Writer) Cannot map simple type yet: " + c);
         }
     }
-    
-    private void writeSimpleTypeAttribute(WriterBuilder b, 
+
+    private void writeSimpleTypeAttribute(WriterBuilder b,
                                           Type rawType, 
                                           Class c, 
                                           JType jt) {
@@ -516,6 +513,52 @@ public class WriterIntrospector {
         } else {
             logger.info("(JAXB Writer) Cannot map simple attribute type yet: " + c);
         }
+    }
+
+    private JVar convertEnumToText(RuntimeNonElement target, JVar object, Class c, JBlock block) {
+        // get all possible enumeration values
+        Enum[] enumValues;
+        try {
+            Method method = c.getMethod("values");
+            enumValues = (Enum[]) method.invoke(null);
+        } catch (Exception e) {
+            throw new BuildException("Class is not an enumeration " + c.getName());
+        }
+
+        if (enumValues.length == 0) {
+            throw new BuildException("Enum contains no values " + c.getName());
+        }
+
+        // if/else block that sets the text value to the XmlEnumValue
+        JVar textVar = block.decl(model._ref(String.class), "text");
+        JConditional xsiCond = null;
+        for (Enum enumValue : enumValues) {
+            String enumText;
+            try {
+                Transducer transducer = (Transducer) target;
+                enumText = transducer.print(enumValue).toString();
+            } catch (AccessorException e) {
+                throw new BuildException(e);
+            }
+
+            // if (EnumClass.VALUE == object)
+            JClass jc = (JClass) builder.getCodeModel()._ref(c);
+            JExpression textCompare = jc.staticRef(enumValue.name()).eq(object);
+            if (xsiCond == null) {
+                xsiCond = block._if(textCompare);
+            } else {
+                xsiCond = xsiCond._else()._if(textCompare);
+            }
+            JBlock thenBlock = xsiCond._then();
+
+            thenBlock.assign(textVar, JExpr.lit(enumText));
+        }
+
+        // if not found throw an exception
+        // java.lang.IllegalArgumentException: No enum const class com.envoisolutions.sxc.jaxb.enums.AnnotatedEnum.ssssss
+        xsiCond._else()._throw(JExpr._new(builder.getCodeModel()._ref(IllegalArgumentException.class))
+                .arg(JExpr.lit("Unknown enum value ").plus(object)));
+        return textVar;
     }
 
     private void writePropertyWithMethodInvoke(WriterBuilder b, 
@@ -547,7 +590,6 @@ public class WriterIntrospector {
         
         b.setCurrentBlock(block);
     }
-    
 
     private void writeAttributeWithMethodInvoke(WriterBuilder b, 
                                                 JType t, 
@@ -572,6 +614,7 @@ public class WriterIntrospector {
         
         b.setCurrentBlock(block);
     }
+
     private void writeBase64Binary(WriterBuilder b, 
                                    JVar var,
                                    JType t, 
@@ -693,7 +736,13 @@ public class WriterIntrospector {
                 return getType(actual);
             }
         }
-        throw new IllegalStateException();
+        if (t instanceof Class) {
+            Class clazz = (Class) t;
+            if (clazz.isArray()) {
+                return getType(clazz.getComponentType());
+            }
+        }
+        throw new IllegalStateException("Can not determine generic type of " + t);
     }
     private JType getType(Class<?> c) {
         return rootWriter.getCodeModel()._ref(c);
