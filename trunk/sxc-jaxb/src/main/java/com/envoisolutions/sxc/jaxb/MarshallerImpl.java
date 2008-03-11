@@ -95,10 +95,14 @@ public class MarshallerImpl implements Marshaller {
     }
 
     public void marshal(Object obj, Node node) throws JAXBException {
+        if (obj == null) throw new IllegalArgumentException("obj is null");
+        if (node == null) throw new IllegalArgumentException("out is node");
         marshal(obj, new DOMResult(node));
     }
 
     public void marshal(Object obj, File file) throws JAXBException {
+        if (obj == null) throw new IllegalArgumentException("obj is null");
+        if (file == null) throw new IllegalArgumentException("file is null");
         try {
             OutputStream stream = new FileOutputStream(file);
             marshal(obj, stream);
@@ -109,6 +113,8 @@ public class MarshallerImpl implements Marshaller {
     }
 
     public void marshal(Object obj, OutputStream out) throws JAXBException {
+        if (obj == null) throw new IllegalArgumentException("obj is null");
+        if (out == null) throw new IllegalArgumentException("out is null");
         try {
             XMLStreamWriter writer = xof.createXMLStreamWriter(out);
             marshalAndClose(obj, writer);
@@ -123,6 +129,8 @@ public class MarshallerImpl implements Marshaller {
     }
 
     public void marshal(Object obj, Result r) throws JAXBException {
+        if (obj == null) throw new IllegalArgumentException("obj is null");
+        if (r == null) throw new IllegalArgumentException("r is null");
         try {
             XMLStreamWriter writer;
             if (r instanceof DOMResult) {
@@ -145,6 +153,8 @@ public class MarshallerImpl implements Marshaller {
     }
 
     public void marshal(Object obj, Writer writer) throws JAXBException {
+        if (obj == null) throw new IllegalArgumentException("obj is null");
+        if (writer == null) throw new IllegalArgumentException("writer is null");
         try {
             XMLStreamWriter xsw = xof.createXMLStreamWriter(writer);
             marshalAndClose(obj, xsw);
@@ -158,6 +168,8 @@ public class MarshallerImpl implements Marshaller {
     }
 
     public void marshal(Object o, XMLStreamWriter xsw) throws JAXBException {
+        if (o == null) throw new IllegalArgumentException("o is null");
+        if (xsw == null) throw new IllegalArgumentException("xsw is null");
         try {
             if (!introspector.isElement(o)) {
                 throw new MarshalException("Object must be annotated with @XmlRootElement or be a JAXBElement!");
