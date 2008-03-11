@@ -54,13 +54,14 @@ public class BuilderImpl implements Builder {
         if(contextClassName!=null) {
             try {
                 JDefinedClass cc = buildContext.getCodeModel()._class(contextClassName);
+                cc._extends(Context.class);
                 cc.method(JMod.PUBLIC, Reader.class,"createReader")
                     .body()._return( parserBuilder!=null
-                        ? JExpr._new(parserBuilder.getReaderClass())
+                        ? JExpr._new(parserBuilder.getReaderClass()).arg(JExpr._this())
                         : JExpr._null());
                 cc.method(JMod.PUBLIC, Writer.class,"createWriter")
                     .body()._return( writerBuilder!=null
-                        ? JExpr._new(writerBuilder.getWriterClass())
+                        ? JExpr._new(writerBuilder.getWriterClass()).arg(JExpr._this())
                         : JExpr._null());
             } catch (JClassAlreadyExistsException e) {
                 throw new BuildException(e);
