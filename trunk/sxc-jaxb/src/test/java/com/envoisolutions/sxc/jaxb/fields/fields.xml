@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<fields>
+    <publicField>-public-</publicField>
+    <packageField>-package-</packageField>
+    <protectedField>-protected-</protectedField>
+    <privateField>-private-</privateField>
+    <booleanField>true</booleanField>
+    <byteField>42</byteField>
+    <shortField>4242</shortField>
+    <intField>424242</intField>
+    <longField>42424242</longField>
+    <floatField>0.42</floatField>
+    <doubleField>0.4242</doubleField>
+</fields>
