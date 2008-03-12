@@ -5,6 +5,7 @@ import com.envoisolutions.sxc.builder.Builder;
 import com.envoisolutions.sxc.builder.ElementWriterBuilder;
 import com.envoisolutions.sxc.builder.WriterBuilder;
 import com.envoisolutions.sxc.util.Base64;
+import com.envoisolutions.sxc.util.FieldAccessor;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
@@ -15,6 +16,9 @@ import com.sun.codemodel.JForEach;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
+import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JInvocation;
 import com.sun.xml.bind.v2.model.core.Adapter;
 import com.sun.xml.bind.v2.model.core.ElementInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeAttributePropertyInfo;
@@ -29,11 +33,14 @@ import com.sun.xml.bind.v2.model.runtime.RuntimeTypeInfoSet;
 import com.sun.xml.bind.v2.model.runtime.RuntimeTypeRef;
 import com.sun.xml.bind.v2.model.runtime.RuntimeValuePropertyInfo;
 import com.sun.xml.bind.v2.runtime.Transducer;
+import com.sun.xml.bind.v2.runtime.reflect.Accessor;
 import com.sun.xml.bind.api.AccessorException;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -44,9 +51,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.Collection;
 import java.util.logging.Logger;
 
 import javax.xml.bind.JAXBException;
+import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.datatype.Duration;
 import javax.xml.datatype.XMLGregorianCalendar;
 import javax.xml.namespace.QName;
@@ -65,7 +75,9 @@ public class WriterIntrospector {
     private Map<Class, JVar> adapters = new HashMap<Class, JVar>();
     private int adapterCount = 0;
     private RuntimeTypeInfoSet set;
-    
+
+    private Map<String, JFieldVar> privateFieldAccessors = new TreeMap<String, JFieldVar>();
+
     public WriterIntrospector(Builder b, RuntimeTypeInfoSet set) throws JAXBException {
         this.builder = b;
         rootWriter = this.builder.getWriterBuilder();
@@ -260,7 +272,8 @@ public class WriterIntrospector {
             		
             		JExpression propValue = classBuilder.getObject().invoke(propName);
             		if (prop.isCollection()) {
-                        JForEach each = block.forEach(getGenericType(rawType), "_o", propValue);
+                        JBlock collectionNotNull = block._if(propValue.ne(JExpr._null()))._then();
+                        JForEach each = collectionNotNull.forEach(getGenericType(rawType), "_o", propValue);
                         JBlock newBody = each.body();
                         block = newBody;
                         propValue = each.var();
@@ -301,13 +314,79 @@ public class WriterIntrospector {
 
         addType(c, target.getTypeName());
 
-        String propName = JaxbUtil.getGetter(parentClass, propEl.getName(), rawType);
-        
-        JVar var = block.decl(rawJT, 
-                              propEl.getName() + "_" + javify(name.getLocalPart()), 
-                              b.getObject().invoke(propName));
+        Accessor accessor = propEl.getAccessor();
 
-        
+        // if we have an AdaptedAccessor wrapper, strip off wrapper but preserve the name of the adapter class
+        Class<XmlAdapter> xmlAdapterClass = null;
+        if ("com.sun.xml.bind.v2.runtime.reflect.AdaptedAccessor".equals(accessor.getClass().getName())) {
+            try {
+                // fields on AdaptedAccessor are private so use set accessible to grab the values
+                Field adapterClassField = accessor.getClass().getDeclaredField("adapter");
+                adapterClassField.setAccessible(true);
+                xmlAdapterClass = (Class<XmlAdapter>) adapterClassField.get(accessor);
+
+                Field coreField = accessor.getClass().getDeclaredField("core");
+                coreField.setAccessible(true);
+                accessor = (Accessor) coreField.get(accessor);
+            } catch (Throwable e) {
+                throw new BuildException("Unable to access private fields of AdaptedAccessor class", e);
+            }
+        }
+
+        JVar var;
+        if (accessor instanceof Accessor.FieldReflection) {
+            Accessor.FieldReflection fieldReflection = (Accessor.FieldReflection) accessor;
+            Field field = fieldReflection.f;
+
+            if (Modifier.isPublic(field.getDeclaringClass().getModifiers()) && Modifier.isPublic(field.getModifiers()) && !Modifier.isFinal(field.getModifiers())) {
+                var = block.decl(rawJT,
+                                      propEl.getName() + "_" + javify(name.getLocalPart()),
+                                      b.getObject().ref(field.getName()));
+            } else {
+                JFieldVar fieldAccessorField = getPrivateFieldAccessor(field);
+
+                String methodName;
+                if (Boolean.TYPE.equals(field.getType())) {
+                    methodName = "getBoolean";
+                } else if (Byte.TYPE.equals(field.getType())) {
+                    methodName = "getByte";
+                } else if (Character.TYPE.equals(field.getType())) {
+                    methodName = "getChar";
+                } else if (Short.TYPE.equals(field.getType())) {
+                    methodName = "getShort";
+                } else if (Integer.TYPE.equals(field.getType())) {
+                    methodName = "getInt";
+                } else if (Long.TYPE.equals(field.getType())) {
+                    methodName = "getLong";
+                } else if (Float.TYPE.equals(field.getType())) {
+                    methodName = "getFloat";
+                } else if (Double.TYPE.equals(field.getType())) {
+                    methodName = "getDouble";
+                } else {
+                    methodName = "getObject";
+                }
+
+                if (field.getType().isPrimitive()) {
+                    var = block.decl(rawJT,
+                            propEl.getName() + "_" + javify(name.getLocalPart()),
+                            fieldAccessorField.invoke(methodName).arg(b.getObject()));
+                } else {
+                    var = block.decl(rawJT,
+                            propEl.getName() + "_" + javify(name.getLocalPart()),
+                            JExpr.cast(rawJT, fieldAccessorField.invoke(methodName).arg(b.getObject())));
+                }
+            }
+        } else if (accessor instanceof Accessor.GetterSetterReflection) {
+            Accessor.GetterSetterReflection getterSetterReflection = (Accessor.GetterSetterReflection) accessor;
+            Method getter = getterSetterReflection.getter;
+            var = block.decl(rawJT,
+                                  propEl.getName() + "_" + javify(name.getLocalPart()),
+                                  b.getObject().invoke(getter.getName()));
+        } else {
+            throw new BuildException("Unknown property accessor type '" + accessor.getClass().getName() + "' for property " + c.getName() + "." + propEl.getName());
+        }
+
+
         if (!propEl.isRequired()) {
             JConditional nullCond = block._if(var.ne(JExpr._null()));
             block = nullCond._then();
@@ -321,7 +400,8 @@ public class WriterIntrospector {
         }
         
         if (propEl.isCollection()) {
-            JForEach each = block.forEach(getGenericType(rawType), "_o", var);
+            JBlock collectionNotNull = block._if(var.ne(JExpr._null()))._then();
+            JForEach each = collectionNotNull.forEach(getGenericType(rawType), "_o", var);
             JBlock newBody = each.body();
             b.setCurrentBlock(newBody);
             var = each.var();
@@ -372,6 +452,27 @@ public class WriterIntrospector {
         }
         
         b.setCurrentBlock(origBlock);
+    }
+
+    private JFieldVar getPrivateFieldAccessor(Field field) {
+        String fieldName = "_" + field.getDeclaringClass().getSimpleName() + "_" + field.getName();
+        JFieldVar fieldAccessorField = privateFieldAccessors.get(fieldName);
+        if (fieldAccessorField == null) {
+
+            JDefinedClass readerCls = rootWriter.getWriterClass();
+
+
+            JInvocation newFieldAccessor = JExpr._new(builder.getCodeModel()._ref(FieldAccessor.class))
+                    .arg(builder.getCodeModel().ref(field.getDeclaringClass()).staticRef("class"))
+                    .arg(JExpr.lit(field.getName()));
+
+            fieldAccessorField = readerCls.field(JMod.PRIVATE | JMod.STATIC,
+                    FieldAccessor.class, fieldName,
+                    newFieldAccessor);
+
+            privateFieldAccessors.put(fieldName, fieldAccessorField);
+        }
+        return fieldAccessorField;
     }
 
     private void writeClassWriter(Class parentClass, QName name, RuntimeClassInfo rci, Class<?> subCls, ElementWriterBuilder b2) {

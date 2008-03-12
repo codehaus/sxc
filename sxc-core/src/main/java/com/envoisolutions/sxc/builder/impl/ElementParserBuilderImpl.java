@@ -25,16 +25,16 @@ import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
 
 public class ElementParserBuilderImpl extends AbstractParserBuilder implements ElementParserBuilder {
 
-    Map<QName, ElementParserBuilderImpl> elements = new HashMap<QName, ElementParserBuilderImpl>();
-    Map<QName, ElementCall> elementCalls = new HashMap<QName, ElementCall>();
-    Map<QName, AttributeParserBuilderImpl> attributes = new HashMap<QName, AttributeParserBuilderImpl>();
-    Map<QName, ElementParserBuilderImpl> xsiTypes = new HashMap<QName, ElementParserBuilderImpl>();
+    Map<QName, ElementParserBuilderImpl> elements = new LinkedHashMap<QName, ElementParserBuilderImpl>();
+    Map<QName, ElementCall> elementCalls = new LinkedHashMap<QName, ElementCall>();
+    Map<QName, AttributeParserBuilderImpl> attributes = new LinkedHashMap<QName, AttributeParserBuilderImpl>();
+    Map<QName, ElementParserBuilderImpl> xsiTypes = new LinkedHashMap<QName, ElementParserBuilderImpl>();
     List<ElementParserBuilderImpl> states = new ArrayList<ElementParserBuilderImpl>();
     int varCount = 0;
     
@@ -46,6 +46,8 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
     private boolean checkXsiTypes = true;
     private JInvocation methodInvocation;
     JMethod constructor;
+    private Map<QName, JBlock> postReadBlocks = new LinkedHashMap<QName, JBlock>();
+    private JVar readItem;
 
     /**
      * Base class to extend from. Only used when root.
@@ -171,8 +173,15 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         }
         return b;
     }
-    
-    
+
+    public JVar setPostReadBlock(QName key, JBlock block) {
+        postReadBlocks.put(key, block);
+        if (readItem == null) {
+            readItem = codeBlock.decl(model.ref(Object.class), "item");
+        }
+        return readItem;
+    }
+
     public JVar as(Class<?> cls) {
         return as(cls, false);
     }
@@ -183,19 +192,19 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         if (cls.equals(String.class)) {
             return createVar("getElementAsString", String.class, nillable);
         } else if (cls.equals(int.class) || cls.equals(Integer.class)) {
-            return createVar("getElementAsInt", Integer.class, nillable);
+            return createVar("getElementAsInt", cls, nillable);
         } else if (cls.equals(double.class) || cls.equals(Double.class)) {
-            return createVar("getElementAsDouble", Double.class, nillable);
+            return createVar("getElementAsDouble", cls, nillable);
         } else if (cls.equals(float.class) || cls.equals(Float.class)) {
-            return createVar("getElementAsFloat", Float.class, nillable);
+            return createVar("getElementAsFloat", cls, nillable);
         } else if (cls.equals(long.class) || cls.equals(Long.class)) {
-            return createVar("getElementAsLong", Long.class, nillable);
+            return createVar("getElementAsLong", cls, nillable);
         } else if (cls.equals(short.class) || cls.equals(Short.class)) {
-            return createVar("getElementAsShort", Short.class, nillable);
+            return createVar("getElementAsShort", cls, nillable);
         } else if (cls.equals(boolean.class) || cls.equals(Boolean.class)) {
-            return createVar("getElementAsBoolean", Boolean.class, nillable);
+            return createVar("getElementAsBoolean", cls, nillable);
         }  else if (cls.equals(byte.class) || cls.equals(Byte.class)) {
-            return createVar("getElementAsByte", Byte.class, nillable);
+            return createVar("getElementAsByte", cls, nillable);
         } 
         throw new UnsupportedOperationException("Invalid type " + cls);
     }
@@ -377,7 +386,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
 
         
         JConditional ifDepth = b._if(depthVar.eq(targetDepthVar));
-        
+
         writeElementReader(elements, ifDepth._then(), false);
         
         if (allowUnknown) {
@@ -484,8 +493,9 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
             }
             
             JBlock block = xsiCond._then();
-            
-            writeElementReader(builder, block, false);
+
+            // xsi:type elements are immediately returned to the caller
+            writeElementReader(builder, block, false, true);
             
             if (builder.returnType == null) {
                 block._return();
@@ -504,15 +514,8 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         for (Map.Entry<QName, ElementParserBuilderImpl> e : els.entrySet()) {
             QName name = e.getKey();
             ElementParserBuilderImpl builder = e.getValue();
-            
-            JExpression localInv = xsrVar.invoke("getLocalName").eq(JExpr.lit(name.getLocalPart()));
-            String ns = name.getNamespaceURI();
-            JExpression nsInv = JExpr.lit(name.getNamespaceURI()).eq(xsrVar.invoke("getNamespaceURI"));
-            if (ns.equals("")) {
-                nsInv = nsInv.cor(xsrVar.invoke("getNamespaceURI").eq(JExpr._null()));
-            }
-            
-            JExpression qnameCompare = localInv.cand(nsInv);
+
+            JExpression qnameCompare = buildQNameCompare(name);
 
             if (cond == null) {
                 cond = b._if(qnameCompare); 
@@ -521,23 +524,16 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
             }
             
             JBlock block = cond._then();
-            
-            writeElementReader(builder, block, global);
+
+            writeElementReader(builder, block, global, false);
         }
         
         for (Map.Entry<QName, ElementCall> e : elementCalls.entrySet()) {
             QName name = e.getKey();
             ElementCall call = e.getValue();
             ElementParserBuilderImpl builder = call.getElement();
-            
-            JExpression localInv = xsrVar.invoke("getLocalName").eq(JExpr.lit(name.getLocalPart()));
-            String ns = name.getNamespaceURI();
-            JExpression nsInv = JExpr.lit(name.getNamespaceURI()).eq(xsrVar.invoke("getNamespaceURI"));
-            if (ns.equals("")) {
-                nsInv = nsInv.cor(xsrVar.invoke("getNamespaceURI").eq(JExpr._null()));
-            }
-            
-            JExpression qnameCompare = localInv.cand(nsInv);
+
+            JExpression qnameCompare = buildQNameCompare(name);
 
             if (cond == null) {
                 cond = b._if(qnameCompare); 
@@ -552,7 +548,15 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
             for (JExpression var : call.getVars()) {
                 invocation.arg(var);
             }
-            block.add(invocation);
+            
+            JBlock postReadBlock = postReadBlocks.get(builder.getName());
+            if (postReadBlock != null) {
+                block.assign(readItem, invocation);
+                block.add(postReadBlock);
+            } else {
+                block.add(invocation);
+            }
+
             if (builder != this)
                 builder.write();
         }
@@ -563,29 +567,50 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
                 anyBlock = cond._else().block();
             }
             
-            writeElementReader(anyElement, anyBlock, false);
+            writeElementReader(anyElement, anyBlock, false, false);
         }
     }
 
-    private void writeElementReader(ElementParserBuilderImpl builder, 
-                                    JBlock block, 
-                                    boolean global) {
-        JMethod nextMethod = builder.getMethod();
-        
-        JInvocation invocation = JExpr.invoke(nextMethod).arg(xsrVar).arg(rtContextVar);
+    private JExpression buildQNameCompare(QName name) {
+        JExpression localInv = JExpr.lit(name.getLocalPart()).eq(xsrVar.invoke("getLocalName"));
+        String ns = name.getNamespaceURI();
+        JExpression nsInv = JExpr.lit(ns).eq(xsrVar.invoke("getNamespaceURI"));
+        if (ns.equals("")) {
+            nsInv = nsInv.cor(xsrVar.invoke("getNamespaceURI").eq(JExpr._null()));
+        }
 
+        JExpression qnameCompare = localInv.cand(nsInv);
+        return qnameCompare;
+    }
+
+    private void writeElementReader(ElementParserBuilderImpl builder, JBlock block, boolean global, boolean returnValue) {
+
+        JMethod elementReadMethod = builder.getMethod();
+        
+        JInvocation invocation = JExpr.invoke(elementReadMethod).arg(xsrVar).arg(rtContextVar);
+
+        // Global reader methods don't have arguments
         if (!global) {
             for (JVar v : builder.variables) {
                 invocation.arg(v);
             }
         } 
         
-        if (root && builder.returnType != null) {
-            block._return(invocation);
+        JBlock postReadBlock = postReadBlocks.get(builder.getName());
+        if (postReadBlock != null) {
+            block.assign(readItem, invocation);
+            block.add(postReadBlock);
+            if ((returnValue || root) && builder.returnType != null) {
+                block._return(readItem);
+            }
         } else {
-            block.add(invocation);
+            if ((returnValue || root) && builder.returnType != null) {
+                block._return(invocation);
+            } else {
+                block.add(invocation);
+            }
         }
-        
+
         // TODO: throw exception if unknown elements are encountered and allowUnknown == false
         if (builder != this)
             builder.write();
