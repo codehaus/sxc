@@ -4,6 +4,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.HashMap;
@@ -13,6 +14,12 @@ import java.util.Set;
 import java.util.Collection;
 import java.util.TreeMap;
 import java.util.ArrayList;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.logging.Logger;
 
 import javax.xml.bind.JAXBElement;
@@ -637,13 +644,6 @@ public class ReaderIntrospector {
             Class beanClass,
             RuntimePropertyInfo prop) {
 
-        // inside the header of the expect element method...
-        //
-        // Collection collection = null;
-        JVar collectionVar = classBuilder.getBody().decl(builder.getCodeModel().ref(Collection.class),
-                "col_" + prop.parent().getClass().getSimpleName() + "_" + prop.getName(),
-                JExpr._null());
-
         // determine all of the qnames that are mapped to this collection
         // JaxB allows for multiple element names to be dumped into the same collection
         Collection<QName> elementNames = new ArrayList<QName>();
@@ -669,11 +669,35 @@ public class ReaderIntrospector {
                                + " with type " + prop.getRawType()
                                + " on " + beanClass
                                + " for " + prop.getClass().getName());
+            return;
         }
+
+
+        // inside the header of the expect element method...
+        //
+        // Collection collection = null;
+
+        JType collectionType;
+        Class collectionClass;
+        Accessor accessor = prop.getAccessor();
+        if (accessor instanceof Accessor.FieldReflection) {
+            Accessor.FieldReflection fieldReflection = (Accessor.FieldReflection) accessor;
+            Field field = fieldReflection.f;
+            collectionClass = field.getType();
+        } else if (accessor instanceof Accessor.GetterSetterReflection) {
+            Accessor.GetterSetterReflection getterSetterReflection = (Accessor.GetterSetterReflection) accessor;
+            collectionClass = getterSetterReflection.getter.getReturnType();
+        } else {
+            throw new BuildException("Unknown property accessor type '" + accessor.getClass().getName() + "' for property " + beanClass.getName() + "." + prop.getName());
+        }
+        collectionType = getType(collectionClass);
+
+        JVar collectionVar = classBuilder.getBody().decl(collectionType,
+                "col_" + beanClass.getSimpleName() + "_" + prop.getName(),
+                JExpr._null());
 
         // inside the if block that reads each element
         //
-        Accessor accessor = null;
         for (QName elementName : elementNames) {
             // item = read5(reader, properties)
             JBlock block = new JBlock();
@@ -683,33 +707,40 @@ public class ReaderIntrospector {
             JBlock createCollectionBlock = block._if(collectionVar.eq(JExpr._null()))._then();
 
             //     collection = (Collection) bean.getItemCollection();
-            accessor = prop.getAccessor();
             if (accessor instanceof Accessor.FieldReflection) {
                 Accessor.FieldReflection fieldReflection = (Accessor.FieldReflection) accessor;
                 Field field = fieldReflection.f;
 
                 if (Modifier.isPublic(field.getDeclaringClass().getModifiers()) && Modifier.isPublic(field.getModifiers()) && !Modifier.isFinal(field.getModifiers())) {
-                    createCollectionBlock.assign(collectionVar, JExpr.cast(builder.getCodeModel().ref(Collection.class), bean.ref(field.getName())));
+                    createCollectionBlock.assign(collectionVar, bean.ref(field.getName()));
                 } else {
                     JFieldVar fieldAccessorField = getPrivateFieldAccessor(field);
-                    createCollectionBlock.assign(collectionVar, JExpr.cast(builder.getCodeModel().ref(Collection.class), fieldAccessorField.invoke("getObject").arg(bean)));
+                    createCollectionBlock.assign(collectionVar, JExpr.cast(collectionType, fieldAccessorField.invoke("getObject").arg(bean)));
                 }
             } else if (accessor instanceof Accessor.GetterSetterReflection) {
                 Accessor.GetterSetterReflection getterSetterReflection = (Accessor.GetterSetterReflection) accessor;
                 // todo private getter support
                 Method getter = getterSetterReflection.getter;
-                createCollectionBlock.assign(collectionVar, JExpr.cast(builder.getCodeModel().ref(Collection.class), bean.invoke(getter.getName())));
+                createCollectionBlock.assign(collectionVar, bean.invoke(getter.getName()));
             } else {
                 throw new BuildException("Unknown property accessor type '" + accessor.getClass().getName() + "' for property " + beanClass.getName() + "." + prop.getName());
             }
 
-            //     if (collection == null) {
+            //     if (collection != null) {
+            //         collection.clear();
+            JConditional arrayFoundCondition = createCollectionBlock._if(collectionVar.ne(JExpr._null()));
+            arrayFoundCondition._then().invoke(collectionVar, "clear");
+            //     } else {
             //         collection = new ArrayList();
+            Class clazz = getCollectionClass(collectionClass);
+            if (clazz != null) {
+                arrayFoundCondition._else().assign(collectionVar, JExpr._new(builder.getCodeModel().ref(clazz)));
+            } else {
+                arrayFoundCondition._else()._throw(JExpr._new(model.ref(NullPointerException.class))
+                        .arg("Collection " + prop.getName() + " in class " + beanClass.getName() +
+                        " is null and a new instance of " + collectionClass.getName() + " can not be created"));
+            }
             //     }
-            // todo fallback collection created should be based on the field type
-            JBlock createArrayListBlock = block._if(collectionVar.eq(JExpr._null()))._then();
-            createArrayListBlock.assign(collectionVar, JExpr._new(builder.getCodeModel().ref(ArrayList.class)));
-
             // }
             // collection.add(item);
             block.add(collectionVar.invoke("add").arg(itemVar));
@@ -720,30 +751,53 @@ public class ReaderIntrospector {
         // if (collection != null) {
         //     bean.setItemCollection(collection);
         // }
-        JBlock assignCollectionBlock = classBuilder.getTailBlock()._if(collectionVar.ne(JExpr._null()))._then();
+        if (accessor instanceof Accessor.FieldReflection) {
+            JBlock assignCollectionBlock = classBuilder.getTailBlock()._if(collectionVar.ne(JExpr._null()))._then();
 
-        //     bean.setItemCollection(collection)
-        if (accessor != null) {
-            if (accessor instanceof Accessor.FieldReflection) {
-                Accessor.FieldReflection fieldReflection = (Accessor.FieldReflection) accessor;
-                Field field = fieldReflection.f;
+            Accessor.FieldReflection fieldReflection = (Accessor.FieldReflection) accessor;
+            Field field = fieldReflection.f;
 
-                if (Modifier.isPublic(field.getDeclaringClass().getModifiers()) && Modifier.isPublic(field.getModifiers()) && !Modifier.isFinal(field.getModifiers())) {
-                    assignCollectionBlock.assign(bean.ref(field.getName()), JExpr.cast(builder.getCodeModel().ref(field.getType()), collectionVar));
-                } else {
-                    JFieldVar fieldAccessorField = getPrivateFieldAccessor(field);
-                    assignCollectionBlock.add(fieldAccessorField.invoke("setObject").arg(bean).arg(JExpr.cast(builder.getCodeModel().ref(field.getType()), collectionVar)));
-                }
-            } else if (accessor instanceof Accessor.GetterSetterReflection) {
-                Accessor.GetterSetterReflection getterSetterReflection = (Accessor.GetterSetterReflection) accessor;
-                // todo private getter support
-                Method setter = getterSetterReflection.setter;
-                assignCollectionBlock.add(bean.invoke(setter.getName()).arg(JExpr.cast(builder.getCodeModel().ref(setter.getParameterTypes()[0]), collectionVar)));
+            if (Modifier.isPublic(field.getDeclaringClass().getModifiers()) && Modifier.isPublic(field.getModifiers()) && !Modifier.isFinal(field.getModifiers())) {
+                assignCollectionBlock.assign(bean.ref(field.getName()), collectionVar);
             } else {
-                throw new BuildException("Unknown property accessor type '" + accessor.getClass().getName() + "' for property " + beanClass.getName() + "." + prop.getName());
+                JFieldVar fieldAccessorField = getPrivateFieldAccessor(field);
+                assignCollectionBlock.add(fieldAccessorField.invoke("setObject").arg(bean).arg(collectionVar));
             }
+        } else if (accessor instanceof Accessor.GetterSetterReflection) {
+            Accessor.GetterSetterReflection getterSetterReflection = (Accessor.GetterSetterReflection) accessor;
+            // todo private getter support
+            Method setter = getterSetterReflection.setter;
+            if (setter != null) {
+                // if there is no setter method, the collection is not assigned into the class
+                // this assumes that the getter returned the a collection instance and held on to a reference
+                JBlock assignCollectionBlock = classBuilder.getTailBlock()._if(collectionVar.ne(JExpr._null()))._then();
+                assignCollectionBlock.add(bean.invoke(setter.getName()).arg(collectionVar));
+            }
+        } else {
+            throw new BuildException("Unknown property accessor type '" + accessor.getClass().getName() + "' for property " + beanClass.getName() + "." + prop.getName());
         }
         // }
+    }
+
+    private Class getCollectionClass(Class collectionType) {
+        if (!collectionType.isInterface()) {
+            try {
+                collectionType.getConstructor();
+                return collectionType;
+            } catch (NoSuchMethodException e) {
+            }
+        } else if (SortedSet.class.equals(collectionType)) {
+            return TreeSet.class;
+        } else if (Set.class.equals(collectionType)) {
+            return LinkedHashSet.class;
+        } else if (Queue.class.equals(collectionType)) {
+            return LinkedList.class;
+        } else if (List.class.equals(collectionType)) {
+            return ArrayList.class;
+        } else if (Collection.class.equals(collectionType)) {
+            return ArrayList.class;
+        }
+        return null;
     }
 
     private JFieldVar getPrivateFieldAccessor(Field field) {
@@ -820,5 +874,44 @@ public class ReaderIntrospector {
 
     public Builder getBuilder() {
         return builder;
+    }
+
+    private JType getGenericType(Type t) {
+        if (t instanceof ParameterizedType) {
+            ParameterizedType pt = (ParameterizedType) t;
+
+            Type[] actualTypes = pt.getActualTypeArguments();
+            for (Type actual : actualTypes) {
+                return getType(actual);
+            }
+        }
+        if (t instanceof Class) {
+            Class clazz = (Class) t;
+            if (clazz.isArray()) {
+                return getType(clazz.getComponentType());
+            }
+        }
+        throw new IllegalStateException("Can not determine generic type of " + t);
+    }
+
+    private JType getType(Type t) {
+        if (t instanceof Class) {
+            return rootReader.getCodeModel()._ref((Class)t);
+        } else if (t instanceof ParameterizedType) {
+            ParameterizedType pt = (ParameterizedType) t;
+            JClass raw = (JClass) getType(pt.getRawType());
+
+            Type[] actualTypes = pt.getActualTypeArguments();
+            for (Type actual : actualTypes) {
+                raw = raw.narrow((JClass) getType(actual));
+            }
+
+            return raw;
+        }
+        throw new IllegalStateException();
+    }
+
+    private JType getType(Class<?> c) {
+        return rootReader.getCodeModel()._ref(c);
     }
 }

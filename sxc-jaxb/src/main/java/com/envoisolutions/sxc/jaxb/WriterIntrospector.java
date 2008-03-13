@@ -391,10 +391,11 @@ public class WriterIntrospector {
             JConditional nullCond = block._if(var.ne(JExpr._null()));
             block = nullCond._then();
             b.setCurrentBlock(block);
-            
-            if (typeRef.isNillable()) {
-                nullCond._else().add(b.getXSW().invoke("writeXsiNil"));
-            } else if (propEl.isCollection() && propEl.isCollectionNillable()) {
+
+            if (propEl.isCollection()) {
+                // todo is this needed?  Doesn't seem to work (test by marshalling a class with a null collection property)
+                // nullCond._else().add(b.getXSW().invoke("writeXsiNil"));
+            } else if (typeRef.isNillable()) {
                 nullCond._else().add(b.getXSW().invoke("writeXsiNil"));
             }
         }
@@ -845,6 +846,7 @@ public class WriterIntrospector {
         }
         throw new IllegalStateException("Can not determine generic type of " + t);
     }
+    
     private JType getType(Class<?> c) {
         return rootWriter.getCodeModel()._ref(c);
     }
