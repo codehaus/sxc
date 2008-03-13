@@ -51,15 +51,15 @@ public interface ElementParserBuilder extends ParserBuilder {
     JBlock getTailBlock();
 
     /**
-     * Optional code to add after the specified qname is unmarshalled.
+     * Spedified the block used to read an element.
      *
      * <p>
      * This can be used to perform operations on nested elements such
      * as placing them in a collection.
      *
      * @param name the qname of the expected element to enhance
+     * @param var the variable that will be assigned the item
      * @param block the code block
-     * @return the variable in which the unmarshalled item is stored
      */
-    JVar setPostReadBlock(QName name, JBlock block);
+    void setReadBlock(QName name, JVar var, JBlock block);
 }

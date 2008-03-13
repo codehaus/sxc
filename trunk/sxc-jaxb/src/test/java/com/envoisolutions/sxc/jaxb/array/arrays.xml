@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<arrays>
+    <booleanField>false</booleanField>
+    <booleanField>true</booleanField>
+    <booleanField>false</booleanField>
+    <booleanField>true</booleanField>
+    <booleanField>false</booleanField>
+    <byteField>AAA=</byteField>
+    <charField>1</charField>
+    <charField>2</charField>
+    <charField>3</charField>
+    <charField>4</charField>
+    <charField>5</charField>
+    <doubleField>0.0</doubleField>
+    <doubleField>1.11</doubleField>
+    <doubleField>2.22</doubleField>
+    <doubleField>3.33</doubleField>
+    <doubleField>4.44</doubleField>
+    <floatField>0.0</floatField>
+    <floatField>1.1</floatField>
+    <floatField>2.2</floatField>
+    <floatField>3.3</floatField>
+    <floatField>4.4</floatField>
+    <intField>0</intField>
+    <intField>111</intField>
+    <intField>222</intField>
+    <intField>333</intField>
+    <intField>444</intField>
+    <longField>0</longField>
+    <longField>11111</longField>
+    <longField>22222</longField>
+    <longField>33333</longField>
+    <longField>44444</longField>
+    <shortField>0</shortField>
+    <shortField>11</shortField>
+    <shortField>22</shortField>
+    <shortField>33</shortField>
+    <shortField>44</shortField>
+    <stringField>stringField0</stringField>
+    <stringField>stringField1</stringField>
+    <stringField>stringField2</stringField>
+    <stringField>stringField3</stringField>
+    <stringField>stringField4</stringField>
+</arrays>

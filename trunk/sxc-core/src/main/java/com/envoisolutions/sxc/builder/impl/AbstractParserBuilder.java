@@ -34,7 +34,7 @@ public abstract class AbstractParserBuilder implements ParserBuilder {
     boolean written;
     boolean required;
     JType returnType;
-    JBlock codeBlock = new JBlock();
+    JBlock codeBlock = new JBlock(false, false);
     
     static class Prop {
         Class type;

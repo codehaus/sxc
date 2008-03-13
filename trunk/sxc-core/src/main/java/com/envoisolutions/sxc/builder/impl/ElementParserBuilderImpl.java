@@ -46,15 +46,14 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
     private boolean checkXsiTypes = true;
     private JInvocation methodInvocation;
     JMethod constructor;
-    private Map<QName, JBlock> postReadBlocks = new LinkedHashMap<QName, JBlock>();
-    private JVar readItem;
+    private Map<QName, ReadBlock> readBlocks = new LinkedHashMap<QName, ReadBlock>();
 
     /**
      * Base class to extend from. Only used when root.
      */
     JClass baseClass;
 
-    JBlock tailBlock = new JBlock();
+    JBlock tailBlock = new JBlock(false, false);
 
     public ElementParserBuilderImpl(BuildContext buildContext, String className) throws BuildException {
         this.buildContext = buildContext;
@@ -174,12 +173,18 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         return b;
     }
 
-    public JVar setPostReadBlock(QName key, JBlock block) {
-        postReadBlocks.put(key, block);
-        if (readItem == null) {
-            readItem = codeBlock.decl(model.ref(Object.class), "item");
+    private static class ReadBlock {
+        private final JVar itemVar;
+        private final JBlock block;
+
+        private ReadBlock(JVar itemVar, JBlock block) {
+            this.itemVar = itemVar;
+            this.block = block;
         }
-        return readItem;
+    }
+
+    public void setReadBlock(QName key, JVar itemVar, JBlock block) {
+        readBlocks.put(key, new ReadBlock(itemVar, block));
     }
 
     public JVar as(Class<?> cls) {
@@ -211,7 +216,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
 
     private JVar createVar(String value, Class<?> cls, boolean nillable) {
         JVar var;
-        if (nillable) {
+        if (!cls.isPrimitive() && nillable) {
             var = method.body().decl(model._ref(cls), "value" + varCount++, JExpr._null());
             JConditional cond = method.body()._if(xsrVar.invoke("isXsiNil").not());
             
@@ -293,7 +298,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
             || anyElement != null)){
             writeMainLoop();
         } else {
-            b.add(codeBlock);
+            b.add(removeBraces(codeBlock));
         }
         
         for (ElementParserBuilderImpl e : states) {
@@ -301,7 +306,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         }
         
         if(!tailBlock.getContents().isEmpty())
-            codeBlock.add(tailBlock);
+            codeBlock.add(removeBraces(tailBlock));
 
         // Add return statement to the end of the block
         if (returnType != null) {
@@ -548,11 +553,11 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
             for (JExpression var : call.getVars()) {
                 invocation.arg(var);
             }
-            
-            JBlock postReadBlock = postReadBlocks.get(builder.getName());
-            if (postReadBlock != null) {
-                block.assign(readItem, invocation);
-                block.add(postReadBlock);
+
+            ReadBlock readBlock = readBlocks.get(builder.getName());
+            if (readBlock != null) {
+                readBlock.itemVar.init(invocation);
+                block.add(removeBraces(readBlock.block));
             } else {
                 block.add(invocation);
             }
@@ -596,12 +601,12 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
             }
         } 
         
-        JBlock postReadBlock = postReadBlocks.get(builder.getName());
-        if (postReadBlock != null) {
-            block.assign(readItem, invocation);
-            block.add(postReadBlock);
+        ReadBlock readBlock = readBlocks.get(builder.getName());
+        if (readBlock != null) {
+            readBlock.itemVar.init(invocation);
+            block.add(removeBraces(readBlock.block));
             if ((returnValue || root) && builder.returnType != null) {
-                block._return(readItem);
+                block._return(readBlock.itemVar);
             }
         } else {
             if ((returnValue || root) && builder.returnType != null) {
@@ -656,5 +661,18 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
             return vars;
         }
         
+    }
+
+    private static JBlock removeBraces(JBlock block) {
+        try {
+            Field field = JBlock.class.getDeclaredField("bracesRequired");
+            field.setAccessible(true);
+            field.setBoolean(block, false);
+            field = JBlock.class.getDeclaredField("indentRequired");
+            field.setAccessible(true);
+            field.setBoolean(block, false);
+        } catch(Throwable ignored) {
+        }
+        return block;
     }
 }
