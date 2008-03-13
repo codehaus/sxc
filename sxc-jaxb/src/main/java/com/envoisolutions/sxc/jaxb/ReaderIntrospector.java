@@ -37,6 +37,7 @@ import com.envoisolutions.sxc.builder.ElementParserBuilder;
 import com.envoisolutions.sxc.builder.ParserBuilder;
 import com.envoisolutions.sxc.util.Base64;
 import com.envoisolutions.sxc.util.FieldAccessor;
+import com.envoisolutions.sxc.util.ArrayUtil;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
@@ -51,6 +52,7 @@ import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 import com.sun.codemodel.JConditional;
 import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JArray;
 import com.sun.xml.bind.v2.model.core.Adapter;
 import com.sun.xml.bind.v2.model.core.ElementInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeAttributePropertyInfo;
@@ -241,6 +243,17 @@ public class ReaderIntrospector {
                                   ElementParserBuilder classBuilder, 
                                   JVar beanVar) {
         for (RuntimePropertyInfo prop : info.getProperties()) {
+            // DS: the JaxB spec does not define the mapping for char or char[]
+            // the RI reads the string as an int and then converts it to a char so 42 becomes '*'
+            // I think this is lame so I didn't implement it. You can use a XmlAdapter to covert
+            // if you really want to handle char.
+            if (char.class.equals(prop.getRawType()) || char[].class.equals(prop.getRawType())) {
+                logger.info("(JAXB Reader) JaxB specification does not support property " + prop.getName()
+                                   + " with type " + prop.getRawType()
+                                   + " on " + beanClass + ": Use a XmlAdapter");
+                continue;
+            }
+
             if (prop.isCollection()) {
                 addCollectionItem(classBuilder, beanVar, beanClass, prop);
             }
@@ -328,9 +341,6 @@ public class ReaderIntrospector {
             // No previous parser available, lets build one.
             ElementParserBuilder propBuilder = classBuilder.expectElement(name);
             JVar propVar = propBuilder.passParentVariable(beanVar);
-            
-            Class<?> propCls = (Class<?>) typeRef.getTarget().getType();
-            
             type2Parser.put(key, propBuilder);
             
             // Check to see if the property class is abstract
@@ -346,7 +356,8 @@ public class ReaderIntrospector {
                 Class c = e.getKey();
                 RuntimeClassInfo clsInfo = e.getValue();
                 
-                if (propCls.isAssignableFrom(c) 
+                Class<?> propCls = (Class<?>) typeRef.getTarget().getType();
+                if (propCls.isAssignableFrom(c)
                     && propCls != c
                     && !Modifier.isAbstract(c.getModifiers())) {
                     ElementParserBuilder xsiBuilder = propBuilder.expectXsiType(clsInfo.getTypeName());
@@ -381,14 +392,23 @@ public class ReaderIntrospector {
             Type type = propEl.getRawType();
             if (type instanceof Class) {
                 c = (Class) type;
+                if (c.isArray() && !Byte.TYPE.equals(c.getComponentType())) {
+                    c = c.getComponentType();
+                }
             }
-            
+
             // type to create for this property
             JBlock block = builder.getBody().getBlock();
             JExpression toSet = handleElement(builder, target, adapter, c, nillable);
 
             if (toSet != null) {
-                JVar var = block.decl(model._ref(c), "_returnValue", toSet);
+                JVar var;
+                if (toSet instanceof JVar) {
+                    var = (JVar) toSet;
+                } else {
+                    var = block.decl(model._ref(c), "_returnValue", toSet);
+                }
+
                 doSet(block, bean, beanClass, propEl, var);
                 return var;
             }
@@ -403,7 +423,14 @@ public class ReaderIntrospector {
             if (propBuilder != null) {
                 JExpression exp = JExpr.direct(c.getSimpleName());
                 JBlock block = propBuilder.getBody().getBlock();
-                JVar var = block.decl(model._ref(c), "_returnValue", exp);
+
+                JVar var;
+                if (exp instanceof JVar) {
+                    var = (JVar) exp;
+                } else {
+                    var = block.decl(model._ref(c), "_returnValue", exp);
+                }
+
                 doSet(block, bean, beanClass, propEl, var);
                 return var;
             }
@@ -413,7 +440,7 @@ public class ReaderIntrospector {
         return null;
     }
     
-    private JExpression handleElement(ElementParserBuilder builder, 
+    private JExpression handleElement(ElementParserBuilder builder,
                                       RuntimeNonElement target,
                                       Adapter<Type, Class> adapter, 
                                       Class c,
@@ -690,7 +717,28 @@ public class ReaderIntrospector {
         } else {
             throw new BuildException("Unknown property accessor type '" + accessor.getClass().getName() + "' for property " + beanClass.getName() + "." + prop.getName());
         }
-        collectionType = getType(collectionClass);
+        if (collectionClass.isArray()) {
+            Class componentType = collectionClass.getComponentType();
+            if (Boolean.TYPE.equals(componentType)) {
+                collectionType = getType(ArrayUtil.BooleanArray.class);
+            } else if (Character.TYPE.equals(componentType)) {
+                collectionType = getType(ArrayUtil.CharArray.class);
+            } else if (Short.TYPE.equals(componentType)) {
+                collectionType = getType(ArrayUtil.ShortArray.class);
+            } else if (Integer.TYPE.equals(componentType)) {
+                collectionType = getType(ArrayUtil.IntArray.class);
+            } else if (Long.TYPE.equals(componentType)) {
+                collectionType = getType(ArrayUtil.LongArray.class);
+            } else if (Float.TYPE.equals(componentType)) {
+                collectionType = getType(ArrayUtil.FloatArray.class);
+            } else if (Double.TYPE.equals(componentType)) {
+                collectionType = getType(ArrayUtil.DoubleArray.class);
+            } else {
+                collectionType = getType(ArrayList.class);
+            }
+        } else {
+            collectionType = getType(collectionClass);
+        }
 
         JVar collectionVar = classBuilder.getBody().decl(collectionType,
                 "col_" + beanClass.getSimpleName() + "_" + prop.getName(),
@@ -701,47 +749,58 @@ public class ReaderIntrospector {
         for (QName elementName : elementNames) {
             // item = read5(reader, properties)
             JBlock block = new JBlock();
-            JVar itemVar = classBuilder.setPostReadBlock(elementName, block);
+            JVar itemVar;
+            if (collectionClass.isArray() && collectionClass.getComponentType().isPrimitive()) {
+                itemVar = block.decl(model._ref(collectionClass.getComponentType()), "item");
+            } else {
+                itemVar = block.decl(model._ref(Object.class), "item");
+            }
+            classBuilder.setReadBlock(elementName, itemVar, block);
 
             // if (collection == null) {
             JBlock createCollectionBlock = block._if(collectionVar.eq(JExpr._null()))._then();
 
             //     collection = (Collection) bean.getItemCollection();
-            if (accessor instanceof Accessor.FieldReflection) {
-                Accessor.FieldReflection fieldReflection = (Accessor.FieldReflection) accessor;
-                Field field = fieldReflection.f;
+            if (!collectionClass.isArray()) {
+                if (accessor instanceof Accessor.FieldReflection) {
+                    Accessor.FieldReflection fieldReflection = (Accessor.FieldReflection) accessor;
+                    Field field = fieldReflection.f;
 
-                if (Modifier.isPublic(field.getDeclaringClass().getModifiers()) && Modifier.isPublic(field.getModifiers()) && !Modifier.isFinal(field.getModifiers())) {
-                    createCollectionBlock.assign(collectionVar, bean.ref(field.getName()));
+                    if (Modifier.isPublic(field.getDeclaringClass().getModifiers()) && Modifier.isPublic(field.getModifiers()) && !Modifier.isFinal(field.getModifiers())) {
+                        createCollectionBlock.assign(collectionVar, bean.ref(field.getName()));
+                    } else {
+                        JFieldVar fieldAccessorField = getPrivateFieldAccessor(field);
+                        createCollectionBlock.assign(collectionVar, JExpr.cast(collectionType, fieldAccessorField.invoke("getObject").arg(bean)));
+                    }
+                } else if (accessor instanceof Accessor.GetterSetterReflection) {
+                    Accessor.GetterSetterReflection getterSetterReflection = (Accessor.GetterSetterReflection) accessor;
+                    // todo private getter support
+                    Method getter = getterSetterReflection.getter;
+                    createCollectionBlock.assign(collectionVar, bean.invoke(getter.getName()));
                 } else {
-                    JFieldVar fieldAccessorField = getPrivateFieldAccessor(field);
-                    createCollectionBlock.assign(collectionVar, JExpr.cast(collectionType, fieldAccessorField.invoke("getObject").arg(bean)));
+                    throw new BuildException("Unknown property accessor type '" + accessor.getClass().getName() + "' for property " + beanClass.getName() + "." + prop.getName());
                 }
-            } else if (accessor instanceof Accessor.GetterSetterReflection) {
-                Accessor.GetterSetterReflection getterSetterReflection = (Accessor.GetterSetterReflection) accessor;
-                // todo private getter support
-                Method getter = getterSetterReflection.getter;
-                createCollectionBlock.assign(collectionVar, bean.invoke(getter.getName()));
-            } else {
-                throw new BuildException("Unknown property accessor type '" + accessor.getClass().getName() + "' for property " + beanClass.getName() + "." + prop.getName());
-            }
 
-            //     if (collection != null) {
-            //         collection.clear();
-            JConditional arrayFoundCondition = createCollectionBlock._if(collectionVar.ne(JExpr._null()));
-            arrayFoundCondition._then().invoke(collectionVar, "clear");
-            //     } else {
-            //         collection = new ArrayList();
-            Class clazz = getCollectionClass(collectionClass);
-            if (clazz != null) {
-                arrayFoundCondition._else().assign(collectionVar, JExpr._new(builder.getCodeModel().ref(clazz)));
+                //     if (collection != null) {
+                //         collection.clear();
+                JConditional arrayFoundCondition = createCollectionBlock._if(collectionVar.ne(JExpr._null()));
+                arrayFoundCondition._then().invoke(collectionVar, "clear");
+                //     } else {
+                //         collection = new ArrayList();
+                Class clazz = getCollectionClass(collectionClass);
+                if (clazz != null) {
+                    arrayFoundCondition._else().assign(collectionVar, JExpr._new(builder.getCodeModel().ref(clazz)));
+                } else {
+                    arrayFoundCondition._else()._throw(JExpr._new(model.ref(NullPointerException.class))
+                            .arg("Collection " + prop.getName() + " in class " + beanClass.getName() +
+                            " is null and a new instance of " + collectionClass.getName() + " can not be created"));
+                }
             } else {
-                arrayFoundCondition._else()._throw(JExpr._new(model.ref(NullPointerException.class))
-                        .arg("Collection " + prop.getName() + " in class " + beanClass.getName() +
-                        " is null and a new instance of " + collectionClass.getName() + " can not be created"));
+                createCollectionBlock.assign(collectionVar, JExpr._new(collectionType));
             }
             //     }
             // }
+
             // collection.add(item);
             block.add(collectionVar.invoke("add").arg(itemVar));
         }
@@ -751,6 +810,15 @@ public class ReaderIntrospector {
         // if (collection != null) {
         //     bean.setItemCollection(collection);
         // }
+        JExpression collectionAssignment = collectionVar;
+        if (collectionClass.isArray()) {
+            if (collectionClass.getComponentType().isPrimitive()) {
+                collectionAssignment = collectionVar.invoke("toArray");
+            } else {
+                JArray newArray = JExpr.newArray(model._ref(collectionClass.getComponentType()), collectionVar.invoke("size"));
+                collectionAssignment = JExpr.cast(model._ref(collectionClass), collectionVar.invoke("toArray").arg(newArray));
+            }
+        }
         if (accessor instanceof Accessor.FieldReflection) {
             JBlock assignCollectionBlock = classBuilder.getTailBlock()._if(collectionVar.ne(JExpr._null()))._then();
 
@@ -758,10 +826,10 @@ public class ReaderIntrospector {
             Field field = fieldReflection.f;
 
             if (Modifier.isPublic(field.getDeclaringClass().getModifiers()) && Modifier.isPublic(field.getModifiers()) && !Modifier.isFinal(field.getModifiers())) {
-                assignCollectionBlock.assign(bean.ref(field.getName()), collectionVar);
+                assignCollectionBlock.assign(bean.ref(field.getName()), collectionAssignment);
             } else {
                 JFieldVar fieldAccessorField = getPrivateFieldAccessor(field);
-                assignCollectionBlock.add(fieldAccessorField.invoke("setObject").arg(bean).arg(collectionVar));
+                assignCollectionBlock.add(fieldAccessorField.invoke("setObject").arg(bean).arg(collectionAssignment));
             }
         } else if (accessor instanceof Accessor.GetterSetterReflection) {
             Accessor.GetterSetterReflection getterSetterReflection = (Accessor.GetterSetterReflection) accessor;
@@ -771,7 +839,7 @@ public class ReaderIntrospector {
                 // if there is no setter method, the collection is not assigned into the class
                 // this assumes that the getter returned the a collection instance and held on to a reference
                 JBlock assignCollectionBlock = classBuilder.getTailBlock()._if(collectionVar.ne(JExpr._null()))._then();
-                assignCollectionBlock.add(bean.invoke(setter.getName()).arg(collectionVar));
+                assignCollectionBlock.add(bean.invoke(setter.getName()).arg(collectionAssignment));
             }
         } else {
             throw new BuildException("Unknown property accessor type '" + accessor.getClass().getName() + "' for property " + beanClass.getName() + "." + prop.getName());
