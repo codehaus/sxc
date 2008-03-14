@@ -1,16 +1,12 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <arrays>
-    <booleanField>false</booleanField>
     <booleanField>true</booleanField>
     <booleanField>false</booleanField>
     <booleanField>true</booleanField>
     <booleanField>false</booleanField>
-    <byteField>AAA=</byteField>
-    <charField>1</charField>
-    <charField>2</charField>
-    <charField>3</charField>
-    <charField>4</charField>
-    <charField>5</charField>
+    <booleanField>true</booleanField>
+    <booleanField>true</booleanField>
+    <byteField>ABCD</byteField>
     <doubleField>0.0</doubleField>
     <doubleField>1.11</doubleField>
     <doubleField>2.22</doubleField>
@@ -22,23 +18,67 @@
     <floatField>3.3</floatField>
     <floatField>4.4</floatField>
     <intField>0</intField>
-    <intField>111</intField>
-    <intField>222</intField>
-    <intField>333</intField>
-    <intField>444</intField>
+    <intField>11</intField>
+    <intField>22</intField>
+    <intField>33</intField>
+    <intField>44</intField>
     <longField>0</longField>
-    <longField>11111</longField>
-    <longField>22222</longField>
-    <longField>33333</longField>
-    <longField>44444</longField>
+    <longField>111</longField>
+    <longField>222</longField>
+    <longField>333</longField>
+    <longField>444</longField>
     <shortField>0</shortField>
-    <shortField>11</shortField>
-    <shortField>22</shortField>
-    <shortField>33</shortField>
-    <shortField>44</shortField>
+    <shortField>1</shortField>
+    <shortField>2</shortField>
+    <shortField>3</shortField>
+    <shortField>4</shortField>
     <stringField>stringField0</stringField>
     <stringField>stringField1</stringField>
     <stringField>stringField2</stringField>
     <stringField>stringField3</stringField>
     <stringField>stringField4</stringField>
+    <finalField>finalField0</finalField>
+    <finalField>finalField1</finalField>
+    <finalField>finalField2</finalField>
+    <finalField>finalField3</finalField>
+    <finalField>finalField4</finalField>
+
+    <booleanProperty>true</booleanProperty>
+    <booleanProperty>false</booleanProperty>
+    <booleanProperty>true</booleanProperty>
+    <booleanProperty>false</booleanProperty>
+    <booleanProperty>true</booleanProperty>
+    <booleanProperty>true</booleanProperty>
+    <byteProperty>ABCD</byteProperty>
+    <doubleProperty>0.0</doubleProperty>
+    <doubleProperty>1.11</doubleProperty>
+    <doubleProperty>2.22</doubleProperty>
+    <doubleProperty>3.33</doubleProperty>
+    <doubleProperty>4.44</doubleProperty>
+    <floatProperty>0.0</floatProperty>
+    <floatProperty>1.1</floatProperty>
+    <floatProperty>2.2</floatProperty>
+    <floatProperty>3.3</floatProperty>
+    <floatProperty>4.4</floatProperty>
+    <intProperty>0</intProperty>
+    <intProperty>11</intProperty>
+    <intProperty>22</intProperty>
+    <intProperty>33</intProperty>
+    <intProperty>44</intProperty>
+    <longProperty>0</longProperty>
+    <longProperty>111</longProperty>
+    <longProperty>222</longProperty>
+    <longProperty>333</longProperty>
+    <longProperty>444</longProperty>
+    <shortProperty>0</shortProperty>
+    <shortProperty>1</shortProperty>
+    <shortProperty>2</shortProperty>
+    <shortProperty>3</shortProperty>
+    <shortProperty>4</shortProperty>
+    <stringProperty>stringProperty0</stringProperty>
+    <stringProperty>stringProperty1</stringProperty>
+    <stringProperty>stringProperty2</stringProperty>
+    <stringProperty>stringProperty3</stringProperty>
+    <stringProperty>stringProperty4</stringProperty>
+
 </arrays>
