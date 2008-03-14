@@ -714,6 +714,9 @@ public class ReaderIntrospector {
         } else if (accessor instanceof Accessor.GetterSetterReflection) {
             Accessor.GetterSetterReflection getterSetterReflection = (Accessor.GetterSetterReflection) accessor;
             collectionClass = getterSetterReflection.getter.getReturnType();
+            if (collectionClass.isArray() && getterSetterReflection.setter == null) {
+                throw new BuildException("Array property " + beanClass.getName() + "." + prop.getName() + " does not have a setter method.  Either add a setter, convert the property to field access, or use a Collection");
+            }
         } else {
             throw new BuildException("Unknown property accessor type '" + accessor.getClass().getName() + "' for property " + beanClass.getName() + "." + prop.getName());
         }
