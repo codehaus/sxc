@@ -52,7 +52,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.Collection;
 import java.util.logging.Logger;
 
 import javax.xml.bind.JAXBException;
@@ -212,9 +211,11 @@ public class WriterIntrospector {
         for (RuntimePropertyInfo prop : info.getProperties()) {
             if (prop instanceof RuntimeElementPropertyInfo) {
                 RuntimeElementPropertyInfo propEl = (RuntimeElementPropertyInfo) prop;
-                
+
+                JVar propertyVar = getFieldValue(classBuilder, propEl);
+
                 for (RuntimeTypeRef typeRef : propEl.getTypes()) {
-                    handlePropertyTypeRef(classBuilder, parentClass, propEl, typeRef);
+                    handlePropertyTypeRef(classBuilder, parentClass, propEl, propertyVar, typeRef);
                 }
             } else if (prop instanceof RuntimeAttributePropertyInfo) {
                 RuntimeAttributePropertyInfo propAt = (RuntimeAttributePropertyInfo) prop;
@@ -294,26 +295,98 @@ public class WriterIntrospector {
         }
     }
 
-    private void handlePropertyTypeRef(ElementWriterBuilder b, 
-                                Class parentClass, 
-                                RuntimeElementPropertyInfo propEl, 
+    private void handlePropertyTypeRef(ElementWriterBuilder b,
+                                Class parentClass,
+                                RuntimeElementPropertyInfo propEl,
+                                JVar propertyVar,
                                 RuntimeTypeRef typeRef) {
 
-        
+
         RuntimeNonElement target = typeRef.getTarget();
-        
+
         Type rawType = propEl.getRawType();
 
         Class c = (Class) target.getType();
         JType jt = getType(c);
         JType rawJT = getType(rawType);
-        
+
         QName name = typeRef.getTagName();
         JBlock block = b.getCurrentBlock();
         JBlock origBlock = block;
 
         addType(c, target.getTypeName());
 
+        JVar var = propertyVar;
+
+        if (!propEl.isRequired()) {
+            JConditional nullCond = block._if(var.ne(JExpr._null()));
+            block = nullCond._then();
+            b.setCurrentBlock(block);
+
+            if (propEl.isCollection()) {
+                // todo is this needed?  Doesn't seem to work (test by marshalling a class with a null collection property)
+                // nullCond._else().add(b.getXSW().invoke("writeXsiNil"));
+            } else if (typeRef.isNillable()) {
+                nullCond._else().add(b.getXSW().invoke("writeXsiNil"));
+            }
+        }
+
+        if (propEl.isCollection()) {
+            JBlock collectionNotNull = block._if(var.ne(JExpr._null()))._then();
+            JForEach each = collectionNotNull.forEach(getGenericType(rawType), "_o", var);
+            JBlock newBody = each.body();
+            b.setCurrentBlock(newBody);
+            var = each.var();
+
+            rawType = c;
+            rawJT = jt;
+        }
+
+        ElementWriterBuilder valueBuilder = b.writeElement(name, rawJT, var);
+
+        if (target.isSimpleType()) {
+            if (rawType instanceof Class) {
+                c = (Class) rawType;
+            }
+            writeSimpleTypeElement(valueBuilder,
+                                   target,
+                                   propEl.getAdapter(),
+                                   typeRef.isNillable(),
+                                   rawType, c, jt);
+        } else if (target instanceof RuntimeClassInfo) {
+            RuntimeClassInfo rci = (RuntimeClassInfo)target;
+
+            List<Class<?>> substTypes = getSubstitutionTypes(c);
+            JBlock origBlck = valueBuilder.getCurrentBlock();
+
+            if (typeRef.isNillable()) {
+                valueBuilder.writeNilIfNull();
+            }
+
+            if (substTypes.size() > 1) {
+                for (Class<?> subCls : substTypes) {
+                    ElementWriterBuilder b2 =
+                        (ElementWriterBuilder) valueBuilder.newCondition(valueBuilder.getObject()._instanceof(model._ref(subCls)), model._ref(subCls));
+
+                    writeClassWriter(parentClass, name, rci, subCls, b2);
+                }
+            } else {
+                writeClassWriter(parentClass, name, rci, c, valueBuilder);
+            }
+
+            valueBuilder.setCurrentBlock(origBlck);
+        } else {
+        	logger.info("(JAXB Writer) Cannot map type yet: " + c);
+        }
+
+        if (propEl.isCollection()) {
+            b.setCurrentBlock(block);
+        }
+
+        b.setCurrentBlock(origBlock);
+    }
+
+    private JVar getFieldValue(ElementWriterBuilder classBuilder, RuntimeElementPropertyInfo propEl) {
         Accessor accessor = propEl.getAccessor();
 
         // if we have an AdaptedAccessor wrapper, strip off wrapper but preserve the name of the adapter class
@@ -333,15 +406,15 @@ public class WriterIntrospector {
             }
         }
 
-        JVar var;
+        final JVar propertyVar;
         if (accessor instanceof Accessor.FieldReflection) {
             Accessor.FieldReflection fieldReflection = (Accessor.FieldReflection) accessor;
             Field field = fieldReflection.f;
 
             if (Modifier.isPublic(field.getDeclaringClass().getModifiers()) && Modifier.isPublic(field.getModifiers()) && !Modifier.isFinal(field.getModifiers())) {
-                var = block.decl(rawJT,
-                                      propEl.getName() + "_" + javify(name.getLocalPart()),
-                                      b.getObject().ref(field.getName()));
+                propertyVar = classBuilder.getCurrentBlock().decl(getType(propEl.getRawType()),
+                        propEl.getName() + "_" + field.getName(),
+                        classBuilder.getObject().ref(field.getName()));
             } else {
                 JFieldVar fieldAccessorField = getPrivateFieldAccessor(field);
 
@@ -367,92 +440,31 @@ public class WriterIntrospector {
                 }
 
                 if (field.getType().isPrimitive()) {
-                    var = block.decl(rawJT,
-                            propEl.getName() + "_" + javify(name.getLocalPart()),
-                            fieldAccessorField.invoke(methodName).arg(b.getObject()));
+                    propertyVar = classBuilder.getCurrentBlock().decl(getType(propEl.getRawType()),
+                            propEl.getName() + "_" + field.getName(),
+                            fieldAccessorField.invoke(methodName).arg(classBuilder.getObject()));
                 } else {
-                    var = block.decl(rawJT,
-                            propEl.getName() + "_" + javify(name.getLocalPart()),
-                            JExpr.cast(rawJT, fieldAccessorField.invoke(methodName).arg(b.getObject())));
+                    propertyVar = classBuilder.getCurrentBlock().decl(getType(propEl.getRawType()),
+                            propEl.getName() + "_" + field.getName(),
+                            JExpr.cast(getType(propEl.getRawType()), fieldAccessorField.invoke(methodName).arg(classBuilder.getObject())));
                 }
             }
         } else if (accessor instanceof Accessor.GetterSetterReflection) {
             Accessor.GetterSetterReflection getterSetterReflection = (Accessor.GetterSetterReflection) accessor;
             Method getter = getterSetterReflection.getter;
-            var = block.decl(rawJT,
-                                  propEl.getName() + "_" + javify(name.getLocalPart()),
-                                  b.getObject().invoke(getter.getName()));
+            propertyVar = classBuilder.getCurrentBlock().decl(getType(propEl.getRawType()),
+                    propEl.getName() + "_" + getter.getName(),
+                    classBuilder.getObject().invoke(getter.getName()));
         } else {
-            throw new BuildException("Unknown property accessor type '" + accessor.getClass().getName() + "' for property " + c.getName() + "." + propEl.getName());
-        }
-
-
-        if (!propEl.isRequired()) {
-            JConditional nullCond = block._if(var.ne(JExpr._null()));
-            block = nullCond._then();
-            b.setCurrentBlock(block);
-
-            if (propEl.isCollection()) {
-                // todo is this needed?  Doesn't seem to work (test by marshalling a class with a null collection property)
-                // nullCond._else().add(b.getXSW().invoke("writeXsiNil"));
-            } else if (typeRef.isNillable()) {
-                nullCond._else().add(b.getXSW().invoke("writeXsiNil"));
-            }
-        }
-        
-        if (propEl.isCollection()) {
-            JBlock collectionNotNull = block._if(var.ne(JExpr._null()))._then();
-            JForEach each = collectionNotNull.forEach(getGenericType(rawType), "_o", var);
-            JBlock newBody = each.body();
-            b.setCurrentBlock(newBody);
-            var = each.var();
-            
-            rawType = c;
-            rawJT = jt;
-        }
-
-        ElementWriterBuilder valueBuilder = b.writeElement(name, rawJT, var);
-        
-        if (target.isSimpleType()) {
-            if (rawType instanceof Class) {
-                c = (Class) rawType;
-            }
-            writeSimpleTypeElement(valueBuilder, 
-                                   target,
-                                   propEl.getAdapter(),
-                                   typeRef.isNillable(), 
-                                   rawType, c, jt);
-        } else if (target instanceof RuntimeClassInfo) {
-            RuntimeClassInfo rci = (RuntimeClassInfo)target;
-
-            List<Class<?>> substTypes = getSubstitutionTypes(c);
-            JBlock origBlck = valueBuilder.getCurrentBlock();
-            
-            if (typeRef.isNillable()) {
-                valueBuilder.writeNilIfNull();
-            }
-            
-            if (substTypes.size() > 1) {
-                for (Class<?> subCls : substTypes) {
-                    ElementWriterBuilder b2 = 
-                        (ElementWriterBuilder) valueBuilder.newCondition(valueBuilder.getObject()._instanceof(model._ref(subCls)), model._ref(subCls));
-                    
-                    writeClassWriter(parentClass, name, rci, subCls, b2);
-                }
+            String classType;
+            if (propEl.parent().getType() instanceof Class) {
+                classType = ((Class) propEl.parent().getType()).getName();
             } else {
-                writeClassWriter(parentClass, name, rci, c, valueBuilder);
+                classType = propEl.parent().getType().toString();
             }
-            
-            valueBuilder.setCurrentBlock(origBlck);
-        } else {
-        	logger.info("(JAXB Writer) Cannot map type yet: " + c);
+            throw new BuildException("Unknown property accessor type '" + accessor.getClass().getName() + "' for property " + classType + "." + propEl.getName());
         }
-        
-        if (propEl.isCollection()) {
-            b.setCurrentBlock(block);
-        }
-        
-        b.setCurrentBlock(origBlock);
+        return propertyVar;
     }
 
     private JFieldVar getPrivateFieldAccessor(Field field) {
@@ -513,11 +525,7 @@ public class WriterIntrospector {
         return types;
     }
 
-    private String javify(String localPart) {
-        return JavaUtils.makeNonJavaKeyword(localPart);
-    }
-
-    private void writeSimpleTypeElement(ElementWriterBuilder b, 
+    private void writeSimpleTypeElement(ElementWriterBuilder b,
                                         RuntimeNonElement target, 
                                         Adapter<Type, Class> adapter,
                                         boolean nillable,

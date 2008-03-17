@@ -19,7 +19,7 @@ public class CollectionsTest extends XoTestCase {
         assertNotNull(collections);
 
         // verify all fields loaded correctly
-        assertValues(collections.collectionField, "collectionField");
+        assertValues(collections.collectionField, "collection-field");
         assertValues(collections.listField, "listField");
         assertValues(collections.setField, "setField");
         assertValues(collections.sortedSetField, "sortedSetField");
@@ -31,7 +31,7 @@ public class CollectionsTest extends XoTestCase {
         assertValues(collections.finalField, "finalField");
 
         // verify all properties loaded correctly
-        assertValues(collections.getCollectionProperty(), "collectionProperty");
+        assertValues(collections.getCollectionProperty(), "collection-property");
         assertValues(collections.getListProperty(), "listProperty");
         assertValues(collections.getSetProperty(), "setProperty");
         assertValues(collections.getSortedSetProperty(), "sortedSetProperty");
@@ -64,7 +64,7 @@ public class CollectionsTest extends XoTestCase {
         marshaller.marshal(collections, bos);
 
         Document d = readDocument(bos.toByteArray());
-        assertValues(d, "collectionField");
+        assertValues(d, "collection-field");
         assertValues(d, "listField");
         assertValues(d, "setField");
         assertValues(d, "sortedSetField");
@@ -77,7 +77,7 @@ public class CollectionsTest extends XoTestCase {
         assertValues(d, "uncreatableCollectionField");
         assertValues(d, "unknownCollectionField");
 
-        assertValues(d, "collectionProperty");
+        assertValues(d, "collection-property");
         assertValues(d, "listProperty");
         assertValues(d, "setProperty");
         assertValues(d, "sortedSetProperty");
@@ -105,6 +105,7 @@ public class CollectionsTest extends XoTestCase {
     }
 
     private void assertValues(Collection<String> collection, String name) {
+        assertNotNull("collection is null", collection);
         for (int i =0; i < 5; i++) {
             assertTrue("Expected collection " + name + " to contain value " + name + i, collection.contains(name + i));
         }

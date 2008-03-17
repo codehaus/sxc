@@ -6,6 +6,7 @@ import javax.xml.bind.annotation.XmlType;
 import javax.xml.bind.annotation.XmlAccessorOrder;
 import javax.xml.bind.annotation.XmlAccessOrder;
 import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlElement;
 
 import junit.framework.Assert;
 
@@ -14,9 +15,13 @@ import junit.framework.Assert;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlAccessorOrder(XmlAccessOrder.ALPHABETICAL)
 public class Fields {
+    @XmlElement(name = "public-field")
     public String publicField;
+    @XmlElement(name = "package-field")
     String packageField;
+    @XmlElement(name = "protected-field")
     protected String protectedField;
+    @XmlElement(name = "private-field")
     private String privateField;
 
     private boolean booleanField;

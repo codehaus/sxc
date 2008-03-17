@@ -28,6 +28,7 @@ public class Collections {
     // Public fields
 
     // intefaces type fields
+    @XmlElement(name = "collection-field")
     public Collection<String> collectionField;
     public List<String> listField;
     public Set<String> setField;
@@ -78,6 +79,7 @@ public class Collections {
     // this collection interface can not be created by JaxB because it does not have a "known" implementations
     private UnknownCollection<String> unknownCollectionProperty;
 
+    @XmlElement(name = "collection-property")
     public Collection<String> getCollectionProperty() {
         return collectionProperty;
     }
