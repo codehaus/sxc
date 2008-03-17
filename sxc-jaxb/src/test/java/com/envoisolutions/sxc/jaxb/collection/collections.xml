@@ -1,10 +1,10 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <collections>
-    <collectionField>collectionField0</collectionField>
-    <collectionField>collectionField1</collectionField>
-    <collectionField>collectionField2</collectionField>
-    <collectionField>collectionField3</collectionField>
-    <collectionField>collectionField4</collectionField>
+    <collection-field>collection-field0</collection-field>
+    <collection-field>collection-field1</collection-field>
+    <collection-field>collection-field2</collection-field>
+    <collection-field>collection-field3</collection-field>
+    <collection-field>collection-field4</collection-field>
     <customCollectionField>customCollectionField0</customCollectionField>
     <customCollectionField>customCollectionField1</customCollectionField>
     <customCollectionField>customCollectionField2</customCollectionField>
@@ -57,11 +57,11 @@
     <sortedSetField>sortedSetField4</sortedSetField>
 
 
-    <collectionProperty>collectionProperty0</collectionProperty>
-    <collectionProperty>collectionProperty1</collectionProperty>
-    <collectionProperty>collectionProperty2</collectionProperty>
-    <collectionProperty>collectionProperty3</collectionProperty>
-    <collectionProperty>collectionProperty4</collectionProperty>
+    <collection-property>collection-property0</collection-property>
+    <collection-property>collection-property1</collection-property>
+    <collection-property>collection-property2</collection-property>
+    <collection-property>collection-property3</collection-property>
+    <collection-property>collection-property4</collection-property>
     <customCollectionProperty>customCollectionProperty0</customCollectionProperty>
     <customCollectionProperty>customCollectionProperty1</customCollectionProperty>
     <customCollectionProperty>customCollectionProperty2</customCollectionProperty>

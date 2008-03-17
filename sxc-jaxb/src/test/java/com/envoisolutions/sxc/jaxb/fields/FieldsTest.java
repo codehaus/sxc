@@ -34,9 +34,16 @@ public class FieldsTest extends XoTestCase {
         marshaller.marshal(fields, bos);
 
         Document d = readDocument(bos.toByteArray());
-        assertValid("/fields/publicField[text()='-public-']", d);
-        assertValid("/fields/packageField[text()='-package-']", d);
-        assertValid("/fields/protectedField[text()='-protected-']", d);
-        assertValid("/fields/privateField[text()='-private-']", d);
+        assertValid("/fields/public-field[text()='-public-']", d);
+        assertValid("/fields/package-field[text()='-package-']", d);
+        assertValid("/fields/protected-field[text()='-protected-']", d);
+        assertValid("/fields/private-field[text()='-private-']", d);
+        assertValid("/fields/booleanField[text()='true']", d);
+        assertValid("/fields/byteField[text()='42']", d);
+        assertValid("/fields/shortField[text()='4242']", d);
+        assertValid("/fields/intField[text()='424242']", d);
+        assertValid("/fields/longField[text()='42424242']", d);
+        assertValid("/fields/floatField[text()='0.42']", d);
+        assertValid("/fields/doubleField[text()='0.4242']", d);
     }
 }

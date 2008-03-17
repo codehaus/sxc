@@ -1,9 +1,9 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <fields>
-    <publicField>-public-</publicField>
-    <packageField>-package-</packageField>
-    <protectedField>-protected-</protectedField>
-    <privateField>-private-</privateField>
+    <public-field>-public-</public-field>
+    <package-field>-package-</package-field>
+    <protected-field>-protected-</protected-field>
+    <private-field>-private-</private-field>
     <booleanField>true</booleanField>
     <byteField>42</byteField>
     <shortField>4242</shortField>
