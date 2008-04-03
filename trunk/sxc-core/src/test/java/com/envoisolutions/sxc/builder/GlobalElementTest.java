@@ -2,7 +2,6 @@ package com.envoisolutions.sxc.builder;
 
 import java.io.File;
 import java.util.Map;
-import java.util.HashMap;
 
 import javax.xml.namespace.QName;
 

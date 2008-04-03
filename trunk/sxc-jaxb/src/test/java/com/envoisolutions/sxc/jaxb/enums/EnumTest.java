@@ -15,6 +15,11 @@ public class EnumTest extends XoTestCase {
         Enums enums = (Enums) ctx.createUnmarshaller().unmarshal(getClass().getResourceAsStream("enum.xml"));
 
         assertNotNull(enums);
+
+        assertEquals(AnnotatedEnum.TWO, enums.getAnnotatedEnumAttribute());
+        assertEquals(NotAnnotatedEnum.TWO, enums.getNotAnnotatedEnumAttribute());
+        assertEquals(GeneratedEnum.SILVER, enums.getGeneratedEnumAttribute());
+
         assertEquals(AnnotatedEnum.TWO, enums.getAnnotatedEnum());
         assertEquals(NotAnnotatedEnum.TWO, enums.getNotAnnotatedEnum());
         assertEquals(GeneratedEnum.SILVER, enums.getGeneratedEnum());
@@ -26,6 +31,10 @@ public class EnumTest extends XoTestCase {
         marshaller.marshal(enums, bos);
 
         Document d = readDocument(bos.toByteArray());
+        assertValid("/enums[@annotatedEnumAttribute='dos']", d);
+        assertValid("/enums[@notAnnotatedEnumAttribute='TWO']", d);
+        assertValid("/enums[@generatedEnumAttribute='Silver']", d);
+
         assertValid("/enums/annotatedEnum[text()='dos']", d);
         assertValid("/enums/notAnnotatedEnum[text()='TWO']", d);
         assertValid("/enums/generatedEnum[text()='Silver']", d);

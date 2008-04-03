@@ -29,6 +29,9 @@ public abstract class AbstractWriterBuilder implements WriterBuilder {
     protected QName name;
     protected List<Class> exceptions = new ArrayList<Class>();
     
+    protected final IdentityManager fieldManager = new IdentityManager();
+    protected final IdentityManager variableManager = new IdentityManager();
+
     public AbstractWriterBuilder() {
         super();
     }
@@ -40,10 +43,15 @@ public abstract class AbstractWriterBuilder implements WriterBuilder {
 
 	protected JVar addBasicArgs(JMethod method, JType sourceObjectType, String sourceVariableName) {
         xswVar = method.param(XoXMLStreamWriter.class, "writer");
+
+        sourceVariableName = IdentityManager.toValidId(sourceVariableName);
+        if (sourceVariableName.equals("writer") || sourceVariableName.equals("properties")) {
+            sourceVariableName = "_" + sourceVariableName;
+        }
         JVar var = method.param(sourceObjectType, sourceVariableName);
 
         rtContextVar = method.param(buildContext.getStringToObjectMap(), "properties");
-    
+
         method._throws(XMLStreamException.class);
         
         for (Class c : exceptions) {
@@ -77,9 +85,17 @@ public abstract class AbstractWriterBuilder implements WriterBuilder {
     public void setObject(JVar var) {
         this.objectVar = var;
     }
-    
+
     public JVar getXSW() {
         return xswVar;
+    }
+
+    public JVar getContextVar() {
+        return rtContextVar;
+    }
+
+    public JMethod getMethod() {
+        return method;
     }
 
     public JDefinedClass getWriterClass() {
@@ -102,4 +118,11 @@ public abstract class AbstractWriterBuilder implements WriterBuilder {
         return parent;
     }
 
+    public IdentityManager getFieldManager() {
+        return fieldManager;
+    }
+
+    public IdentityManager getVariableManager() {
+        return variableManager;
+    }
 }

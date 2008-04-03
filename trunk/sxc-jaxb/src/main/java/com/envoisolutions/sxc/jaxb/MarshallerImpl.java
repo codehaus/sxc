@@ -35,6 +35,8 @@ import org.w3c.dom.Node;
 import org.xml.sax.ContentHandler;
 
 import com.envoisolutions.sxc.Context;
+import com.envoisolutions.sxc.jaxb.model.Model;
+import com.envoisolutions.sxc.jaxb.model.Bean;
 import com.envoisolutions.sxc.util.W3CDOMStreamWriter;
 import com.envoisolutions.sxc.util.XoXMLStreamWriter;
 import com.envoisolutions.sxc.util.XoXMLStreamWriterImpl;
@@ -43,6 +45,7 @@ public class MarshallerImpl implements Marshaller {
 
 	public static final String MARSHALLER = "sxc.marshaller"; 
     JAXBContext jaxbContext;
+    private final Model model;
     Context context;
     XMLOutputFactory xof = XMLOutputFactory.newInstance();
     Map<String, Object> properties = new HashMap<String, Object>();
@@ -53,9 +56,10 @@ public class MarshallerImpl implements Marshaller {
     private JAXBIntrospector introspector;
     private boolean writeStartAndEnd = true;
     
-    public MarshallerImpl(JAXBContext jaxbContext, Context context) {
+    public MarshallerImpl(JAXBContext jaxbContext, Model model, Context context) {
         super();
         this.jaxbContext = jaxbContext;
+        this.model = model;
         this.context = context;
         this.introspector = jaxbContext.createJAXBIntrospector();
         context.put(MARSHALLER, this);
@@ -180,23 +184,41 @@ public class MarshallerImpl implements Marshaller {
                 w.writeStartDocument();
             }
             
-            JAXBElement jaxbElement = null;
+            QName name;
+            QName xsiType = null;
+            boolean writeXsiNil = false;
             if (o instanceof JAXBElement) {
-                jaxbElement = (JAXBElement) o;
-            }
-            
-            if (jaxbElement != null) {
-                QName n = jaxbElement.getName();
-                w.writeStartElement("",  n.getLocalPart(), n.getNamespaceURI());
-                // TODO: we should check to see if a NS is already written here
-                w.writeDefaultNamespace(n.getNamespaceURI());
-                
+                JAXBElement jaxbElement = (JAXBElement) o;
                 o = jaxbElement.getValue();
+
+                name = jaxbElement.getName();
+                writeXsiNil = jaxbElement.isNil();
+
+                Bean bean = model.getBean(o.getClass());
+                if (bean != null && bean.getRootElementName() == null) {
+                    xsiType = bean.getSchemaTypeName();
+                }
+            } else {
+                Bean bean = model.getBean(o.getClass());
+                if (bean == null || bean.getRootElementName() == null) {
+                    throw new MarshalException("Object must be annotated with @XmlRootElement or be a JAXBElement!");
+                }
+                name = bean.getRootElementName();
             }
             
-            if (o == null) {
+            // write root element
+            w.writeStartElement("",  name.getLocalPart(), name.getNamespaceURI());
+            // TODO: we should check to see if a NS is already written here
+            w.writeAndDeclareIfUndeclared("ns1", name.getNamespaceURI());
+            w.writeDefaultNamespace(name.getNamespaceURI());
+
+            if (xsiType != null) {
+                w.writeXsiType(xsiType.getNamespaceURI(), xsiType.getLocalPart());
+            }
+
+            if (writeXsiNil) {
                 w.writeXsiNil();
-            } else {
+            } else if (o != null) {
                 Class c = o.getClass();
                 if (c == String.class) {
                     w.writeCharacters((String) o);
@@ -215,7 +237,7 @@ public class MarshallerImpl implements Marshaller {
                 } else if (c == Short.class) {
                     w.writeShort((Short) o);
                 } else if (c == Duration.class) {
-                    w.writeCharacters(((Duration) o).toString());
+                    w.writeCharacters(o.toString());
                 } else if (c == XMLGregorianCalendar.class) {
                     w.writeCharacters(((XMLGregorianCalendar) o).toXMLFormat());
                 } else if (c == byte[].class) {
@@ -224,11 +246,10 @@ public class MarshallerImpl implements Marshaller {
                     context.createWriter().write(w, o);
                 }
             }
-            
-            if (jaxbElement != null) {
-                w.writeEndElement();
-            }
-            
+
+            // close root element
+            w.writeEndElement();
+
             if (writeStartAndEnd) {
                 w.writeEndDocument();
             }
@@ -267,7 +288,7 @@ public class MarshallerImpl implements Marshaller {
 
     public void setProperty(String key, Object value) throws PropertyException {
         if (key.equals(Marshaller.JAXB_FRAGMENT)) {
-            writeStartAndEnd = !((Boolean) value).booleanValue();
+            writeStartAndEnd = !(Boolean) value;
         }
         
         properties.put(key, value);

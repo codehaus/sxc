@@ -6,6 +6,7 @@ import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JVar;
+import com.envoisolutions.sxc.builder.impl.IdentityManager;
 
 public interface WriterBuilder {
 
@@ -46,4 +47,8 @@ public interface WriterBuilder {
     void writeAs(Class cls);
 
     void declareException(Class cls);
+
+
+    IdentityManager getFieldManager();
+    IdentityManager getVariableManager();
 }

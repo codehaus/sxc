@@ -35,7 +35,10 @@ public abstract class AbstractParserBuilder implements ParserBuilder {
     boolean required;
     JType returnType;
     JBlock codeBlock = new JBlock(false, false);
-    
+
+    protected final IdentityManager fieldManager = new IdentityManager();
+    protected final IdentityManager variableManager = new IdentityManager();
+
     static class Prop {
         Class type;
         boolean nillable;
@@ -48,15 +51,14 @@ public abstract class AbstractParserBuilder implements ParserBuilder {
         return xsrVar;
     }
 
+    public JVar getContextVar() {
+        return rtContextVar;
+    }
 
     public void setAllowUnkown(boolean allow) {
         allowUnknown = allow;
     }
 
-    public JVar asInteger(int min, int max) {
-        return null;
-    }
-    
     public void mapAsProperty(String name, Class type, boolean nillable) {
         Prop prop = new Prop();
         prop.type = type;
@@ -85,7 +87,9 @@ public abstract class AbstractParserBuilder implements ParserBuilder {
 
     protected void addBasicArgs(JMethod method) {
         xsrVar = method.param(XoXMLStreamReader.class, "reader");
+        variableManager.addId("reader");
         rtContextVar = method.param(buildContext.getStringToObjectMap(), "properties");
+        variableManager.addId("properties");
 
         method._throws(XMLStreamException.class);
     }
@@ -94,9 +98,7 @@ public abstract class AbstractParserBuilder implements ParserBuilder {
     public JVar passParentVariable(JVar parentVar) {
         variables.add(parentVar);
         String name = "parent_" + parentVar.name();
-//        if (!name.startsWith("_p_")) {
-//            name = "_p_" + name;
-//        }
+        variableManager.addId(name);
         return method.param(parentVar.type(), name);
     }
 
@@ -104,7 +106,7 @@ public abstract class AbstractParserBuilder implements ParserBuilder {
         return variables;
     }
 
-    JMethod getMethod() {
+    public JMethod getMethod() {
         return method;
     }
 
@@ -124,5 +126,12 @@ public abstract class AbstractParserBuilder implements ParserBuilder {
     public void setRequired(boolean required) {
         this.required = required;
     }
-    
+
+    public IdentityManager getFieldManager() {
+        return fieldManager;
+    }
+
+    public IdentityManager getVariableManager() {
+        return variableManager;
+    }
 }

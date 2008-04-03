@@ -4,7 +4,7 @@ import java.lang.reflect.Field;
 
 import sun.misc.Unsafe;
 
-public class FieldAccessor {
+public class FieldAccessor<BeanType, FieldType> {
     private static final Unsafe unsafe;
     static {
         Unsafe theUnsafe = null;
@@ -52,14 +52,15 @@ public class FieldAccessor {
         }
     }
 
-    public Object getObject(Object instance) {
+    @SuppressWarnings({"unchecked"})
+    public FieldType getObject(BeanType instance) {
         if (unsafe == null) {
             return reflectionGet(instance);
         }
-        return unsafe.getObject(instance, offset);
+        return (FieldType) unsafe.getObject(instance, offset);
     }
 
-    public void setObject(Object instance, Object value) {
+    public void setObject(BeanType instance, FieldType value) {
         if (unsafe == null) {
             reflectionSet(instance, value);
             return;
@@ -67,14 +68,14 @@ public class FieldAccessor {
         unsafe.putObject(instance, offset, value);
     }
 
-    public boolean getBoolean(Object instance) {
+    public boolean getBoolean(BeanType instance) {
         if (unsafe == null) {
             return (Boolean) reflectionGet(instance);
         }
         return unsafe.getBoolean(instance, offset);
     }
 
-    public void setBoolean(Object instance, boolean value) {
+    public void setBoolean(BeanType instance, boolean value) {
         if (unsafe == null) {
             reflectionSet(instance, value);
             return;
@@ -82,14 +83,14 @@ public class FieldAccessor {
         unsafe.putBoolean(instance, offset, value);
     }
 
-    public byte getByte(Object instance) {
+    public byte getByte(BeanType instance) {
         if (unsafe == null) {
             return (Byte) reflectionGet(instance);
         }
         return unsafe.getByte(instance, offset);
     }
 
-    public void setByte(Object instance, byte value) {
+    public void setByte(BeanType instance, byte value) {
         if (unsafe == null) {
             reflectionSet(instance, value);
             return;
@@ -97,14 +98,14 @@ public class FieldAccessor {
         unsafe.putByte(instance, offset, value);
     }
 
-    public char getChar(Object instance) {
+    public char getChar(BeanType instance) {
         if (unsafe == null) {
             return (Character) reflectionGet(instance);
         }
         return unsafe.getChar(instance, offset);
     }
 
-    public void setChar(Object instance, char value) {
+    public void setChar(BeanType instance, char value) {
         if (unsafe == null) {
             reflectionSet(instance, value);
             return;
@@ -112,14 +113,14 @@ public class FieldAccessor {
         unsafe.putChar(instance, offset, value);
     }
 
-    public short getShort(Object instance) {
+    public short getShort(BeanType instance) {
         if (unsafe == null) {
             return (Short) reflectionGet(instance);
         }
         return unsafe.getShort(instance, offset);
     }
 
-    public void setShort(Object instance, short value) {
+    public void setShort(BeanType instance, short value) {
         if (unsafe == null) {
             reflectionSet(instance, value);
             return;
@@ -127,14 +128,14 @@ public class FieldAccessor {
         unsafe.putShort(instance, offset, value);
     }
 
-    public int getInt(Object instance) {
+    public int getInt(BeanType instance) {
         if (unsafe == null) {
             return (Integer) reflectionGet(instance);
         }
         return unsafe.getInt(instance, offset);
     }
 
-    public void setInt(Object instance, int value) {
+    public void setInt(BeanType instance, int value) {
         if (unsafe == null) {
             reflectionSet(instance, value);
             return;
@@ -142,14 +143,14 @@ public class FieldAccessor {
         unsafe.putInt(instance, offset, value);
     }
 
-    public long getLong(Object instance) {
+    public long getLong(BeanType instance) {
         if (unsafe == null) {
             return (Long) reflectionGet(instance);
         }
         return unsafe.getLong(instance, offset);
     }
 
-    public void setLong(Object instance, long value) {
+    public void setLong(BeanType instance, long value) {
         if (unsafe == null) {
             reflectionSet(instance, value);
             return;
@@ -157,14 +158,14 @@ public class FieldAccessor {
         unsafe.putLong(instance, offset, value);
     }
 
-    public float getFloat(Object instance) {
+    public float getFloat(BeanType instance) {
         if (unsafe == null) {
             return (Float) reflectionGet(instance);
         }
         return unsafe.getFloat(instance, offset);
     }
 
-    public void setFloat(Object instance, float value) {
+    public void setFloat(BeanType instance, float value) {
         if (unsafe == null) {
             reflectionSet(instance, value);
             return;
@@ -172,14 +173,14 @@ public class FieldAccessor {
         unsafe.putFloat(instance, offset, value);
     }
 
-    public double getDouble(Object instance) {
+    public double getDouble(BeanType instance) {
         if (unsafe == null) {
             return (Double) reflectionGet(instance);
         }
         return unsafe.getDouble(instance, offset);
     }
 
-    public void setDouble(Object instance, double value) {
+    public void setDouble(BeanType instance, double value) {
         if (unsafe == null) {
             reflectionSet(instance, value);
             return;
@@ -187,15 +188,16 @@ public class FieldAccessor {
         unsafe.putDouble(instance, offset, value);
     }
 
-    private Object reflectionGet(Object instance) {
+    @SuppressWarnings({"unchecked"})
+    private FieldType reflectionGet(BeanType instance) {
         try {
-            return field.get(instance);
+            return (FieldType) field.get(instance);
         } catch (IllegalAccessException e) {
             throw new IllegalStateException("Unable to access non-public field " + field.getDeclaringClass().getName() + "." + field.getName());
         }
     }
 
-    private void reflectionSet(Object instance, Object value) {
+    private void reflectionSet(BeanType instance, Object value) {
         try {
             field.set(instance, value);
         } catch (IllegalAccessException e) {

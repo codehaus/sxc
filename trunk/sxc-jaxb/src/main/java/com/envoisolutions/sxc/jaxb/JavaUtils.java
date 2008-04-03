@@ -22,6 +22,12 @@ package com.envoisolutions.sxc.jaxb;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+import java.lang.reflect.Type;
+import java.lang.reflect.GenericArrayType;
+import java.lang.reflect.Array;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 
 public final class JavaUtils {
 
@@ -63,4 +69,57 @@ public final class JavaUtils {
         return KEYWORD_PREFIX + keyword;
     }
 
+    public static Class toClass(Type type) {
+        // GenericArrayType, ParameterizedType, TypeVariable<D>, WildcardType
+        if (type instanceof Class) {
+            Class clazz = (Class) type;
+            return clazz;
+        } else if (type instanceof GenericArrayType) {
+            GenericArrayType arrayType = (GenericArrayType) type;
+            Class componentType = toClass(arrayType.getGenericComponentType());
+            return Array.newInstance(componentType, 0).getClass();
+        } else if (type instanceof ParameterizedType) {
+            ParameterizedType parameterizedType = (ParameterizedType) type;
+            return toClass(parameterizedType.getRawType());
+        } else {
+            return Object.class;
+        }
+    }
+
+    static Class toPrimitiveWrapper(Class type) {
+        if (type.equals(boolean.class)) {
+            return Boolean.class;
+        } else if (type.equals(byte.class)) {
+            return Byte.class;
+        } else if (type.equals(char.class)) {
+            return Character.class;
+        } else if (type.equals(short.class)) {
+            return Short.class;
+        } else if (type.equals(int.class)) {
+            return Integer.class;
+        } else if (type.equals(long.class)) {
+            return Long.class;
+        } else if (type.equals(float.class)) {
+            return Float.class;
+        } else if (type.equals(double.class)) {
+            return Double.class;
+        }
+        return type;
+    }
+
+    public static String capitalize(String name) {
+        if (name == null || name.length() == 0) {
+            return name;
+        }
+        if (Character.isUpperCase(name.charAt(0))) {
+            return name;
+        }
+        char chars[] = name.toCharArray();
+        chars[0] = Character.toUpperCase(chars[0]);
+        return new String(chars);
+    }
+
+    public static boolean isPrivate(Field field) {
+        return !Modifier.isPublic(field.getDeclaringClass().getModifiers()) || !Modifier.isPublic(field.getModifiers()) || Modifier.isFinal(field.getModifiers());
+    }
 }

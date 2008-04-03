@@ -15,15 +15,26 @@ public interface ElementParserBuilder extends ParserBuilder {
     //    
     
     ParserBuilder expectAttribute(QName qname);
-    
+    void setAttributeBlock(QName name, JVar readVar, JBlock readBlock);
+
     ElementParserBuilder expectElement(QName qname);
+    ElementParserBuilder expectElement(QName qname, String methodNameHint);
+    void setElementBlock(QName name, JVar readVar, JBlock readBlock);
 
     ElementParserBuilder expectAnyElement();
+    ElementParserBuilder expectAnyElement(String methodNameHint);
 
     ElementParserBuilder expectGlobalElement(QName qname);
+    ElementParserBuilder expectGlobalElement(QName qname, String methodNameHint);
 
     ElementParserBuilder expectXsiType(QName qname);
-    
+    ElementParserBuilder expectXsiType(QName qname, String methodNameHint);
+    void setXsiTypeBlock(QName name, JVar readVar, JBlock readBlock);
+
+    ElementParserBuilder newState();
+    ElementParserBuilder newState(JBlock block);
+    ElementParserBuilder newState(JBlock block, String methodNameHint);
+
     JVar as(Class<?> cls, boolean nillable);
     
     QName getName();
@@ -49,17 +60,4 @@ public interface ElementParserBuilder extends ParserBuilder {
      * when all the child elements are read and processed.
      */
     JBlock getTailBlock();
-
-    /**
-     * Spedified the block used to read an element.
-     *
-     * <p>
-     * This can be used to perform operations on nested elements such
-     * as placing them in a collection.
-     *
-     * @param name the qname of the expected element to enhance
-     * @param var the variable that will be assigned the item
-     * @param block the code block
-     */
-    void setReadBlock(QName name, JVar var, JBlock block);
 }
