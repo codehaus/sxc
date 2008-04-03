@@ -40,7 +40,7 @@ public class XoXMLStreamReaderImpl implements XoXMLStreamReader {
             String ns = getNamespaceURI(prefix);
             if (ns == null) ns = "";
             
-            return new QName(ns, val.substring(i+1).intern());
+            return new QName(ns, val.substring(i+1).intern(), prefix);
         }
     }
     

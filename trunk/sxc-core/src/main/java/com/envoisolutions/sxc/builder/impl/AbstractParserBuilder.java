@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import static java.beans.Introspector.decapitalize;
 
 public abstract class AbstractParserBuilder implements ParserBuilder {
 
@@ -97,8 +98,7 @@ public abstract class AbstractParserBuilder implements ParserBuilder {
     
     public JVar passParentVariable(JVar parentVar) {
         variables.add(parentVar);
-        String name = "parent_" + parentVar.name();
-        variableManager.addId(name);
+        String name = variableManager.createId(decapitalize(parentVar.type().name()));
         return method.param(parentVar.type(), name);
     }
 

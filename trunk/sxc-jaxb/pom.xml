@@ -27,7 +27,27 @@
       <artifactId>jaxb-xjc</artifactId>
       <version>2.1.2</version>
     </dependency>
-
+    <dependency>
+      <groupId>net.java.dev.stax-utils</groupId>
+      <artifactId>stax-utils</artifactId>
+      <version>20060502</version>
+        <exclusions>
+            <exclusion>
+                <groupId>com.bea.xml</groupId>
+                <artifactId>jsr173-ri</artifactId>
+            </exclusion>
+            <!--<exclusion>-->
+                <!--<groupId>javax.xml</groupId>-->
+                <!--<artifactId>jsr173</artifactId>-->
+            <!--</exclusion>-->
+        </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>xmlunit</groupId>
+      <artifactId>xmlunit</artifactId>
+      <version>1.1</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>

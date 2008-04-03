@@ -1,5 +1,6 @@
 package com.envoisolutions.sxc.util;
 
+import java.util.Iterator;
 import javax.xml.namespace.NamespaceContext;
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamException;
@@ -28,9 +29,32 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
         }
     }
 
+    private void writeAndDeclareIfUndeclared(String prefix, String namespace, boolean useExactPrefix) throws XMLStreamException {
+        if (useExactPrefix) {
+            // prefix must match exactally
+            Iterator prefixes = getNamespaceContext().getPrefixes(namespace);
+            while (prefixes.hasNext()) {
+                if (prefix.equals(prefixes.next())) {
+                    break;
+                }
+            }
+        } else if (getPrefix(namespace) != null) {
+            // any prefix will do
+            return;
+        }
+        writeNamespace(prefix, namespace);
+        setPrefix(prefix, namespace);
+    }
+
     public void writeQName(QName q) throws XMLStreamException {
-        String prefix = getUniquePrefix(q.getNamespaceURI(), true);
-        if (prefix != "") {
+        String prefix = q.getPrefix();
+        if (prefix.length() > 0) {
+            writeAndDeclareIfUndeclared(prefix, q.getNamespaceURI(), true);
+        } else {
+            prefix = getUniquePrefix(q.getNamespaceURI(), true);
+        }
+        
+        if (prefix.length() > 0) {
             writeCharacters(prefix);
             writeCharacters(":");
         }
@@ -38,8 +62,14 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
     }
 
     public String getQNameAsString(QName q) throws XMLStreamException {
-        String prefix = getUniquePrefix(q.getNamespaceURI(), true);
-        if (prefix != "") {
+        String prefix = q.getPrefix();
+        if (prefix.length() > 0) {
+            setPrefix(prefix, q.getNamespaceURI());
+        } else {
+            prefix = getUniquePrefix(q.getNamespaceURI(), true);
+        }
+
+        if (prefix.length() > 0) {
             return new StringBuilder(prefix).append(":").append(q.getLocalPart()).toString();
         } else {
             return q.getLocalPart();
@@ -67,15 +97,12 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
     /**
      * Create a unique namespace uri/prefix combination.
      * 
-     * @param nsUri
+     * @param namespaceURI
      * @return The namespace with the specified URI. If one doesn't exist, one
      *         is created.
      * @throws XMLStreamException
      */
-    public String getUniquePrefix(String namespaceURI,
-                                         boolean declare)
-        throws XMLStreamException
-    {
+    public String getUniquePrefix(String namespaceURI, boolean declare) throws XMLStreamException {
         String prefix = getNamespaceContext().getPrefix(namespaceURI);
         if (prefix == null)
         {

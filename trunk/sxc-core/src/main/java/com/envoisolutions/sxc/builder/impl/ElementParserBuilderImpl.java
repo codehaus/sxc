@@ -16,6 +16,7 @@ import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.CodeBody;
 import com.envoisolutions.sxc.builder.ElementParserBuilder;
 import com.envoisolutions.sxc.builder.ParserBuilder;
+import static com.envoisolutions.sxc.builder.impl.IdentityManager.capitalize;
 import com.envoisolutions.sxc.util.XoXMLStreamReader;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
@@ -94,7 +95,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         this.name = name;
 
         if (methodNameHint == null) methodNameHint = "";
-        method = buildContext.createMethod(readerClass, "read" + methodNameHint);
+        method = buildContext.createMethod(readerClass, "read" + capitalize(methodNameHint));
         addBasicArgs(method);
 
         if (increaseDepth) {
@@ -466,17 +467,18 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         b.add(preElementBlock);
         b = preElementBlock;
 
-        // declare variables used during element reading
-        JVar targetDepthVar;
-        JVar event;
-        if (depth == 1) {
-            targetDepthVar = b.decl(model._ref(int.class), "targetDepth", JExpr.lit(depth));
-            event = b.decl(model._ref(int.class), "event", xsrVar.invoke("getEventType"));
-        } else {
-            targetDepthVar = b.decl(model._ref(int.class), "targetDepth", xsrVar.invoke("getDepth").plus(JExpr.lit(1)));
-            event = b.decl(model._ref(int.class), "event", xsrVar.invoke("nextTagIgnoreAll"));
-        }
-        JVar depthVar = b.decl(model._ref(int.class), "depth", xsrVar.invoke("getDepth"));
+        if (!elements.isEmpty() || !xsiTypes.isEmpty() || allowUnknown ) {
+            // declare variables used during element reading
+            JVar targetDepthVar;
+            JVar event;
+            if (depth == 1) {
+                targetDepthVar = b.decl(model._ref(int.class), "targetDepth", JExpr.lit(depth));
+                event = b.decl(model._ref(int.class), "event", xsrVar.invoke("getEventType"));
+            } else {
+                targetDepthVar = b.decl(model._ref(int.class), "targetDepth", xsrVar.invoke("getDepth").plus(JExpr.lit(1)));
+                event = b.decl(model._ref(int.class), "event", xsrVar.invoke("nextTagIgnoreAll"));
+            }
+            JVar depthVar = b.decl(model._ref(int.class), "depth", xsrVar.invoke("getDepth"));
 
 //        JClass sysType = (JClass) model._ref(System.class);
 //        if (depth != 1)
@@ -485,23 +487,24 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
 //                     .plus(JExpr.lit(" Name: " + name).plus(JExpr.lit(" Current: "))
 //                           .plus(xsrVar.invoke("getName")))));
 
-        JBlock loop = b._while(depthVar.gte(targetDepthVar.minus(JExpr.lit(1)))).body();
-        
-        b = loop._if(event.eq(JExpr.lit(XMLStreamConstants.START_ELEMENT)))._then();
+            JBlock loop = b._while(depthVar.gte(targetDepthVar.minus(JExpr.lit(1)))).body();
 
-        
-        JConditional ifDepth = b._if(depthVar.eq(targetDepthVar));
+            b = loop._if(event.eq(JExpr.lit(XMLStreamConstants.START_ELEMENT)))._then();
 
-        writeElementReader(elements, ifDepth._then(), false);
-        
-        if (allowUnknown) {
-            writeElementReader(buildContext.getGlobalElements(), ifDepth._else(), true);
+
+            JConditional ifDepth = b._if(depthVar.eq(targetDepthVar));
+
+            writeElementReader(elements, ifDepth._then(), false);
+
+            if (allowUnknown) {
+                writeElementReader(buildContext.getGlobalElements(), ifDepth._else(), true);
+            }
+
+            JConditional ifHasNext = loop._if(xsrVar.invoke("hasNext"));
+            ifHasNext._then().assign(event, xsrVar.invoke("next"));
+            ifHasNext._then().assign(depthVar, xsrVar.invoke("getDepth"));
+            ifHasNext._else()._break();
         }
-        
-        JConditional ifHasNext = loop._if(xsrVar.invoke("hasNext"));
-        ifHasNext._then().assign(event, xsrVar.invoke("next"));
-        ifHasNext._then().assign(depthVar, xsrVar.invoke("getDepth"));
-        ifHasNext._else()._break();
     }
 
     private void writeAttributeReader(JBlock b) {

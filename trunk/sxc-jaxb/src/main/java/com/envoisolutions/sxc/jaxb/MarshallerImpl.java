@@ -7,7 +7,6 @@ import java.io.OutputStream;
 import java.io.Writer;
 import java.util.HashMap;
 import java.util.Map;
-
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
@@ -29,17 +28,17 @@ import javax.xml.transform.Result;
 import javax.xml.transform.dom.DOMResult;
 import javax.xml.validation.Schema;
 
+import com.envoisolutions.sxc.Context;
+import com.envoisolutions.sxc.jaxb.model.Bean;
+import com.envoisolutions.sxc.jaxb.model.Model;
+import com.envoisolutions.sxc.util.PrettyPrintXMLStreamWriter;
+import com.envoisolutions.sxc.util.W3CDOMStreamWriter;
+import com.envoisolutions.sxc.util.XoXMLStreamWriter;
+import com.envoisolutions.sxc.util.XoXMLStreamWriterImpl;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.xml.sax.ContentHandler;
-
-import com.envoisolutions.sxc.Context;
-import com.envoisolutions.sxc.jaxb.model.Model;
-import com.envoisolutions.sxc.jaxb.model.Bean;
-import com.envoisolutions.sxc.util.W3CDOMStreamWriter;
-import com.envoisolutions.sxc.util.XoXMLStreamWriter;
-import com.envoisolutions.sxc.util.XoXMLStreamWriterImpl;
 
 public class MarshallerImpl implements Marshaller {
 
@@ -55,9 +54,11 @@ public class MarshallerImpl implements Marshaller {
     private Schema schema;
     private JAXBIntrospector introspector;
     private boolean writeStartAndEnd = true;
-    
+    private boolean formattedOutput = false;
+
     public MarshallerImpl(JAXBContext jaxbContext, Model model, Context context) {
         super();
+//        xof.setProperty("javax.xml.stream.isRepairingNamespaces", Boolean.TRUE);
         this.jaxbContext = jaxbContext;
         this.model = model;
         this.context = context;
@@ -178,12 +179,19 @@ public class MarshallerImpl implements Marshaller {
             if (!introspector.isElement(o)) {
                 throw new MarshalException("Object must be annotated with @XmlRootElement or be a JAXBElement!");
             }
-            
+
+            // if formatted output is set, use the pretty print wrapper
+            if (formattedOutput) {
+                xsw = new PrettyPrintXMLStreamWriter(xsw);
+            }
+
             XoXMLStreamWriter w = new XoXMLStreamWriterImpl(xsw);
+
+            // if the is not a fragment, write the document header
             if (writeStartAndEnd) {
                 w.writeStartDocument();
             }
-            
+
             QName name;
             QName xsiType = null;
             boolean writeXsiNil = false;
@@ -290,7 +298,10 @@ public class MarshallerImpl implements Marshaller {
         if (key.equals(Marshaller.JAXB_FRAGMENT)) {
             writeStartAndEnd = !(Boolean) value;
         }
-        
+        if (key.equals(Marshaller.JAXB_FORMATTED_OUTPUT)) {
+            formattedOutput = (Boolean) value;
+        }
+
         properties.put(key, value);
         
     }
