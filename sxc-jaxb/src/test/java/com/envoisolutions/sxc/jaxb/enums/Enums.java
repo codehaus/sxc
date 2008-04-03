@@ -13,6 +13,9 @@ public class Enums {
     private AnnotatedEnum annotatedEnum;
     private NotAnnotatedEnum notAnnotatedEnum;
     private GeneratedEnum generatedEnum;
+    private AnnotatedEnum annotatedEnumAttribute;
+    private NotAnnotatedEnum notAnnotatedEnumAttribute;
+    private GeneratedEnum generatedEnumAttribute;
 
     public AnnotatedEnum getAnnotatedEnum() {
         return annotatedEnum;
@@ -36,5 +39,32 @@ public class Enums {
 
     public void setGeneratedEnum(GeneratedEnum generatedEnum) {
         this.generatedEnum = generatedEnum;
+    }
+
+    @XmlAttribute
+    public AnnotatedEnum getAnnotatedEnumAttribute() {
+        return annotatedEnumAttribute;
+    }
+
+    public void setAnnotatedEnumAttribute(AnnotatedEnum annotatedEnumAttribute) {
+        this.annotatedEnumAttribute = annotatedEnumAttribute;
+    }
+
+    @XmlAttribute
+    public NotAnnotatedEnum getNotAnnotatedEnumAttribute() {
+        return notAnnotatedEnumAttribute;
+    }
+
+    public void setNotAnnotatedEnumAttribute(NotAnnotatedEnum notAnnotatedEnumAttribute) {
+        this.notAnnotatedEnumAttribute = notAnnotatedEnumAttribute;
+    }
+
+    @XmlAttribute
+    public GeneratedEnum getGeneratedEnumAttribute() {
+        return generatedEnumAttribute;
+    }
+
+    public void setGeneratedEnumAttribute(GeneratedEnum generatedEnumAttribute) {
+        this.generatedEnumAttribute = generatedEnumAttribute;
     }
 }

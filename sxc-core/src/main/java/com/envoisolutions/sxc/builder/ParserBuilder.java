@@ -4,6 +4,7 @@ import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JVar;
+import com.envoisolutions.sxc.builder.impl.IdentityManager;
 
 public interface ParserBuilder {
 
@@ -42,7 +43,8 @@ public interface ParserBuilder {
     void setRequired(boolean b);
     
     ParserBuilder newState();
-    
     ParserBuilder newState(JBlock block);
 
+    IdentityManager getFieldManager();
+    IdentityManager getVariableManager();
 }

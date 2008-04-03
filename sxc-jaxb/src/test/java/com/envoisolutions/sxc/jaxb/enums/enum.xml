@@ -1,5 +1,9 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<enums>
+<enums
+    annotatedEnumAttribute="dos"
+    generatedEnumAttribute="Silver"
+    notAnnotatedEnumAttribute="TWO">
+
     <annotatedEnum>dos</annotatedEnum>
     <generatedEnum>Silver</generatedEnum>
     <notAnnotatedEnum>TWO</notAnnotatedEnum>

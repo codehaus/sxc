@@ -1,13 +1,24 @@
 package com.envoisolutions.sxc.builder.impl;
 
-import com.envoisolutions.sxc.Reader;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import javax.xml.namespace.QName;
+import javax.xml.stream.XMLStreamConstants;
+import javax.xml.stream.XMLStreamException;
+
 import com.envoisolutions.sxc.Context;
+import com.envoisolutions.sxc.Reader;
 import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.CodeBody;
 import com.envoisolutions.sxc.builder.ElementParserBuilder;
 import com.envoisolutions.sxc.builder.ParserBuilder;
 import com.envoisolutions.sxc.util.XoXMLStreamReader;
 import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
 import com.sun.codemodel.JClassAlreadyExistsException;
 import com.sun.codemodel.JConditional;
 import com.sun.codemodel.JExpr;
@@ -18,42 +29,32 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
-import com.sun.codemodel.JClass;
-
-import javax.xml.namespace.QName;
-import javax.xml.stream.XMLStreamConstants;
-import javax.xml.stream.XMLStreamException;
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.LinkedHashMap;
 
 public class ElementParserBuilderImpl extends AbstractParserBuilder implements ElementParserBuilder {
 
-    Map<QName, ElementParserBuilderImpl> elements = new LinkedHashMap<QName, ElementParserBuilderImpl>();
-    Map<QName, ElementCall> elementCalls = new LinkedHashMap<QName, ElementCall>();
-    Map<QName, AttributeParserBuilderImpl> attributes = new LinkedHashMap<QName, AttributeParserBuilderImpl>();
-    Map<QName, ElementParserBuilderImpl> xsiTypes = new LinkedHashMap<QName, ElementParserBuilderImpl>();
-    List<ElementParserBuilderImpl> states = new ArrayList<ElementParserBuilderImpl>();
-    int varCount = 0;
-    
-    ElementParserBuilderImpl anyElement;
-    boolean root;
-    int depth = 1;
-    QName name;
+    private final Map<QName, ExpectedAttribute> attributes = new LinkedHashMap<QName, ExpectedAttribute>();
+    private final Map<QName, ExpectedElement> elements = new LinkedHashMap<QName, ExpectedElement>();
+    private final Map<QName, ExpectedXsiType> xsiTypes = new LinkedHashMap<QName, ExpectedXsiType>();
+    private final List<ElementParserBuilderImpl> states = new ArrayList<ElementParserBuilderImpl>();
+    private ExpectedElement anyElement;
+
+    private boolean root;
+    private int depth = 1;
+    private QName name;
+    private JMethod constructor;
+    private JInvocation methodInvocation;
+
     private boolean valueType;
     private boolean checkXsiTypes = true;
-    private JInvocation methodInvocation;
-    JMethod constructor;
-    private Map<QName, ReadBlock> readBlocks = new LinkedHashMap<QName, ReadBlock>();
+
+    private final JBlock preElementBlock = new JBlock(false, false);
 
     /**
      * Base class to extend from. Only used when root.
      */
-    JClass baseClass;
+    private JClass baseClass;
 
-    JBlock tailBlock = new JBlock(false, false);
+    private final JBlock tailBlock = new JBlock(false, false);
 
     public ElementParserBuilderImpl(BuildContext buildContext, String className) throws BuildException {
         this.buildContext = buildContext;
@@ -73,16 +74,27 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         addBasicArgs(method);
         
         root = true;
+
+        reserveVariables();
+    }
+
+    public ElementParserBuilderImpl(ElementParserBuilderImpl parent, QName name) {
+        this(parent, true, name, null);
     }
 
     public ElementParserBuilderImpl(ElementParserBuilderImpl parent, boolean increaseDepth, QName name) {
+        this(parent, increaseDepth, name, null);
+    }
+
+    public ElementParserBuilderImpl(ElementParserBuilderImpl parent, boolean increaseDepth, QName name, String methodNameHint) {
         this.model = parent.getCodeModel();
         this.buildContext = parent.getBuildContext();
         this.readerClass = parent.getReaderClass();
         // this.variables.addAll(parent.getVariables());
         this.name = name;
 
-        method = buildContext.getNextReadMethod(readerClass);
+        if (methodNameHint == null) methodNameHint = "";
+        method = buildContext.createMethod(readerClass, "read" + methodNameHint);
         addBasicArgs(method);
 
         if (increaseDepth) {
@@ -90,101 +102,182 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         } else {
             depth = parent.depth;
         }
-    }
-    
-    public ElementParserBuilderImpl(ElementParserBuilderImpl parent, QName name) {
-        this(parent, true, name);
+
+        reserveVariables();
     }
 
-    public ParserBuilder expectAttribute(QName qname) {
-        if (qname == null) {
+    private void reserveVariables() {
+        variableManager.addId("depth");
+        variableManager.addId("targetDepth");
+        variableManager.addId("event");
+        variableManager.addId("attName");
+        variableManager.addId("attNs");
+        variableManager.addId("attValue");
+        variableManager.addId("xsiType");
+    }
+
+    public QName getName() {
+        return name;
+    }
+
+    public JMethod getConstructor() {
+        return constructor;
+    }
+
+    public JClass getBaseClass() {
+        return baseClass;
+    }
+
+    public void setBaseClass(JClass baseClass) {
+        this.baseClass = baseClass;
+    }
+
+    public ParserBuilder expectAttribute(QName name) {
+        if (name == null) {
             throw new NullPointerException("Attribute name cannot be null!");
         }
-        
-        AttributeParserBuilderImpl b = attributes.get(qname);
-        if (b == null) {
-            b = new AttributeParserBuilderImpl(this);
-            attributes.put(qname, b);
+
+        ExpectedAttribute expectedAttribute = attributes.get(name);
+        if (expectedAttribute == null) {
+            expectedAttribute = new ExpectedAttribute();
+            attributes.put(name, expectedAttribute);
         }
-        return b;
+        if (expectedAttribute.getParserBuilder() == null) {
+            expectedAttribute.setParserBuilder(new AttributeParserBuilderImpl(this));
+        }
+        return expectedAttribute.getParserBuilder();
     }
 
-    public ElementParserBuilder expectElement(QName qname) {
-        if (qname == null) {
+    public void setAttributeBlock(QName name, JVar readVar, JBlock readBlock) {
+        if (name == null) {
+            throw new NullPointerException("Attribute name cannot be null!");
+        }
+
+        ExpectedAttribute expectedAttribute = attributes.get(name);
+        if (expectedAttribute == null) {
+            expectedAttribute = new ExpectedAttribute();
+            attributes.put(name, expectedAttribute);
+        }
+        expectedAttribute.setReadVar(readVar);
+        expectedAttribute.setReadBlock(readBlock);
+    }
+
+    public ElementParserBuilder expectElement(QName name) {
+        return expectElement(name, null);
+    }
+
+    public ElementParserBuilder expectElement(QName name, String methodNameHint) {
+        if (name == null) {
             throw new NullPointerException("Element name cannot be null!");
         }
         
-        ElementParserBuilderImpl b = elements.get(qname);
-        if (b == null) {
-            ElementCall call = elementCalls.get(qname);
-            if (call != null) {
-                b = call.getElement();
-            } else {
-                b = new ElementParserBuilderImpl(this, qname);
-                elements.put(qname, b);
-            }
+        ExpectedElement expectedElement = elements.get(name);
+        if (expectedElement == null) {
+            expectedElement = new ExpectedElement();
+            elements.put(name, expectedElement);
         }
-        return b;
+        if (expectedElement.getParserBuilder() == null) {
+            expectedElement.setParserBuilder(new ElementParserBuilderImpl(this, true, name, methodNameHint));
+        }
+        return expectedElement.getParserBuilder();
     }
 
     public void expectElement(QName name, ElementParserBuilder elementBuilder, JExpression... vars) {
         if (name == null) {
             throw new NullPointerException("Element name cannot be null!");
         }
-        if (elementBuilder == null) {
-            throw new NullPointerException("ElementParserBuilder cannot be null!");
+
+        ExpectedElement expectedElement = elements.get(name);
+        if (expectedElement == null) {
+            expectedElement = new ExpectedElement();
+            elements.put(name, expectedElement);
         }
-        elements.remove(name);
-        elementCalls.put(name, new ElementCall((ElementParserBuilderImpl) elementBuilder, vars));
+        expectedElement.setParserBuilder((ElementParserBuilderImpl) elementBuilder);
+        expectedElement.setVars(vars);
     }
 
-    public ElementParserBuilder expectXsiType(QName qname) {
-        if (qname == null) {
+    public void setElementBlock(QName name, JVar readVar, JBlock readBlock) {
+        if (name == null) {
             throw new NullPointerException("Element name cannot be null!");
         }
-        
-        ElementParserBuilderImpl b = getXsiTypes().get(qname);
-        if (b == null) {
-            b = new ElementParserBuilderImpl(this, qname);
-            b.checkXsiTypes  = false;
-            getXsiTypes().put(qname, b);
+
+        ExpectedElement expectedElement = elements.get(name);
+        if (expectedElement == null) {
+            expectedElement = new ExpectedElement();
+            elements.put(name, expectedElement);
         }
-        
-        return b;
+        expectedElement.setReadVar(readVar);
+        expectedElement.setReadBlock(readBlock);
     }
-    
-    public ElementParserBuilder expectAnyElement() {
-        if (anyElement == null) {
-            anyElement = new ElementParserBuilderImpl(this, null);
+
+    public ElementParserBuilder expectXsiType(QName name) {
+        return expectXsiType(name, null);
+    }
+
+    public ElementParserBuilder expectXsiType(QName name, String methodNameHint) {
+        if (name == null) {
+            throw new NullPointerException("XsiType name cannot be null!");
         }
-        return anyElement;
+
+        ExpectedXsiType expectedXsiType = xsiTypes.get(name);
+        if (expectedXsiType == null) {
+            expectedXsiType = new ExpectedXsiType();
+            xsiTypes.put(name, expectedXsiType);
+        }
+        if (expectedXsiType.getParserBuilder() == null) {
+            ElementParserBuilderImpl xsiType = new ElementParserBuilderImpl(this, true, name, methodNameHint);
+            xsiType.checkXsiTypes = false;
+            expectedXsiType.setParserBuilder(xsiType);
+        }
+        return expectedXsiType.getParserBuilder();
+    }
+
+    public void setXsiTypeBlock(QName name, JVar readVar, JBlock readBlock) {
+        if (name == null) {
+            throw new NullPointerException("XsiType name cannot be null!");
+        }
+
+        ExpectedXsiType expectedXsiType = xsiTypes.get(name);
+        if (expectedXsiType == null) {
+            expectedXsiType = new ExpectedXsiType();
+            xsiTypes.put(name, expectedXsiType);
+        }
+        expectedXsiType.setReadVar(readVar);
+        expectedXsiType.setReadBlock(readBlock);
+    }
+
+    public ElementParserBuilder expectAnyElement() {
+        return expectAnyElement(null);
+    }
+
+    public ElementParserBuilder expectAnyElement(String methodNameHint) {
+        if (anyElement == null) {
+            anyElement = new ExpectedElement();
+        }
+        if (anyElement.getParserBuilder() == null) {
+            anyElement.setParserBuilder(new ElementParserBuilderImpl(this, true, null, methodNameHint));
+        }
+        return anyElement.getParserBuilder();
     }
 
     public ElementParserBuilder expectGlobalElement(QName qname) {
+        return expectGlobalElement(qname, null);
+    }
+
+    public ElementParserBuilder expectGlobalElement(QName qname, String methodNameHint) {
         if (qname == null) {
             throw new NullPointerException("Element name cannot be null!");
         }
-        
-        ElementParserBuilderImpl b = buildContext.getGlobalElements().get(qname);
-        if (b == null) {
-            b = new ElementParserBuilderImpl(this, qname);
-            buildContext.getGlobalElements().put(qname, b);
+
+        ExpectedElement expectedElement = buildContext.getGlobalElements().get(qname);
+        if (expectedElement == null) {
+            expectedElement = new ExpectedElement();
+            buildContext.getGlobalElements().put(qname, expectedElement);
         }
-        return b;
-    }
-
-    private static class ReadBlock {
-        private final JVar itemVar;
-        private final JBlock block;
-
-        private ReadBlock(JVar itemVar, JBlock block) {
-            this.itemVar = itemVar;
-            this.block = block;
+        if (expectedElement.getParserBuilder() == null) {
+            expectedElement.setParserBuilder(new ElementParserBuilderImpl(this, true, qname, methodNameHint));
         }
-    }
-
-    public void setReadBlock(QName key, JVar itemVar, JBlock block) {
-        readBlocks.put(key, new ReadBlock(itemVar, block));
+        return expectedElement.getParserBuilder();
     }
 
     public JVar as(Class<?> cls) {
@@ -214,16 +307,18 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         throw new UnsupportedOperationException("Invalid type " + cls);
     }
 
-    private JVar createVar(String value, Class<?> cls, boolean nillable) {
+    private JVar createVar(String method, Class<?> cls, boolean nillable) {
+        String name = variableManager.createId("value");
+
         JVar var;
         if (!cls.isPrimitive() && nillable) {
-            var = method.body().decl(model._ref(cls), "value" + varCount++, JExpr._null());
-            JConditional cond = method.body()._if(xsrVar.invoke("isXsiNil").not());
+            var = this.method.body().decl(model._ref(cls), name, JExpr._null());
+            JConditional cond = this.method.body()._if(xsrVar.invoke("isXsiNil").not());
             
-            JInvocation invocation = xsrVar.invoke(value);
+            JInvocation invocation = xsrVar.invoke(method);
             cond._then().assign(var, invocation);
         } else {
-            var = method.body().decl(model._ref(cls), "value" + varCount++, xsrVar.invoke(value));
+            var = this.method.body().decl(model._ref(cls), name, xsrVar.invoke(method));
         }
         
         return var;
@@ -233,12 +328,16 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         return as(String.class, false);
     }
     
-    public ParserBuilder newState() {
-        return newState(codeBlock);
+    public ElementParserBuilder newState() {
+        return newState(preElementBlock);
     }
 
-    public ParserBuilder newState(JBlock block) {
-        ElementParserBuilderImpl b = new ElementParserBuilderImpl(this, false, name);
+    public ElementParserBuilder newState(JBlock block) {
+        return newState(block, null);
+    }
+
+    public ElementParserBuilder newState(JBlock block, String methodNameHint) {
+        ElementParserBuilderImpl b = new ElementParserBuilderImpl(this, false, name, methodNameHint);
         states.add(b);
         
         JMethod nextMethod = b.getMethod();
@@ -261,7 +360,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
     }
 
     public JVar call(JType type, String varName, ElementParserBuilder builder) {
-        JBlock block = codeBlock;
+        JBlock block = preElementBlock;
         
         ElementParserBuilderImpl b = (ElementParserBuilderImpl) builder;
         JMethod nextMethod = b.getMethod();
@@ -270,12 +369,17 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         for (JVar v : b.variables) {
             invocation.arg(v);
         }
-        
+
+        varName = variableManager.createId(varName);
         return block.decl(type, varName, invocation);
     }
 
     public CodeBody getBody() {
-        return new CodeBodyImpl(this);
+        return new CodeBodyImpl(this) {
+            public JBlock getBlock() {
+                return preElementBlock;
+            }
+        };
     }
 
     public JBlock getTailBlock() {
@@ -288,32 +392,33 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         written = true;
         
         JBlock b = method.body();
-        
+
         if (!valueType &&
-            (elements.size() > 0 
-            || elementCalls.size() > 0 
+            (elements.size() > 0
             || buildContext.getGlobalElements().size() > 0 
-            || getXsiTypes().size() > 0 
+            || xsiTypes.size() > 0
             || attributes.size() > 0 
             || anyElement != null)){
             writeMainLoop();
         } else {
             b.add(removeBraces(codeBlock));
+            codeBlock.add(removeBraces(preElementBlock));
         }
         
         for (ElementParserBuilderImpl e : states) {
             e.write();
         }
         
-        if(!tailBlock.getContents().isEmpty())
-            codeBlock.add(removeBraces(tailBlock));
+        if(!tailBlock.getContents().isEmpty()) {
+            preElementBlock.add(removeBraces(tailBlock));
+        }
 
         // Add return statement to the end of the block
         if (returnType != null) {
             if(root)
                 throw new IllegalStateException("root builder is not allowed to have the return type");
             setReturnType(returnType);
-            codeBlock._return(_return);
+            preElementBlock._return(_return);
         } 
         
         if (root) {
@@ -338,10 +443,6 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         
         block._return(JExpr._null());
     }
-    
-    public Map<QName, ElementParserBuilderImpl> getXsiTypes() {
-        return xsiTypes;
-    }
 
     /**
      * Write out a loop which will read in a sequence of elements.
@@ -358,26 +459,25 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         // Add the user constructed codeblock and continue from there
         b.add(codeBlock);
         b = codeBlock;
-        
-        if (attributes.size() > 0) {
-            writeAttributeReader(b);
-        }
-        
-        JVar depthVar = b.decl(model._ref(int.class), "depth", xsrVar.invoke("getDepth"));
+
+        writeAttributeReader(b);
+
+        // Add the user constructed codeblock and continue from there
+        b.add(preElementBlock);
+        b = preElementBlock;
+
+        // declare variables used during element reading
         JVar targetDepthVar;
         JVar event;
         if (depth == 1) {
             targetDepthVar = b.decl(model._ref(int.class), "targetDepth", JExpr.lit(depth));
             event = b.decl(model._ref(int.class), "event", xsrVar.invoke("getEventType"));
         } else {
-            targetDepthVar = b.decl(model._ref(int.class), "targetDepth", depthVar.plus(JExpr.lit(1)));
+            targetDepthVar = b.decl(model._ref(int.class), "targetDepth", xsrVar.invoke("getDepth").plus(JExpr.lit(1)));
             event = b.decl(model._ref(int.class), "event", xsrVar.invoke("nextTagIgnoreAll"));
         }
-        
-        
-        
-        b.assign(depthVar, xsrVar.invoke("getDepth"));
-        
+        JVar depthVar = b.decl(model._ref(int.class), "depth", xsrVar.invoke("getDepth"));
+
 //        JClass sysType = (JClass) model._ref(System.class);
 //        if (depth != 1)
 //            b.add(sysType.staticRef("out").invoke("println").arg(JExpr.lit("TD ").plus(targetDepthVar)
@@ -404,11 +504,11 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         ifHasNext._else()._break();
     }
 
-    /**
-     * Write out a loop which will read in a sequence of elements.
-     *
-     */
     private void writeAttributeReader(JBlock b) {
+        if (attributes.isEmpty()) {
+            return;
+        }
+
         JForLoop loop = b._for();
         JVar var = loop.init(model._ref(int.class), "i", JExpr.lit(0));
         loop.test(var.lt(xsrVar.invoke("getAttributeCount")));
@@ -418,55 +518,38 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         JVar attName = b.decl(model._ref(String.class), "attName", xsrVar.invoke("getAttributeLocalName").arg(var));
         JVar attNs = b.decl(model._ref(String.class), "attNs", xsrVar.invoke("getAttributeNamespace").arg(var));
         JVar attValue = b.decl(model._ref(String.class), "attValue", xsrVar.invoke("getAttributeValue").arg(var));
-        
-        JConditional cond = null;
-        
-        for (Map.Entry<QName, AttributeParserBuilderImpl> e : attributes.entrySet()) {
-            QName name = e.getKey();
-            AttributeParserBuilderImpl builder = e.getValue();
-            
-            JExpression localInv = attName.eq(JExpr.lit(name.getLocalPart()));
-            String ns = name.getNamespaceURI();
-            JExpression nsInv = JExpr.lit(name.getNamespaceURI()).eq(attNs);
-            
-            if (ns.equals("")) {
-                nsInv = nsInv.cor(attNs.eq(JExpr._null()));
-            }
-            
-            JExpression qnameCompare = localInv.cand(nsInv);
 
-            if (cond == null) {
-                cond = b._if(qnameCompare); 
-            } else {
-                cond = cond._else()._if(qnameCompare);
+
+        JIfElseBlock attributesBlock = new JIfElseBlock();
+        b.add(attributesBlock);
+        for (Map.Entry<QName, ExpectedAttribute> e : attributes.entrySet()) {
+            QName name = e.getKey();
+            ExpectedAttribute expectedAttribute = e.getValue();
+
+            JExpression qnameCompare = buildQNameCompare(name, attName, attNs);
+            JBlock block = attributesBlock.addCondition(qnameCompare);
+
+            List<JVar> vars = null;
+            if (expectedAttribute.getParserBuilder() != null) {
+                AttributeParserBuilderImpl builder = expectedAttribute.getParserBuilder();
+
+                // if we have a builder we need to pass the attribute value
+                builder.getMethod().param(model._ref(String.class), "_attValue");
+                vars = new ArrayList<JVar>(builder.variables);
+                vars.add(attValue);
+
+                // todo why?
+                builder.getMethod().body().add(builder.codeBlock);
             }
-            
-            JMethod nextMethod = builder.getMethod();
-            
-            JInvocation invocation = JExpr.invoke(nextMethod).arg(xsrVar).arg(rtContextVar);
-            for (JVar v : builder.variables) {
-                invocation.arg(v);
-            }
-            
-            nextMethod.param(model._ref(String.class), "_attValue");
-            invocation.arg(attValue);
-            
-            nextMethod.body().add(builder.codeBlock);
-            
-            if (root && builder.returnType != null) {
-                cond._then()._return(invocation);
-            } else {
-                cond._then().add(invocation);
-            }
-            
-            // TODO: throw exception if unknown elements are encountered and allowUnknown == false
-            builder.write();
+
+            writeReader(block, expectedAttribute, vars);
         }
     }
 
     private void writeXsiChecks(JBlock b) {
-        if(getXsiTypes().isEmpty())
+        if(xsiTypes.isEmpty()) {
             return; // no @xsi:type to look for.
+        }
 
         JVar xsiType = b.decl(model._ref(QName.class), "xsiType", xsrVar.invoke("getXsiType"));
         JConditional cond = b._if(xsiType.ne(JExpr._null())); 
@@ -475,150 +558,97 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
     }
 
     private void writeXsiChecks(JBlock b, JVar xsiType) {
-        JConditional xsiCond = null;
-        
-        for (Map.Entry<QName, ElementParserBuilderImpl> e : getXsiTypes().entrySet()) {
-            QName name = e.getKey();
-            
-            ElementParserBuilderImpl builder = e.getValue();
-            
-            JExpression localInv = xsiType.invoke("getLocalPart").eq(JExpr.lit(name.getLocalPart()));
-            String ns = name.getNamespaceURI();
-            JExpression nsInv = JExpr.lit(name.getNamespaceURI()).eq(xsiType.invoke("getNamespaceURI"));
-            if (ns.equals("")) {
-                nsInv = nsInv.cor(xsiType.invoke("getNamespaceURI").eq(JExpr._null()));
-            }
-            
-            JExpression qnameCompare = localInv.cand(nsInv);
+        JIfElseBlock xsiBlock = new JIfElseBlock();
+        b.add(xsiBlock);
+        for (Map.Entry<QName, ExpectedXsiType> entry : xsiTypes.entrySet()) {
+            QName name = entry.getKey();
+            ExpectedXsiType expectedXsiType = entry.getValue();
 
-            if (xsiCond == null) {
-                xsiCond = b._if(qnameCompare); 
-            } else {
-                xsiCond = xsiCond._else()._if(qnameCompare);
-            }
-            
-            JBlock block = xsiCond._then();
+            JExpression qnameCompare = buildQNameCompare(name, xsiType.invoke("getLocalPart"), xsiType.invoke("getNamespaceURI"));
+            JBlock block = xsiBlock.addCondition(qnameCompare);
 
             // xsi:type elements are immediately returned to the caller
-            writeElementReader(builder, block, false, true);
-            
-            if (builder.returnType == null) {
+            writeReader(block, expectedXsiType, null);
+
+            ElementParserBuilderImpl parserBuilder = expectedXsiType.getParserBuilder();
+            if (parserBuilder != null && expectedXsiType.getParserBuilder().returnType == null) {
                 block._return();
             }
         }
     }
 
-    
-    private void writeElementReader(Map<QName, ElementParserBuilderImpl> els, JBlock b, boolean global) {
-        JConditional cond = null;
-        
+    private void writeElementReader(Map<QName, ExpectedElement> elements, JBlock block, boolean global) {
         if (depth == 1 && !global && checkXsiTypes) {
-            writeXsiChecks(b);
+            writeXsiChecks(block);
         }
-        
-        for (Map.Entry<QName, ElementParserBuilderImpl> e : els.entrySet()) {
-            QName name = e.getKey();
-            ElementParserBuilderImpl builder = e.getValue();
 
-            JExpression qnameCompare = buildQNameCompare(name);
+        JIfElseBlock elementsBlock = new JIfElseBlock();
+        block.add(elementsBlock);
+        for (Map.Entry<QName, ExpectedElement> entry : elements.entrySet()) {
+            QName name = entry.getKey();
+            ExpectedElement expectedElement = entry.getValue();
 
-            if (cond == null) {
-                cond = b._if(qnameCompare); 
-            } else {
-                cond = cond._else()._if(qnameCompare);
-            }
-            
-            JBlock block = cond._then();
+            JExpression qnameCompare = buildQNameCompare(name, xsrVar.invoke("getLocalName"), xsrVar.invoke("getNamespaceURI"));
+            JBlock elementBlock = elementsBlock.addCondition(qnameCompare);
 
-            writeElementReader(builder, block, global, false);
+            writeReader(elementBlock, expectedElement, expectedElement.getVars());
         }
-        
-        for (Map.Entry<QName, ElementCall> e : elementCalls.entrySet()) {
-            QName name = e.getKey();
-            ElementCall call = e.getValue();
-            ElementParserBuilderImpl builder = call.getElement();
 
-            JExpression qnameCompare = buildQNameCompare(name);
-
-            if (cond == null) {
-                cond = b._if(qnameCompare); 
-            } else {
-                cond = cond._else()._if(qnameCompare);
-            }
-            
-            JBlock block = cond._then();
-            
-            JMethod nextMethod = builder.getMethod();
-            JInvocation invocation = JExpr.invoke(nextMethod).arg(xsrVar).arg(rtContextVar);
-            for (JExpression var : call.getVars()) {
-                invocation.arg(var);
-            }
-
-            ReadBlock readBlock = readBlocks.get(builder.getName());
-            if (readBlock != null) {
-                readBlock.itemVar.init(invocation);
-                block.add(removeBraces(readBlock.block));
-            } else {
-                block.add(invocation);
-            }
-
-            if (builder != this)
-                builder.write();
-        }
-        
         if (anyElement != null) {
-            JBlock anyBlock = b;
-            if (cond != null) {
-                anyBlock = cond._else().block();
+            JBlock anyBlock = block;
+            if (!elementsBlock.ifConditions().isEmpty()) {
+                anyBlock = elementsBlock._else().block();
             }
             
-            writeElementReader(anyElement, anyBlock, false, false);
+            writeReader(anyBlock, anyElement, null);
         }
     }
 
-    private JExpression buildQNameCompare(QName name) {
-        JExpression localInv = JExpr.lit(name.getLocalPart()).eq(xsrVar.invoke("getLocalName"));
-        String ns = name.getNamespaceURI();
-        JExpression nsInv = JExpr.lit(ns).eq(xsrVar.invoke("getNamespaceURI"));
-        if (ns.equals("")) {
-            nsInv = nsInv.cor(xsrVar.invoke("getNamespaceURI").eq(JExpr._null()));
-        }
+    private void writeReader(JBlock block, Expected expected, List<? extends JExpression> vars) {
+        JBlock readBlock = expected.getReadBlock();
+        AbstractParserBuilder builder = expected.getParserBuilder();
+        if (builder != null) {
+            JMethod readMethod = builder.getMethod();
 
-        JExpression qnameCompare = localInv.cand(nsInv);
-        return qnameCompare;
-    }
+            JInvocation invocation = JExpr.invoke(readMethod).arg(xsrVar).arg(rtContextVar);
 
-    private void writeElementReader(ElementParserBuilderImpl builder, JBlock block, boolean global, boolean returnValue) {
-
-        JMethod elementReadMethod = builder.getMethod();
-        
-        JInvocation invocation = JExpr.invoke(elementReadMethod).arg(xsrVar).arg(rtContextVar);
-
-        // Global reader methods don't have arguments
-        if (!global) {
-            for (JVar v : builder.variables) {
-                invocation.arg(v);
+            // Global reader methods don't have arguments
+            if (vars == null) vars = builder.getVariables();
+            if (vars != null) {
+                for (JExpression var : vars) {
+                    invocation.arg(var);
+                }
             }
-        } 
-        
-        ReadBlock readBlock = readBlocks.get(builder.getName());
-        if (readBlock != null) {
-            readBlock.itemVar.init(invocation);
-            block.add(removeBraces(readBlock.block));
-            if ((returnValue || root) && builder.returnType != null) {
-                block._return(readBlock.itemVar);
-            }
-        } else {
-            if ((returnValue || root) && builder.returnType != null) {
+
+            if (readBlock != null) {
+                JVar readVar = expected.getReadVar();
+                readVar.init(invocation);
+                block.add(removeBraces(readBlock));
+            } else if (root && builder.returnType != null) {
                 block._return(invocation);
             } else {
                 block.add(invocation);
             }
+
+            // TODO: throw exception if unknown elements are encountered and allowUnknown == false
+            if (builder != this) {
+                builder.write();
+            }
+        } else if (readBlock != null) {
+            block.add(removeBraces(readBlock));
+        }
+    }
+
+    private JExpression buildQNameCompare(QName name, JExpression localPart, JExpression namespaceUri) {
+        JExpression localInv = localPart.eq(JExpr.lit(name.getLocalPart()));
+        String ns = name.getNamespaceURI();
+        JExpression nsInv = JExpr.lit(name.getNamespaceURI()).eq(namespaceUri);
+        if (ns.equals("")) {
+            nsInv = nsInv.cor(namespaceUri.eq(JExpr._null()));
         }
 
-        // TODO: throw exception if unknown elements are encountered and allowUnknown == false
-        if (builder != this)
-            builder.write();
+        JExpression qnameCompare = localInv.cand(nsInv);
+        return qnameCompare;
     }
 
     private void setReturnType(JType type) {
@@ -633,34 +663,113 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         }
     }
 
-    public QName getName() {
-        return name;
+    public static interface Expected {
+        public AbstractParserBuilder getParserBuilder();
+        public JBlock getReadBlock();
+        public JVar getReadVar();
     }
 
-    public boolean isRequired() {
-        return required;
+    public static class ExpectedAttribute implements Expected {
+        private AttributeParserBuilderImpl parserBuilder;
+        private JVar readVar;
+        private JBlock readBlock;
+
+        public AttributeParserBuilderImpl getParserBuilder() {
+            return parserBuilder;
+        }
+
+        public void setParserBuilder(AttributeParserBuilderImpl parserBuilder) {
+            this.parserBuilder = parserBuilder;
+        }
+
+        public JBlock getReadBlock() {
+            return readBlock;
+        }
+
+        public void setReadBlock(JBlock readBlock) {
+            this.readBlock = readBlock;
+        }
+
+        public JVar getReadVar() {
+            return readVar;
+        }
+
+        public void setReadVar(JVar readVar) {
+            this.readVar = readVar;
+        }
     }
 
-    public void setRequired(boolean required) {
-        this.required = required;
-    }    
-    
-    static class ElementCall {
-        private JExpression[] vars;
-        private ElementParserBuilderImpl element;
-        
-        public ElementCall(ElementParserBuilderImpl element, JExpression[] vars) {
-            super();
-            this.vars = vars;
-            this.element = element;
+    public static class ExpectedElement implements Expected {
+        private ElementParserBuilderImpl parserBuilder;
+        private List<JExpression> vars;
+        private JVar readVar;
+        private JBlock readBlock;
+
+        public ElementParserBuilderImpl getParserBuilder() {
+            return parserBuilder;
         }
-        public ElementParserBuilderImpl getElement() {
-            return element;
+
+        public void setParserBuilder(ElementParserBuilderImpl parserBuilder) {
+            this.parserBuilder = parserBuilder;
         }
-        public JExpression[] getVars() {
+
+        public List<JExpression> getVars() {
             return vars;
         }
-        
+
+        public void setVars(List<JExpression> vars) {
+            this.vars = vars;
+        }
+
+        public void setVars(JExpression... vars) {
+            this.vars = new ArrayList<JExpression>(Arrays.asList(vars));
+        }
+
+        public JVar getReadVar() {
+            return readVar;
+        }
+
+        public void setReadVar(JVar readVar) {
+            this.readVar = readVar;
+        }
+
+        public JBlock getReadBlock() {
+            return readBlock;
+        }
+
+        public void setReadBlock(JBlock readBlock) {
+            this.readBlock = readBlock;
+        }
+    }
+
+    public static class ExpectedXsiType implements Expected {
+        private ElementParserBuilderImpl parserBuilder;
+        private JVar readVar;
+        private JBlock readBlock;
+
+        public ElementParserBuilderImpl getParserBuilder() {
+            return parserBuilder;
+        }
+
+        public void setParserBuilder(ElementParserBuilderImpl parserBuilder) {
+            this.parserBuilder = parserBuilder;
+        }
+
+        public JVar getReadVar() {
+            return readVar;
+        }
+
+        public void setReadVar(JVar readVar) {
+            this.readVar = readVar;
+        }
+
+        public JBlock getReadBlock() {
+            return readBlock;
+        }
+
+        public void setReadBlock(JBlock readBlock) {
+            this.readBlock = readBlock;
+        }
     }
 
     private static JBlock removeBraces(JBlock block) {

@@ -8,6 +8,7 @@ import java.util.Arrays;
 import javax.xml.bind.JAXBElement;
 import javax.xml.bind.Marshaller;
 import javax.xml.namespace.QName;
+import javax.xml.transform.stream.StreamSource;
 
 import org.w3c.dom.Document;
 
@@ -22,8 +23,9 @@ public class EverythingAttributeTest extends XoTestCase {
         System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
         JAXBContextImpl ctx = JAXBContextImpl.createContext("com.everything", getClass().getClassLoader(), null);
 
-        JAXBElement<AttributesType> a = (JAXBElement<AttributesType>) 
-            ctx.createUnmarshaller().unmarshal(getClass().getResourceAsStream("everything-attribute.xml"));
+        JAXBElement<AttributesType> a = ctx.createUnmarshaller().unmarshal(
+                new StreamSource(getClass().getResourceAsStream("everything-attribute.xml")),
+                AttributesType.class);
         assertNotNull(a);
         
         AttributesType st = a.getValue();

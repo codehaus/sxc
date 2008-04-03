@@ -90,7 +90,7 @@ public class BuilderImpl implements Builder {
     }
 
     public void setReaderBaseClass(JClass c) {
-        parserBuilder.baseClass = c;
+        parserBuilder.setBaseClass(c);
     }
 
     public JCodeModel getCodeModel() {
@@ -98,7 +98,7 @@ public class BuilderImpl implements Builder {
     }
 
     public JMethod getParserConstructor() {
-        return parserBuilder.constructor;
+        return parserBuilder.getConstructor();
     }
 
     public void write(File dir) throws IOException, BuildException {

@@ -10,18 +10,22 @@ import javax.xml.namespace.QName;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.envoisolutions.sxc.builder.impl.ElementParserBuilderImpl.ExpectedElement;
+
 public class BuildContext {
     private JCodeModel model = new JCodeModel();
-    private Map<QName, ElementParserBuilderImpl> globalElements = new HashMap<QName, ElementParserBuilderImpl>();
-    
-    private int readCount;
-    private int writeCount;
+    private Map<QName, ExpectedElement> globalElements = new HashMap<QName, ExpectedElement>();
+    private final IdentityManager methodManager = new IdentityManager();
 
     /**
      * {@code Map<String,Object>} type.
      */
     private JClass stringToObjectMap = model.ref(Map.class).narrow(String.class,Object.class);
-    
+
+    public BuildContext() {
+        methodManager.addId("read");
+    }
+
     public JCodeModel getCodeModel() {
         return model;
     }
@@ -31,17 +35,18 @@ public class BuildContext {
     }
 
     JMethod getNextReadMethod(JDefinedClass contextClass) {
-        readCount++;
-        return contextClass.method(JMod.PUBLIC | JMod.FINAL, void.class, "read" + readCount);
+        return createMethod(contextClass, "read");
     }
-
 
     JMethod getNextWriteMethod(JDefinedClass contextClass) {
-        writeCount++;
-        return contextClass.method(JMod.PUBLIC | JMod.FINAL, void.class, "write" + writeCount);
+        return createMethod(contextClass, "write");
     }
-    
-    public Map<QName, ElementParserBuilderImpl> getGlobalElements() {
+
+    JMethod createMethod(JDefinedClass contextClass, String name) {
+        return contextClass.method(JMod.PUBLIC | JMod.FINAL, void.class, methodManager.createId(name));
+    }
+
+    public Map<QName, ExpectedElement> getGlobalElements() {
         return globalElements;
     }
 

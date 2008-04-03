@@ -8,6 +8,7 @@ import java.io.InputStream;
 import java.io.Reader;
 import java.net.URL;
 import java.util.Map;
+import java.util.LinkedHashMap;
 
 import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
@@ -36,6 +37,8 @@ import org.w3c.dom.Node;
 import org.xml.sax.InputSource;
 
 import com.envoisolutions.sxc.Context;
+import com.envoisolutions.sxc.jaxb.model.Bean;
+import com.envoisolutions.sxc.jaxb.model.Model;
 import com.envoisolutions.sxc.util.XoXMLStreamReader;
 import com.envoisolutions.sxc.util.XoXMLStreamReaderImpl;
 
@@ -54,11 +57,18 @@ public class UnmarshallerImpl implements Unmarshaller {
     private Map<Class, QName> c2type;
     private DatatypeFactory dtFactory;
     
-    public UnmarshallerImpl(JAXBContextImpl jaxbCtx, Map<Class, QName> c2type, Context context) 
+    public UnmarshallerImpl(JAXBContextImpl jaxbCtx, Model model, Context context)
         throws JAXBException {
         this.jaxbCtx = jaxbCtx;
         this.context = context;
-        this.c2type = c2type;
+
+        c2type = new LinkedHashMap<Class, QName>();
+        for (Bean bean : model.getBeans()) {
+            if (bean.getSchemaTypeName() != null) {
+                c2type.put(bean.getType(), bean.getSchemaTypeName());
+            }
+        }
+
         this.unmarshaller = context.createReader();
         try {
             dtFactory = DatatypeFactory.newInstance();
