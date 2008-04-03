@@ -5,6 +5,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
+import javax.xml.namespace.QName;
 
 public class Property {
     public enum XmlStyle {
@@ -18,6 +19,8 @@ public class Property {
 
     private final String name;
 
+    private QName xmlName;
+
     private XmlStyle xmlStyle;
 
     private final List<XmlMapping> xmlMappings = new ArrayList<XmlMapping>();
@@ -26,6 +29,7 @@ public class Property {
     private Type componentType;
 
     private boolean required;
+    private boolean nillable;
     private boolean collection;
 
     private Field field;
@@ -47,6 +51,14 @@ public class Property {
 
     public String getName() {
         return name;
+    }
+
+    public QName getXmlName() {
+        return xmlName;
+    }
+
+    public void setXmlName(QName xmlName) {
+        this.xmlName = xmlName;
     }
 
     public XmlStyle getXmlStyle() {
@@ -83,6 +95,14 @@ public class Property {
 
     public void setRequired(boolean required) {
         this.required = required;
+    }
+
+    public boolean isNillable() {
+        return nillable;
+    }
+
+    public void setNillable(boolean nillable) {
+        this.nillable = nillable;
     }
 
     public boolean isCollection() {

@@ -119,7 +119,7 @@ public class XsiParserBuilderTest extends TestCase {
     }
 
     private void handleNoXsi(ElementParserBuilder b, JVar parentNodeVar2) {
-        JVar var2 = b.getBody().decl(nodeClass, "node", JExpr._new(nodeClass));
+        JVar var2 = b.getBody().decl(nodeClass, b.getVariableManager().createId("node"), JExpr._new(nodeClass));
         b.getBody().add(parentNodeVar2.invoke("getNode").invoke("add").arg(var2));
 
         b.expectElement(new QName(nodeNs, "node"), childNodeBuilder, var2);
@@ -130,7 +130,7 @@ public class XsiParserBuilderTest extends TestCase {
         JVar parentNodeVar3 = nodeB.passParentVariable(parentNodeVar2);
         
         CodeBody body = nodeB.getBody();
-        JVar var = body.decl(nodeClass, "node", JExpr._new(nodeClass));
+        JVar var = body.decl(nodeClass, b.getVariableManager().createId("node"), JExpr._new(nodeClass));
         body.add(parentNodeVar3.invoke("getNode").invoke("add").arg(var));
         
         nodeB.expectElement(new QName(nodeNs, "node"), childNodeBuilder, var);
@@ -141,7 +141,7 @@ public class XsiParserBuilderTest extends TestCase {
         JVar parentNodeVar3 = namedNodeB.passParentVariable(parentNodeVar2);
         
         CodeBody body = namedNodeB.getBody();
-        JVar var = body.decl(namedNodeClass, "node", JExpr._new(namedNodeClass));
+        JVar var = body.decl(namedNodeClass, b.getVariableManager().createId("node"), JExpr._new(namedNodeClass));
         body.add(parentNodeVar3.invoke("getNode").invoke("add").arg(var));
         
         if (childNamedNodeBuilder == null) {

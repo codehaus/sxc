@@ -8,6 +8,7 @@ import com.envoisolutions.sxc.Writer;
 import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.ElementWriterBuilder;
 import com.envoisolutions.sxc.builder.WriterBuilder;
+import static com.envoisolutions.sxc.builder.impl.IdentityManager.capitalize;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClassAlreadyExistsException;
 import com.sun.codemodel.JConditional;
@@ -204,17 +205,5 @@ public class ElementWriterBuilderImpl extends AbstractWriterBuilder implements E
     }
 
     public void write() {
-    }
-
-    private static String capitalize(String name) {
-        if (name == null || name.length() == 0) {
-            return name;
-        }
-        if (Character.isUpperCase(name.charAt(0))) {
-            return name;
-        }
-        char chars[] = name.toCharArray();
-        chars[0] = Character.toUpperCase(chars[0]);
-        return new String(chars);
     }
 }

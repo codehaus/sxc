@@ -257,8 +257,6 @@ public class ReaderIntrospector {
                 continue;
             }
 
-            JVar collectionVar = handleCollection(classBuilder, property, beanVar);
-
             switch (property.getXmlStyle()) {
                 case ATTRIBUTE: {
                     XmlMapping mapping = property.getXmlMappings().iterator().next();
@@ -266,6 +264,9 @@ public class ReaderIntrospector {
                     // create attribute block
                     JBlock block = new JBlock();
                     classBuilder.setAttributeBlock(mapping.getXmlName(), null, block);
+
+                    // create collection var if necessary
+                    JVar collectionVar = handleCollection(classBuilder, property, beanVar);
 
                     // read and set
                     JExpression toSet = handleAttribute(classBuilder, block, mapping);
@@ -275,14 +276,24 @@ public class ReaderIntrospector {
 
                 case ELEMENT:
                 case ELEMENT_REF: {
+                    ElementParserBuilder elementBuilder = classBuilder;
+                    JVar parentVar = beanVar;
+                    if (property.getXmlName() != null) {
+                        elementBuilder = classBuilder.expectElement(property.getXmlName(), property.getName());
+                        parentVar = elementBuilder.passParentVariable(beanVar);
+                    }
+                    
+                    // create collection var if necessary
+                    JVar collectionVar = handleCollection(elementBuilder, property, parentVar);
+
                     for (XmlMapping mapping : property.getXmlMappings()) {
                         // create element block
                         JBlock block = new JBlock();
-                        classBuilder.setElementBlock(mapping.getXmlName(), null, block);
+                        elementBuilder.setElementBlock(mapping.getXmlName(), null, block);
 
                         // read and set
                         JExpression toSet = handleElement(classBuilder, block, mapping);
-                        doSet(block, property, beanVar, toSet, collectionVar);
+                        doSet(block, property, parentVar, toSet, collectionVar);
                     }
 
                 }
@@ -293,6 +304,9 @@ public class ReaderIntrospector {
 
                     // value is read in class block
                     JBlock block = classBuilder.getBody().getBlock();
+
+                    // create collection var if necessary
+                    JVar collectionVar = handleCollection(classBuilder, property, beanVar);
 
                     // read and set
                     JExpression toSet = handleElement(classBuilder, block, mapping);

@@ -237,7 +237,25 @@ public class WriterIntrospector {
                     }
 
                     if (property.isCollection()) {
+                        // if collection is not null, process it; otherwise write xsi:nil
                         JConditional nullCond = outerBlock._if(outerVar.ne(JExpr._null()));
+                        if (property.isNillable()) {
+                            nullCond._else().add(classBuilder.getXSW().invoke("writeXsiNil"));
+                        }
+
+                        // write wraper element opening tag
+                        QName wrapperElement = property.getXmlName();
+                        JBlock wrapperElementBlock = outerBlock;
+                        if (wrapperElement != null) {
+                            if (property.isRequired() || property.isNillable()) {
+                                wrapperElementBlock = nullCond._then();
+                            }
+                            wrapperElementBlock.add(getXSW(classBuilder).invoke("writeStartElement").arg(wrapperElement.getPrefix()).arg(wrapperElement.getLocalPart()).arg(wrapperElement.getNamespaceURI()));
+                            if (classBuilder.getName() == null || !classBuilder.getName().getNamespaceURI().equals(wrapperElement.getNamespaceURI())) {
+                                wrapperElementBlock.add(getXSW(classBuilder).invoke("writeAndDeclareIfUndeclared").arg(JExpr.lit("")).arg(wrapperElement.getNamespaceURI()));
+                            }
+                        }
+
                         JType itemType;
                         if (!toClass(property.getComponentType()).isPrimitive()) {
                             itemType = getGenericType(property.getComponentType());
@@ -252,6 +270,12 @@ public class WriterIntrospector {
                             itemName = "item";
                         }
                         JForEach each = nullCond._then().forEach(itemType, itemName, outerVar);
+
+                        // write wraper element closing tag
+                        if (wrapperElement != null) {
+                            wrapperElementBlock.add(getXSW(classBuilder).invoke("writeEndElement"));
+                        }
+
                         outerBlock = each.body();
                         outerVar = each.var();
                     }
@@ -558,8 +582,13 @@ public class WriterIntrospector {
             return;
         }
 
+        String prefix = name.getPrefix();
+        // stax is not handling the "xml" namespace correctly
+        if ("http://www.w3.org/XML/1998/namespace".equals(name.getNamespaceURI())) {
+            prefix = "xml";
+        }
         block.add(getXSW(classBuilder).invoke("writeAttribute")
-                  .arg(JExpr.lit(name.getPrefix()))
+                  .arg(JExpr.lit(prefix))
                   .arg(JExpr.lit(name.getNamespaceURI()))
                   .arg(JExpr.lit(name.getLocalPart()))
                   .arg(value));

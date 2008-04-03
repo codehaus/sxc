@@ -166,16 +166,19 @@ public class RiModelBuilder {
         }
 
         if (runtimePropertyInfo instanceof RuntimeElementPropertyInfo) {
-            property.setXmlStyle(Property.XmlStyle.ELEMENT);
             RuntimeElementPropertyInfo elementProperty = (RuntimeElementPropertyInfo) runtimePropertyInfo;
+            property.setXmlStyle(Property.XmlStyle.ELEMENT);
+            property.setXmlName(elementProperty.getXmlName());
             for (RuntimeTypeRef typeRef : elementProperty.getTypes()) {
                 XmlMapping xmlMapping = createXmlMapping(property, typeRef);
                 property.getXmlMappings().add(xmlMapping);
             }
             property.setRequired(elementProperty.isRequired());
+            property.setNillable(elementProperty.isCollectionNillable());
         } else if (runtimePropertyInfo instanceof RuntimeAttributePropertyInfo) {
             RuntimeAttributePropertyInfo attributeProperty = (RuntimeAttributePropertyInfo) runtimePropertyInfo;
             property.setXmlStyle(Property.XmlStyle.ATTRIBUTE);
+            property.setXmlName(attributeProperty.getXmlName());
             XmlMapping xmlMapping = new XmlMapping(property, attributeProperty.getXmlName());
             property.getXmlMappings().add(xmlMapping);
             property.setRequired(attributeProperty.isRequired());
@@ -187,6 +190,7 @@ public class RiModelBuilder {
                 XmlMapping xmlMapping = createXmlMapping(property, runtimeElement);
                 property.getXmlMappings().add(xmlMapping);
             }
+            property.setNillable(referenceProperty.isCollectionNillable());
         } else if (runtimePropertyInfo instanceof RuntimeValuePropertyInfo) {
             property.setXmlStyle(Property.XmlStyle.VALUE);
             XmlMapping xmlMapping = new XmlMapping(property, null);
