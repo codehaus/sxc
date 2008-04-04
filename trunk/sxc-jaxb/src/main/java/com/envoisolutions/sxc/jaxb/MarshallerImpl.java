@@ -1,10 +1,5 @@
 package com.envoisolutions.sxc.jaxb;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.Writer;
 import java.util.HashMap;
 import java.util.Map;
 import javax.xml.bind.JAXBContext;
@@ -12,11 +7,10 @@ import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.JAXBIntrospector;
 import javax.xml.bind.MarshalException;
-import javax.xml.bind.Marshaller;
-import javax.xml.bind.PropertyException;
 import javax.xml.bind.ValidationEventHandler;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.attachment.AttachmentMarshaller;
+import javax.xml.bind.helpers.AbstractMarshallerImpl;
 import javax.xml.datatype.Duration;
 import javax.xml.datatype.XMLGregorianCalendar;
 import javax.xml.namespace.QName;
@@ -38,109 +32,38 @@ import com.envoisolutions.sxc.util.XoXMLStreamWriterImpl;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
-import org.xml.sax.ContentHandler;
 
-public class MarshallerImpl implements Marshaller {
+public class MarshallerImpl extends AbstractMarshallerImpl {
+	public static final String MARSHALLER = "sxc.marshaller";
 
-	public static final String MARSHALLER = "sxc.marshaller"; 
-    JAXBContext jaxbContext;
     private final Model model;
-    Context context;
-    XMLOutputFactory xof = XMLOutputFactory.newInstance();
-    Map<String, Object> properties = new HashMap<String, Object>();
-    Listener listener;
-    private AttachmentMarshaller am;
+    private final Context context;
+    private final XMLOutputFactory xmlOutputFactory = XMLOutputFactory.newInstance();
+
+    private final Map<Class<?>, ? super XmlAdapter> adapters = new HashMap<Class<?>, XmlAdapter>();
+    private AttachmentMarshaller attachmentMarshaller;
     private ValidationEventHandler eventHandler;
+    private Listener listener;
     private Schema schema;
-    private JAXBIntrospector introspector;
-    private boolean writeStartAndEnd = true;
-    private boolean formattedOutput = false;
+
+    private final JAXBIntrospector introspector;
 
     public MarshallerImpl(JAXBContext jaxbContext, Model model, Context context) {
         super();
-//        xof.setProperty("javax.xml.stream.isRepairingNamespaces", Boolean.TRUE);
-        this.jaxbContext = jaxbContext;
         this.model = model;
         this.context = context;
         this.introspector = jaxbContext.createJAXBIntrospector();
         context.put(MARSHALLER, this);
     }
 
-    public <A extends XmlAdapter> A getAdapter(Class<A> arg0) {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-    public AttachmentMarshaller getAttachmentMarshaller() {
-        return am;
-    }
-
-    public ValidationEventHandler getEventHandler() throws JAXBException {
-        return eventHandler;
-    }
-
-    public Listener getListener() {
-        return listener;
-    }
-
-    public Node getNode(Object arg0) throws JAXBException {
-        throw new UnsupportedOperationException();
-    }
-
-    public Object getProperty(String key) throws PropertyException {
-        return properties.get(key);
-    }
-
-    public Schema getSchema() {
-        return schema;
-    }
-
-    public void marshal(Object arg0, ContentHandler arg1) throws JAXBException {
-        throw new UnsupportedOperationException();
-    }
-
-    public void marshal(Object obj, Node node) throws JAXBException {
-        if (obj == null) throw new IllegalArgumentException("obj is null");
-        if (node == null) throw new IllegalArgumentException("out is node");
-        marshal(obj, new DOMResult(node));
-    }
-
-    public void marshal(Object obj, File file) throws JAXBException {
-        if (obj == null) throw new IllegalArgumentException("obj is null");
-        if (file == null) throw new IllegalArgumentException("file is null");
+    public void marshal(Object jaxbElement, Result result) throws JAXBException {
+        if (jaxbElement == null) throw new IllegalArgumentException("jaxbElement is null");
+        if (result == null) throw new IllegalArgumentException("result is null");
+        XMLStreamWriter writer = null;
         try {
-            OutputStream stream = new FileOutputStream(file);
-            marshal(obj, stream);
-            stream.close();
-        } catch (IOException e) {
-            throw new JAXBException(e);
-        }
-    }
+            if (result instanceof DOMResult) {
+                Node node = ((DOMResult) result).getNode();
 
-    public void marshal(Object obj, OutputStream out) throws JAXBException {
-        if (obj == null) throw new IllegalArgumentException("obj is null");
-        if (out == null) throw new IllegalArgumentException("out is null");
-        try {
-            XMLStreamWriter writer = xof.createXMLStreamWriter(out);
-            marshalAndClose(obj, writer);
-        } catch (XMLStreamException e) {
-            throw new JAXBException("Could not close XMLStreamWriter.", e);
-        }
-    }
-
-    private void marshalAndClose(Object obj, XMLStreamWriter writer) throws JAXBException, XMLStreamException {
-        marshal(obj, writer);
-        writer.close();
-    }
-
-    public void marshal(Object obj, Result r) throws JAXBException {
-        if (obj == null) throw new IllegalArgumentException("obj is null");
-        if (r == null) throw new IllegalArgumentException("r is null");
-        try {
-            XMLStreamWriter writer;
-            if (r instanceof DOMResult) {
-                Node node = ((DOMResult) r).getNode();
-                
                 if (node instanceof Document) {
                     writer = new W3CDOMStreamWriter((Document) node);
                 } else if (node instanceof Element) {
@@ -149,74 +72,70 @@ public class MarshallerImpl implements Marshaller {
                     throw new UnsupportedOperationException("Node type not supported.");
                 }
             } else {
-                writer = xof.createXMLStreamWriter(r);
+                writer = xmlOutputFactory.createXMLStreamWriter(result);
             }
-            marshalAndClose(obj, writer);
+            marshal(jaxbElement, writer);
         } catch (XMLStreamException e) {
             throw new JAXBException("Could not close XMLStreamWriter.", e);
+        } finally {
+            if (writer != null) {
+                try {
+                    writer.close();
+                } catch (XMLStreamException ignored) {
+                }
+            }
         }
     }
 
-    public void marshal(Object obj, Writer writer) throws JAXBException {
-        if (obj == null) throw new IllegalArgumentException("obj is null");
-        if (writer == null) throw new IllegalArgumentException("writer is null");
-        try {
-            XMLStreamWriter xsw = xof.createXMLStreamWriter(writer);
-            marshalAndClose(obj, xsw);
-        } catch (XMLStreamException e) {
-            throw new JAXBException("Could not close XMLStreamWriter.", e);
-        }
-    }
-
-    public void marshal(Object arg0, XMLEventWriter arg1) throws JAXBException {
+    public void marshal(Object jaxbElement, XMLEventWriter writer) throws JAXBException {
+        // todo how do we convert XMLEventWriter into a XMLStreamWriter 
         throw new UnsupportedOperationException();
     }
 
-    public void marshal(Object o, XMLStreamWriter xsw) throws JAXBException {
-        if (o == null) throw new IllegalArgumentException("o is null");
-        if (xsw == null) throw new IllegalArgumentException("xsw is null");
+    public void marshal(Object jaxbElement, XMLStreamWriter writer) throws JAXBException {
+        if (jaxbElement == null) throw new IllegalArgumentException("o is null");
+        if (writer == null) throw new IllegalArgumentException("xsw is null");
         try {
-            if (!introspector.isElement(o)) {
+            if (!introspector.isElement(jaxbElement)) {
                 throw new MarshalException("Object must be annotated with @XmlRootElement or be a JAXBElement!");
             }
 
             // if formatted output is set, use the pretty print wrapper
-            if (formattedOutput) {
-                xsw = new PrettyPrintXMLStreamWriter(xsw);
+            if (isFormattedOutput()) {
+                writer = new PrettyPrintXMLStreamWriter(writer);
             }
 
-            XoXMLStreamWriter w = new XoXMLStreamWriterImpl(xsw);
+            XoXMLStreamWriter w = new XoXMLStreamWriterImpl(writer);
 
             // if the is not a fragment, write the document header
-            if (writeStartAndEnd) {
-                w.writeStartDocument();
+            if (!isFragment()) {
+                w.writeStartDocument(getEncoding(), null);
             }
-
+                                    
             QName name;
             QName xsiType = null;
             boolean writeXsiNil = false;
-            if (o instanceof JAXBElement) {
-                JAXBElement jaxbElement = (JAXBElement) o;
-                o = jaxbElement.getValue();
+            if (jaxbElement instanceof JAXBElement) {
+                JAXBElement element = (JAXBElement) jaxbElement;
+                jaxbElement = element.getValue();
 
-                name = jaxbElement.getName();
-                writeXsiNil = jaxbElement.isNil();
+                name = element.getName();
+                writeXsiNil = element.isNil();
 
-                Bean bean = model.getBean(o.getClass());
+                Bean bean = model.getBean(jaxbElement.getClass());
                 if (bean != null && bean.getRootElementName() == null) {
                     xsiType = bean.getSchemaTypeName();
                 }
             } else {
-                Bean bean = model.getBean(o.getClass());
+                Bean bean = model.getBean(jaxbElement.getClass());
                 if (bean == null || bean.getRootElementName() == null) {
                     throw new MarshalException("Object must be annotated with @XmlRootElement or be a JAXBElement!");
                 }
                 name = bean.getRootElementName();
             }
-            
+
             // write root element
             w.writeStartElement("",  name.getLocalPart(), name.getNamespaceURI());
-            // TODO: we should check to see if a NS is already written here
             w.writeAndDeclareIfUndeclared("ns1", name.getNamespaceURI());
             w.writeDefaultNamespace(name.getNamespaceURI());
 
@@ -226,39 +145,39 @@ public class MarshallerImpl implements Marshaller {
 
             if (writeXsiNil) {
                 w.writeXsiNil();
-            } else if (o != null) {
-                Class c = o.getClass();
+            } else if (jaxbElement != null) {
+                Class c = jaxbElement.getClass();
                 if (c == String.class) {
-                    w.writeCharacters((String) o);
+                    w.writeCharacters((String) jaxbElement);
                 } else if (c == Boolean.class) {
-                    w.writeBoolean((Boolean) o);
+                    w.writeBoolean((Boolean) jaxbElement);
                 } else if (c == Byte.class) {
-                    w.writeByte((Byte) o);
+                    w.writeByte((Byte) jaxbElement);
                 } else if (c == Double.class) {
-                    w.writeDouble((Double) o);
+                    w.writeDouble((Double) jaxbElement);
                 } else if (c == Float.class) {
-                    w.writeFloat((Float) o);
+                    w.writeFloat((Float) jaxbElement);
                 } else if (c == Long.class) {
-                    w.writeLong((Long) o);
+                    w.writeLong((Long) jaxbElement);
                 } else if (c == Integer.class) {
-                    w.writeInt((Integer) o);
+                    w.writeInt((Integer) jaxbElement);
                 } else if (c == Short.class) {
-                    w.writeShort((Short) o);
+                    w.writeShort((Short) jaxbElement);
                 } else if (c == Duration.class) {
-                    w.writeCharacters(o.toString());
+                    w.writeCharacters(jaxbElement.toString());
                 } else if (c == XMLGregorianCalendar.class) {
-                    w.writeCharacters(((XMLGregorianCalendar) o).toXMLFormat());
+                    w.writeCharacters(((XMLGregorianCalendar) jaxbElement).toXMLFormat());
                 } else if (c == byte[].class) {
-                    BinaryUtils.encodeBytes(w, (byte[]) o);
+                    BinaryUtils.encodeBytes(w, (byte[]) jaxbElement);
                 } else {
-                    context.createWriter().write(w, o);
+                    context.createWriter().write(w, jaxbElement);
                 }
             }
 
             // close root element
             w.writeEndElement();
 
-            if (writeStartAndEnd) {
+            if (!isFragment()) {
                 w.writeEndDocument();
             }
         } catch (Exception e) {
@@ -272,42 +191,44 @@ public class MarshallerImpl implements Marshaller {
         }
     }
 
-    public <A extends XmlAdapter> void setAdapter(Class<A> arg0, A arg1) {
-        // TODO Auto-generated method stub
-        
+    @SuppressWarnings({"unchecked"})
+    public <A extends XmlAdapter> A getAdapter(Class<A> type) {
+        return (A) adapters.get(type);
     }
 
-    public void setAdapter(XmlAdapter arg0) {
-        // TODO Auto-generated method stub
-        
+    public <A extends XmlAdapter> void setAdapter(Class<A> type, A adapter) {
+        adapters.put(type, adapter);
     }
 
-    public void setAttachmentMarshaller(AttachmentMarshaller am) {
-        this.am = am;
+    public AttachmentMarshaller getAttachmentMarshaller() {
+        return attachmentMarshaller;
+    }
+
+    public void setAttachmentMarshaller(AttachmentMarshaller attachmentMarshaller) {
+        this.attachmentMarshaller = attachmentMarshaller;
+    }
+
+    public ValidationEventHandler getEventHandler() throws JAXBException {
+        return eventHandler;
     }
 
     public void setEventHandler(ValidationEventHandler eventHandler) throws JAXBException {
         this.eventHandler = eventHandler;
     }
 
+    public Listener getListener() {
+        return listener;
+    }
+
     public void setListener(Listener listener) {
         this.listener = listener;
     }
 
-    public void setProperty(String key, Object value) throws PropertyException {
-        if (key.equals(Marshaller.JAXB_FRAGMENT)) {
-            writeStartAndEnd = !(Boolean) value;
-        }
-        if (key.equals(Marshaller.JAXB_FORMATTED_OUTPUT)) {
-            formattedOutput = (Boolean) value;
-        }
-
-        properties.put(key, value);
-        
+    public Schema getSchema() {
+        return schema;
     }
 
     public void setSchema(Schema schema) {
         this.schema = schema;
     }
-
 }

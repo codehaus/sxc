@@ -11,175 +11,162 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.StringTokenizer;
+import java.util.TreeSet;
+import java.util.concurrent.Callable;
 import java.util.logging.Logger;
 import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.JAXBIntrospector;
 import javax.xml.bind.Marshaller;
 import javax.xml.bind.SchemaOutputResolver;
 import javax.xml.bind.Unmarshaller;
-import javax.xml.bind.Validator;
+import javax.xml.namespace.QName;
 
 import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.Builder;
 import com.envoisolutions.sxc.builder.impl.BuilderImpl;
+import com.envoisolutions.sxc.jaxb.model.Bean;
 import com.envoisolutions.sxc.jaxb.model.Model;
 import com.envoisolutions.sxc.jaxb.model.RiModelBuilder;
-import com.sun.xml.bind.v2.ContextFactory;
-import com.sun.xml.bind.v2.model.runtime.RuntimeTypeInfoSet;
 
 public class JAXBContextImpl extends JAXBContext {
     private static final Logger logger = Logger.getLogger(JAXBContextImpl.class.getName());
-        
-    private Context context;
-    private Marshaller marshaller;
-    private UnmarshallerImpl unmarshaller;
-    private com.sun.xml.bind.v2.runtime.JAXBContextImpl riContext;
+    private static Map<Set<String>, WeakReference<JAXBContextImpl>> contexts = new HashMap<Set<String>, WeakReference<JAXBContextImpl>>();
 
-    private static Map<Set<Class>, WeakReference<JAXBContextImpl>> contexts
-         = new HashMap<Set<Class>, WeakReference<JAXBContextImpl>>();
-    
-    public static synchronized JAXBContextImpl createContext( Class[] classes, Map<String, Object> properties ) throws JAXBException {
+    public static synchronized JAXBContextImpl createContext(Class[] classes, Map<String, Object> properties) throws JAXBException {
         try {
-            Set<Class> clsSet = new HashSet<Class>();
-            for (Class c : clsSet) {
-                clsSet.add(c);
+            Set<String> classNames = new TreeSet<String>();
+            for (Class c : classes) {
+                classNames.add(c.getName());
             }
-            
-            WeakReference<JAXBContextImpl> ctx = contexts.get(clsSet);
-            if (ctx != null) {
-                return ctx.get();
+
+            WeakReference<JAXBContextImpl> contextRef = contexts.get(classNames);
+            if (contextRef != null) {
+                JAXBContextImpl jaxbContext = contextRef.get();
+                if (jaxbContext != null) {
+                    return jaxbContext;
+                }
+                contexts.remove(classNames);
             }
-            
-            JAXBContextImpl c = new JAXBContextImpl(properties, classes);
-            contexts.put(clsSet, new WeakReference<JAXBContextImpl>(c));
-            return c;
+
+            JAXBContextImpl jaxbContext = new JAXBContextImpl(properties, classes);
+            contexts.put(classNames, new WeakReference<JAXBContextImpl>(jaxbContext));
+
+            return jaxbContext;
         } catch (BuildException e) {
-            throw new JAXBException("Could not compile parser/writer!", e);
-        } catch (IOException e) {
             throw new JAXBException("Could not compile parser/writer!", e);
         }
     }
-    
-    public static synchronized JAXBContextImpl createContext(String contextPath, ClassLoader classLoader, Map<String, Object> properties)
-        throws JAXBException, BuildException, IOException {
+
+    public static synchronized JAXBContextImpl createContext(String contextPath, ClassLoader classLoader, Map<String, Object> properties) throws JAXBException, BuildException, IOException {
         Set<Class> classes = new HashSet<Class>();
-        StringTokenizer tokens = new StringTokenizer(contextPath,":");
-        List<Class> indexedClasses;
-
-        // at least on of these must be true per package
-        boolean foundObjectFactory;
-        boolean foundJaxbIndex;
-
-        while(tokens.hasMoreTokens()) {
-            foundObjectFactory = foundJaxbIndex = false;
-            String pkg = tokens.nextToken();
-
+        for (String pkg : contextPath.split(":")) {
             // look for ObjectFactory and load it
-            final Class<?> o;
+            Class<?> objectFactory;
             try {
-                o = classLoader.loadClass(pkg+".ObjectFactory");
-                classes.add(o);
-                foundObjectFactory = true;
+                objectFactory = classLoader.loadClass(pkg + ".ObjectFactory");
+                classes.add(objectFactory);
+                continue;
             } catch (ClassNotFoundException e) {
                 // not necessarily an error
             }
 
             // look for jaxb.index and load the list of classes
             try {
-                indexedClasses = loadIndexedClasses(pkg, classLoader);
+                List<Class> indexedClasses = loadIndexedClasses(pkg, classLoader);
+
+                if (indexedClasses == null) {
+                    throw new JAXBException("Package must contain a jaxb.index file or ObjectFactory class: " + pkg);
+                }
+
+                classes.addAll(indexedClasses);
             } catch (IOException e) {
-                //TODO: think about this more
                 throw new JAXBException(e);
             }
-            if(indexedClasses != null) {
-                classes.addAll(indexedClasses);
-                foundJaxbIndex = true;
-            }
-
-            if( !(foundObjectFactory || foundJaxbIndex) ) {
-                throw new JAXBException("Package must contain a jaxb.index or ObjectFactory: " + pkg);
-            }
         }
 
-        // Yeah, I have no idea what I'm doing here... need to look at javadocs
-        // on weakreferences.
-        WeakReference<JAXBContextImpl> ctx = contexts.get(classes);
-        if (ctx != null) {
-            JAXBContextImpl c = ctx.get();
-            if (c != null) {
-                return c;
-            }
-        }
-        
-        Class[] clsArray = classes.toArray(new Class[classes.size()]);
-        JAXBContextImpl c = new JAXBContextImpl(clsArray, properties);
-        contexts.put(classes, new WeakReference<JAXBContextImpl>(c));
-        return c;
-    }       
-    
-    public JAXBContextImpl(Class[] clsArray, Map<String, Object> properties) 
-        throws JAXBException {
-        this.riContext = (com.sun.xml.bind.v2.runtime.JAXBContextImpl)
-            ContextFactory.createContext(clsArray, properties);
-        
-        init(JAXBModelFactory.create(riContext, clsArray));
+        JAXBContextImpl jaxbContext = createContext(classes.toArray(new Class[classes.size()]), properties);
+        return jaxbContext;
+    }
+
+    private final Model model;
+    private final Context context;
+    private final Callable<JAXBContext> schemaGenerator;
+
+    public JAXBContextImpl(Class[] classes, Map<String, Object> properties) throws JAXBException {
+        this(properties, classes);
     }
     
     public JAXBContextImpl(Class... classes) throws JAXBException, BuildException, IOException {
         this(null, classes);
     }
     
-    public JAXBContextImpl(Map<String, Object> properties, Class... classes) throws JAXBException, BuildException, IOException {
-        this.riContext = (com.sun.xml.bind.v2.runtime.JAXBContextImpl)
-            ContextFactory.createContext(classes, properties);
-        
-        init(JAXBModelFactory.create(riContext, classes));
-    }
+    public JAXBContextImpl(Map<String, Object> properties, Class... classes) throws JAXBException {
+        RiModelBuilder modelBuilder = new RiModelBuilder(properties, classes);
+        model = modelBuilder.getModel();
+        schemaGenerator = modelBuilder.getContext();
 
-    private void init(RuntimeTypeInfoSet set) throws JAXBException {
         Builder builder = new BuilderImpl();
-
-        RiModelBuilder modelBuilder = new RiModelBuilder();
-        Model model = modelBuilder.createModel(set);
-
         new ReaderIntrospector(builder, model);
         new WriterIntrospector(builder, model);
 
         context = builder.compile();
-        marshaller = new MarshallerImpl(this, model, context);
-        unmarshaller = new UnmarshallerImpl(this, model, context);
+
         logger.info("Created SXC JAXB Context.");
     }
     
     @Override
     public Marshaller createMarshaller() throws JAXBException {
-        return marshaller;
+        return new MarshallerImpl(this, model, context);
     }
 
     @Override
     public Unmarshaller createUnmarshaller() throws JAXBException {
-        return unmarshaller;
+        return new UnmarshallerImpl(model, context);
     }
 
     @SuppressWarnings("deprecation")
     @Override
-    public Validator createValidator() throws JAXBException {
-        // TODO Auto-generated method stub
-        return null;
+    public javax.xml.bind.Validator createValidator() throws JAXBException {
+        throw new UnsupportedOperationException();
     }
-
 
     @Override
     public JAXBIntrospector createJAXBIntrospector() {
-        return riContext.createJAXBIntrospector();
+        return new JAXBIntrospector() {
+            public boolean isElement(Object jaxbElement) {
+                return getElementName(jaxbElement) != null;
+            }
+
+            public QName getElementName(Object jaxbElement) {
+                if (jaxbElement instanceof JAXBElement) {
+                    JAXBElement element = (JAXBElement) jaxbElement;
+                    return element.getName();
+                }
+                Bean bean = model.getBean(jaxbElement.getClass());
+                QName elementName = null;
+                if (bean != null) {
+                    elementName = bean.getRootElementName();
+                }
+                return elementName;
+            }
+        };
     }
 
     @Override
-    public void generateSchema(SchemaOutputResolver arg0) throws IOException {
-        riContext.generateSchema(arg0);
+    public void generateSchema(SchemaOutputResolver outputResolver) throws IOException {
+        JAXBContext jaxbContext = null;
+        try {
+            jaxbContext = schemaGenerator.call();
+        } catch (Exception e) {
+        }
+
+        if (jaxbContext == null) {
+            throw new UnsupportedOperationException("Schema generation is not supported");
+        }
+        jaxbContext.generateSchema(outputResolver);
     }
 
     /**
@@ -192,15 +179,14 @@ public class JAXBContextImpl extends JAXBContext {
      * @throws JAXBException if there are any errors in the index file
      */
     private static List<Class> loadIndexedClasses(String pkg, ClassLoader classLoader) throws IOException, JAXBException {
-        final String resource = pkg.replace('.', '/') + "/jaxb.index";
-        final InputStream resourceAsStream = classLoader.getResourceAsStream(resource);
+        String resource = pkg.replace('.', '/') + "/jaxb.index";
+        InputStream resourceAsStream = classLoader.getResourceAsStream(resource);
 
         if (resourceAsStream == null) {
             return null;
         }
 
-        BufferedReader in =
-                new BufferedReader(new InputStreamReader(resourceAsStream, "UTF-8"));
+        BufferedReader in = new BufferedReader(new InputStreamReader(resourceAsStream, "UTF-8"));
         try {
             ArrayList<Class> classes = new ArrayList<Class>();
             String className = in.readLine();
