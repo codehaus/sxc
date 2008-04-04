@@ -43,7 +43,7 @@ import com.envoisolutions.sxc.builder.impl.JIfElseBlock;
 import com.envoisolutions.sxc.jaxb.model.Bean;
 import com.envoisolutions.sxc.jaxb.model.Model;
 import com.envoisolutions.sxc.jaxb.model.Property;
-import com.envoisolutions.sxc.jaxb.model.XmlMapping;
+import com.envoisolutions.sxc.jaxb.model.ElementMapping;
 import static com.envoisolutions.sxc.jaxb.JavaUtils.toClass;
 import static com.envoisolutions.sxc.jaxb.JavaUtils.capitalize;
 import static com.envoisolutions.sxc.jaxb.JavaUtils.isPrivate;
@@ -259,17 +259,15 @@ public class ReaderIntrospector {
 
             switch (property.getXmlStyle()) {
                 case ATTRIBUTE: {
-                    XmlMapping mapping = property.getXmlMappings().iterator().next();
-
                     // create attribute block
                     JBlock block = new JBlock();
-                    classBuilder.setAttributeBlock(mapping.getXmlName(), null, block);
+                    classBuilder.setAttributeBlock(property.getXmlName(), null, block);
 
                     // create collection var if necessary
                     JVar collectionVar = handleCollection(classBuilder, property, beanVar);
 
                     // read and set
-                    JExpression toSet = handleAttribute(classBuilder, block, mapping);
+                    JExpression toSet = handleAttribute(classBuilder, block, property);
                     doSet(block, property, beanVar, toSet, collectionVar);
                 }
                 break;
@@ -286,13 +284,13 @@ public class ReaderIntrospector {
                     // create collection var if necessary
                     JVar collectionVar = handleCollection(elementBuilder, property, parentVar);
 
-                    for (XmlMapping mapping : property.getXmlMappings()) {
+                    for (ElementMapping mapping : property.getElementMappings()) {
                         // create element block
                         JBlock block = new JBlock();
                         elementBuilder.setElementBlock(mapping.getXmlName(), null, block);
 
                         // read and set
-                        JExpression toSet = handleElement(classBuilder, block, mapping);
+                        JExpression toSet = handleElement(classBuilder, block, property, mapping.isNillable(), mapping.getComponentType());
                         doSet(block, property, parentVar, toSet, collectionVar);
                     }
 
@@ -300,8 +298,6 @@ public class ReaderIntrospector {
                 break;
 
                 case VALUE: {
-                    XmlMapping mapping = property.getXmlMappings().iterator().next();
-
                     // value is read in class block
                     JBlock block = classBuilder.getBody().getBlock();
 
@@ -309,7 +305,7 @@ public class ReaderIntrospector {
                     JVar collectionVar = handleCollection(classBuilder, property, beanVar);
 
                     // read and set
-                    JExpression toSet = handleElement(classBuilder, block, mapping);
+                    JExpression toSet = handleElement(classBuilder, block, property, false, null);
                     doSet(block, property, beanVar, toSet, collectionVar);
                 }
                 break;
@@ -322,9 +318,7 @@ public class ReaderIntrospector {
         }
     }
 
-    private JExpression handleAttribute(ElementParserBuilder classBuilder, JBlock block, XmlMapping mapping) {
-        Property property = mapping.getProperty();
-
+    private JExpression handleAttribute(ElementParserBuilder classBuilder, JBlock block, Property property) {
         // Collections are not supported yet
         if (property.isCollection()) {
             logger.info("Reader: attribute lists are not supported yet!");
@@ -359,12 +353,11 @@ public class ReaderIntrospector {
         return toSet;
     }
 
-    private JExpression handleElement(ElementParserBuilder classBuilder, JBlock block, XmlMapping mapping) {
-        Property property = mapping.getProperty();
+    private JExpression handleElement(ElementParserBuilder classBuilder, JBlock block, Property property, boolean nillable, Type componentType) {
 
         Class targetType = toClass(property.getType());
         if (property.isCollection()) {
-            targetType = toClass(mapping.getComponentType());
+            targetType = toClass(componentType);
         }
 
         String propertyName = property.getName();
@@ -386,7 +379,7 @@ public class ReaderIntrospector {
             // todo why the special read method for byte?
             toSet = JExpr.cast(toJType(byte.class), getXSR(classBuilder).invoke("getElementAsInt"));
         } else if (isBuiltinType(targetType)) {
-            toSet = as(classBuilder, block, targetType, propertyName, mapping.isNillable());
+            toSet = as(classBuilder, block, targetType, propertyName, nillable);
         } else if (targetType.equals(byte[].class)) {
             toSet = toJClass(BinaryUtils.class).staticInvoke("decodeAsBytes").arg(getXSR(classBuilder));
         } else if (targetType.equals(QName.class)) {
@@ -396,7 +389,7 @@ public class ReaderIntrospector {
             toSet = JExpr._null();
         } else {
             // Complex type which will already have an element builder defined
-            Bean targetBean = mapping.getTargetBean();
+            Bean targetBean = model.getBean(toClass(componentType));
             ElementParserBuilderImpl elementBuilder = (ElementParserBuilderImpl) beanParsers.get(targetBean);
             if (elementBuilder == null) {
                 throw new BuildException("Unknown bean " + targetBean);

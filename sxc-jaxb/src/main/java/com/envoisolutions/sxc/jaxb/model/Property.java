@@ -23,7 +23,7 @@ public class Property {
 
     private XmlStyle xmlStyle;
 
-    private final List<XmlMapping> xmlMappings = new ArrayList<XmlMapping>();
+    private final List<ElementMapping> elementMappings = new ArrayList<ElementMapping>();
 
     private Type type;
     private Type componentType;
@@ -69,8 +69,8 @@ public class Property {
         this.xmlStyle = xmlStyle;
     }
 
-    public List<XmlMapping> getXmlMappings() {
-        return xmlMappings;
+    public List<ElementMapping> getElementMappings() {
+        return elementMappings;
     }
 
     public Type getType() {

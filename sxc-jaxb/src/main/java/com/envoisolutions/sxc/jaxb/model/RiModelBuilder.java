@@ -1,26 +1,25 @@
 package com.envoisolutions.sxc.jaxb.model;
 
-import java.lang.reflect.Modifier;
-import java.lang.reflect.Method;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 
-import com.sun.xml.bind.v2.model.runtime.RuntimeTypeInfoSet;
+import com.envoisolutions.sxc.builder.BuildException;
+import com.sun.xml.bind.api.AccessorException;
+import com.sun.xml.bind.v2.model.runtime.RuntimeAttributePropertyInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeClassInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeElement;
+import com.sun.xml.bind.v2.model.runtime.RuntimeElementInfo;
+import com.sun.xml.bind.v2.model.runtime.RuntimeElementPropertyInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeEnumLeafInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeLeafInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimePropertyInfo;
-import com.sun.xml.bind.v2.model.runtime.RuntimeTypeRef;
-import com.sun.xml.bind.v2.model.runtime.RuntimeNonElement;
-import com.sun.xml.bind.v2.model.runtime.RuntimeElementInfo;
-import com.sun.xml.bind.v2.model.runtime.RuntimeElementPropertyInfo;
-import com.sun.xml.bind.v2.model.runtime.RuntimeAttributePropertyInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeReferencePropertyInfo;
-import com.sun.xml.bind.v2.model.runtime.RuntimeElement;
+import com.sun.xml.bind.v2.model.runtime.RuntimeTypeInfoSet;
+import com.sun.xml.bind.v2.model.runtime.RuntimeTypeRef;
 import com.sun.xml.bind.v2.model.runtime.RuntimeValuePropertyInfo;
 import com.sun.xml.bind.v2.runtime.Transducer;
 import com.sun.xml.bind.v2.runtime.reflect.Accessor;
-import com.sun.xml.bind.api.AccessorException;
-import com.envoisolutions.sxc.builder.BuildException;
 
 public class RiModelBuilder {
     public Model createModel(RuntimeTypeInfoSet runtimeTypeInfoSet) {
@@ -35,7 +34,7 @@ public class RiModelBuilder {
         return model;
     }
 
-    public Bean addBean(Model model, RuntimeClassInfo runtimeClassInfo) {
+    private Bean addBean(Model model, RuntimeClassInfo runtimeClassInfo) {
         Bean bean = model.getBean(runtimeClassInfo.getClazz());
 
         if (bean == null) {
@@ -50,7 +49,7 @@ public class RiModelBuilder {
         return bean;
     }
 
-    public Bean addBean(Model model, RuntimeEnumLeafInfo runtimeEnumLeafInfo) {
+    private Bean addBean(Model model, RuntimeEnumLeafInfo runtimeEnumLeafInfo) {
         // compiler can't handle the wacy over loaded methods in the jaxb ri
         // so we convert it to a simpler type
         RuntimeLeafInfo leafInfo = runtimeEnumLeafInfo;
@@ -73,7 +72,7 @@ public class RiModelBuilder {
         return bean;
     }
 
-    public void initBean(Model model, Bean bean, RuntimeClassInfo runtimeClassInfo) {
+    private void initBean(Model model, Bean bean, RuntimeClassInfo runtimeClassInfo) {
         bean.setRootElementName(runtimeClassInfo.getElementName());
         bean.setSchemaTypeName(runtimeClassInfo.getTypeName());
 
@@ -94,7 +93,7 @@ public class RiModelBuilder {
     }
 
     @SuppressWarnings({"unchecked"})
-    public void initBean(Bean bean, RuntimeEnumLeafInfo runtimeEnumLeafInfo) {
+    private void initBean(Bean bean, RuntimeEnumLeafInfo runtimeEnumLeafInfo) {
         bean.setRootElementName(runtimeEnumLeafInfo.getElementName());
         bean.setSchemaTypeName(runtimeEnumLeafInfo.getTypeName());
 
@@ -123,7 +122,7 @@ public class RiModelBuilder {
         }
     }
 
-    public Property createProperty(Bean bean, RuntimePropertyInfo runtimePropertyInfo) {
+    private Property createProperty(Bean bean, RuntimePropertyInfo runtimePropertyInfo) {
         Property property = new Property(bean, runtimePropertyInfo.getName());
 
         property.setType(runtimePropertyInfo.getRawType());
@@ -165,36 +164,32 @@ public class RiModelBuilder {
             throw new BuildException("Unknown property accessor type '" + accessor.getClass().getName() + "' for property " + property);
         }
 
-        if (runtimePropertyInfo instanceof RuntimeElementPropertyInfo) {
+        if (runtimePropertyInfo instanceof RuntimeAttributePropertyInfo) {
+            RuntimeAttributePropertyInfo attributeProperty = (RuntimeAttributePropertyInfo) runtimePropertyInfo;
+            property.setXmlStyle(Property.XmlStyle.ATTRIBUTE);
+            property.setXmlName(attributeProperty.getXmlName());
+            property.setRequired(attributeProperty.isRequired());
+        } else if (runtimePropertyInfo instanceof RuntimeElementPropertyInfo) {
             RuntimeElementPropertyInfo elementProperty = (RuntimeElementPropertyInfo) runtimePropertyInfo;
             property.setXmlStyle(Property.XmlStyle.ELEMENT);
             property.setXmlName(elementProperty.getXmlName());
             for (RuntimeTypeRef typeRef : elementProperty.getTypes()) {
-                XmlMapping xmlMapping = createXmlMapping(property, typeRef);
-                property.getXmlMappings().add(xmlMapping);
+                ElementMapping elementMapping = createXmlMapping(property, typeRef);
+                property.getElementMappings().add(elementMapping);
             }
             property.setRequired(elementProperty.isRequired());
             property.setNillable(elementProperty.isCollectionNillable());
-        } else if (runtimePropertyInfo instanceof RuntimeAttributePropertyInfo) {
-            RuntimeAttributePropertyInfo attributeProperty = (RuntimeAttributePropertyInfo) runtimePropertyInfo;
-            property.setXmlStyle(Property.XmlStyle.ATTRIBUTE);
-            property.setXmlName(attributeProperty.getXmlName());
-            XmlMapping xmlMapping = new XmlMapping(property, attributeProperty.getXmlName());
-            property.getXmlMappings().add(xmlMapping);
-            property.setRequired(attributeProperty.isRequired());
-        } else if (runtimePropertyInfo instanceof RuntimeReferencePropertyInfo) {
+        } else  if (runtimePropertyInfo instanceof RuntimeReferencePropertyInfo) {
             RuntimeReferencePropertyInfo referenceProperty = (RuntimeReferencePropertyInfo) runtimePropertyInfo;
             property.setXmlStyle(Property.XmlStyle.ELEMENT_REF);
             for (RuntimeElement re : referenceProperty.getElements()) {
                 RuntimeElementInfo runtimeElement = (RuntimeElementInfo) re;
-                XmlMapping xmlMapping = createXmlMapping(property, runtimeElement);
-                property.getXmlMappings().add(xmlMapping);
+                ElementMapping elementMapping = createXmlMapping(property, runtimeElement);
+                property.getElementMappings().add(elementMapping);
             }
             property.setNillable(referenceProperty.isCollectionNillable());
         } else if (runtimePropertyInfo instanceof RuntimeValuePropertyInfo) {
             property.setXmlStyle(Property.XmlStyle.VALUE);
-            XmlMapping xmlMapping = new XmlMapping(property, null);
-            property.getXmlMappings().add(xmlMapping);
         } else {
             throw new BuildException("Unknown property type " + runtimePropertyInfo.getClass().getName());
         }
@@ -202,50 +197,21 @@ public class RiModelBuilder {
         return property;
     }
 
-    public XmlMapping createXmlMapping(Property property, RuntimeTypeRef runtimeTypeRef) {
-        XmlMapping mapping = new XmlMapping(property, runtimeTypeRef.getTagName());
+    private ElementMapping createXmlMapping(Property property, RuntimeTypeRef runtimeTypeRef) {
+        ElementMapping mapping = new ElementMapping(property, runtimeTypeRef.getTagName());
 
         mapping.setNillable(runtimeTypeRef.isNillable());
 
-        if (property.isCollection()) {
-            mapping.setComponentType(runtimeTypeRef.getTarget().getType());
-        }
-
-        RuntimeNonElement targetElement = runtimeTypeRef.getTarget();
-        setTargetBean(property, mapping, targetElement);
+        mapping.setComponentType(runtimeTypeRef.getTarget().getType());
 
         return mapping;
     }
 
-    public XmlMapping createXmlMapping(Property property, RuntimeElementInfo runtimeElement) {
-        XmlMapping mapping = new XmlMapping(property, runtimeElement.getElementName());
+    private ElementMapping createXmlMapping(Property property, RuntimeElementInfo runtimeElement) {
+        ElementMapping mapping = new ElementMapping(property, runtimeElement.getElementName());
 
-        if (property.isCollection()) {
-            mapping.setComponentType(runtimeElement.getContentType().getType());
-        }
-
-        RuntimeNonElement targetElement = runtimeElement.getContentType();
-        setTargetBean(property, mapping, targetElement);
+        mapping.setComponentType(runtimeElement.getContentType().getType());
 
         return mapping;
-    }
-
-    public void setTargetBean(Property property, XmlMapping mapping, RuntimeNonElement targetElement) {
-        if (targetElement instanceof RuntimeClassInfo) {
-            RuntimeClassInfo runtimeClassInfo = (RuntimeClassInfo) targetElement;
-
-            if (!runtimeClassInfo.isSimpleType()) {
-                Model model = property.getBean().getModel();
-                Bean targetBean = model.getBean(runtimeClassInfo.getClazz());
-                if (targetBean == null) {
-                    if (runtimeClassInfo.getClazz().equals(property.getBean().getType())) {
-                        targetBean = property.getBean();
-                    } else {
-                        targetBean = addBean(model, runtimeClassInfo);
-                    }
-                }
-                mapping.setTargetBean(targetBean);
-            }
-        }
     }
 }
