@@ -3,9 +3,15 @@ package com.envoisolutions.sxc.jaxb.model;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.Map;
+import java.util.concurrent.Callable;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
 
 import com.envoisolutions.sxc.builder.BuildException;
+import com.envoisolutions.sxc.jaxb.JAXBModelFactory;
 import com.sun.xml.bind.api.AccessorException;
+import com.sun.xml.bind.v2.ContextFactory;
 import com.sun.xml.bind.v2.model.runtime.RuntimeAttributePropertyInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeClassInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeElement;
@@ -18,12 +24,20 @@ import com.sun.xml.bind.v2.model.runtime.RuntimeReferencePropertyInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeTypeInfoSet;
 import com.sun.xml.bind.v2.model.runtime.RuntimeTypeRef;
 import com.sun.xml.bind.v2.model.runtime.RuntimeValuePropertyInfo;
+import com.sun.xml.bind.v2.runtime.JAXBContextImpl;
 import com.sun.xml.bind.v2.runtime.Transducer;
 import com.sun.xml.bind.v2.runtime.reflect.Accessor;
 
 public class RiModelBuilder {
-    public Model createModel(RuntimeTypeInfoSet runtimeTypeInfoSet) {
-        Model model = new Model();
+    private final JAXBContextImpl context;
+    private final Model model;
+
+    public RiModelBuilder(Map<String, Object> properties, Class... classes) throws JAXBException {
+        context = (JAXBContextImpl) ContextFactory.createContext(classes, properties);
+
+        RuntimeTypeInfoSet runtimeTypeInfoSet = JAXBModelFactory.create(context, classes);
+
+        model = new Model();
         for (RuntimeClassInfo runtimeClassInfo : runtimeTypeInfoSet.beans().values()) {
             addBean(model, runtimeClassInfo);
         }
@@ -31,7 +45,18 @@ public class RiModelBuilder {
         for (RuntimeEnumLeafInfo runtimeEnumLeafInfo : runtimeTypeInfoSet.enums().values()) {
             addBean(model, runtimeEnumLeafInfo);
         }
+    }
+
+    public Model getModel() {
         return model;
+    }
+
+    public Callable<JAXBContext> getContext() {
+        return new Callable<JAXBContext>() {
+            public JAXBContext call() throws Exception {
+                return context;
+            }
+        };
     }
 
     private Bean addBean(Model model, RuntimeClassInfo runtimeClassInfo) {

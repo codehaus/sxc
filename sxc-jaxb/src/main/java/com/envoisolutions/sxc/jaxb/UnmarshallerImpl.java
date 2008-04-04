@@ -1,24 +1,15 @@
 package com.envoisolutions.sxc.jaxb;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.Reader;
-import java.net.URL;
-import java.util.Map;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
-
+import java.util.Map;
 import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
-import javax.xml.bind.PropertyException;
 import javax.xml.bind.UnmarshalException;
-import javax.xml.bind.Unmarshaller;
 import javax.xml.bind.UnmarshallerHandler;
-import javax.xml.bind.ValidationEventHandler;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.attachment.AttachmentUnmarshaller;
+import javax.xml.bind.helpers.AbstractUnmarshallerImpl;
 import javax.xml.datatype.DatatypeConfigurationException;
 import javax.xml.datatype.DatatypeFactory;
 import javax.xml.datatype.Duration;
@@ -31,35 +22,31 @@ import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import javax.xml.transform.Source;
 import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.sax.SAXSource;
 import javax.xml.validation.Schema;
-
-import org.w3c.dom.Node;
-import org.xml.sax.InputSource;
 
 import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.jaxb.model.Bean;
 import com.envoisolutions.sxc.jaxb.model.Model;
 import com.envoisolutions.sxc.util.XoXMLStreamReader;
 import com.envoisolutions.sxc.util.XoXMLStreamReaderImpl;
+import org.w3c.dom.Node;
+import org.xml.sax.InputSource;
+import org.xml.sax.XMLReader;
 
-public class UnmarshallerImpl implements Unmarshaller {
+@SuppressWarnings({"unchecked"})
+public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
+    private final Map<Class, QName> c2type;
+    private final Context context;
+    private final XMLInputFactory xif = XMLInputFactory.newInstance();
+    private final DatatypeFactory dtFactory;
 
-    private XMLInputFactory xif = XMLInputFactory.newInstance();
-    private JAXBContextImpl jaxbCtx;
-    private Context context;
-    private com.envoisolutions.sxc.Reader unmarshaller;
+    private final Map<Class<?>, ? super XmlAdapter> adapters = new HashMap<Class<?>, XmlAdapter>();
     private Listener listener;
     private Schema schema;
-    private boolean validating;
-    private AttachmentUnmarshaller au;
-    private ValidationEventHandler eventHandler;
-    private UnmarshallerHandler unmarshallerHandler;
-    private Map<Class, QName> c2type;
-    private DatatypeFactory dtFactory;
-    
-    public UnmarshallerImpl(JAXBContextImpl jaxbCtx, Model model, Context context)
-        throws JAXBException {
-        this.jaxbCtx = jaxbCtx;
+    private AttachmentUnmarshaller attachmentUnmarshaller;
+
+    public UnmarshallerImpl(Model model, Context context) throws JAXBException {
         this.context = context;
 
         c2type = new LinkedHashMap<Class, QName>();
@@ -69,100 +56,10 @@ public class UnmarshallerImpl implements Unmarshaller {
             }
         }
 
-        this.unmarshaller = context.createReader();
         try {
             dtFactory = DatatypeFactory.newInstance();
         } catch (DatatypeConfigurationException e) {
             throw new JAXBException("Could not create datatype factory.", e);
-        }
-    }
-
-    public <A extends XmlAdapter> A getAdapter(Class<A> arg0) {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-    public AttachmentUnmarshaller getAttachmentUnmarshaller() {
-        return au;
-    }
-
-    public ValidationEventHandler getEventHandler() throws JAXBException {
-        return eventHandler;
-    }
-
-    public Listener getListener() {
-        return listener;
-    }
-
-    public Object getProperty(String key) throws PropertyException {
-        return context.get(key);
-    }
-
-    public Schema getSchema() {
-        return schema;
-    }
-
-    public UnmarshallerHandler getUnmarshallerHandler() {
-        return unmarshallerHandler;
-    }
-
-    public boolean isValidating() throws JAXBException {
-        // TODO Auto-generated method stub
-        return validating;
-    }
-
-    public <A extends XmlAdapter> void setAdapter(Class<A> arg0, A arg1) {
-        // TODO Auto-generated method stub
-        
-    }
-
-    public void setAdapter(XmlAdapter arg0) {
-        // TODO Auto-generated method stub
-        
-    }
-
-    public void setAttachmentUnmarshaller(AttachmentUnmarshaller arg0) {
-        // TODO Auto-generated method stub
-        
-    }
-
-    public void setEventHandler(ValidationEventHandler eventHandler) throws JAXBException {
-        this.eventHandler = eventHandler;
-    }
-
-    public void setListener(Listener listener) {
-        this.listener = listener;
-    }
-
-    public void setProperty(String key, Object value) throws PropertyException {
-        context.put(key, value);
-    }
-
-    public void setSchema(Schema schema) {
-        this.schema = schema;
-    }
-
-    public void setValidating(boolean validating) throws JAXBException {
-        this.validating = validating;
-    }
-
-    public Object unmarshal(File arg0) throws JAXBException {
-        try {
-            return unmarshal(new FileInputStream(arg0));
-        } catch (FileNotFoundException e) {
-            throw new JAXBException("Could not open file: " + arg0.getAbsolutePath(), e);
-        }
-    }
-
-    public Object unmarshal(InputSource is) throws JAXBException {
-        throw new UnsupportedOperationException();
-    }
-
-    public Object unmarshal(InputStream is) throws JAXBException {
-        try {
-            return unmarshaller.read(is);
-        } catch (Exception e) {
-            throw new JAXBException(e);
         }
     }
 
@@ -180,17 +77,6 @@ public class UnmarshallerImpl implements Unmarshaller {
     public Object unmarshal(Node node) throws JAXBException {
         try {
             XMLStreamReader xsr = xif.createXMLStreamReader(new DOMSource(node));
-            Object o = unmarshal(xsr);
-            xsr.close();
-            return o;
-        } catch (XMLStreamException e) {
-            throw new JAXBException("Error reading XML stream.", e);
-        }
-    }
-
-    public Object unmarshal(Reader reader) throws JAXBException {
-        try {
-            XMLStreamReader xsr = xif.createXMLStreamReader(reader);
             Object o = unmarshal(xsr);
             xsr.close();
             return o;
@@ -221,24 +107,27 @@ public class UnmarshallerImpl implements Unmarshaller {
         }
     }
 
-    public Object unmarshal(URL url) throws JAXBException {
+    protected Object unmarshal(XMLReader reader, InputSource source) throws JAXBException {
+        return unmarshal(new SAXSource(reader, source));
+    }
+
+    public Object unmarshal(XMLEventReader reader) throws JAXBException {
+        throw new UnsupportedOperationException();
+    }
+
+    public <T> JAXBElement<T> unmarshal(XMLEventReader reader, Class<T> expectedType) throws JAXBException {
+        throw new UnsupportedOperationException();
+    }
+
+    public Object unmarshal(XMLStreamReader reader) throws JAXBException {
         try {
-            return unmarshal(url.openStream());
-        } catch (IOException e) {
-            throw new JAXBException("Could not open URL stream.", e);
+            return context.createReader().read(reader);
+        } catch (Exception e) {
+            throw new JAXBException(e);
         }
     }
 
-    public <T> JAXBElement<T> unmarshal(XMLEventReader arg0, Class<T> arg1) throws JAXBException {
-        throw new UnsupportedOperationException();
-    }
-
-    public Object unmarshal(XMLEventReader arg0) throws JAXBException {
-        throw new UnsupportedOperationException();
-    }
-
-    public <T> JAXBElement<T> unmarshal(XMLStreamReader xsr, 
-                                        Class<T> cls) throws JAXBException {
+    public <T> JAXBElement<T> unmarshal(XMLStreamReader xsr, Class<T> cls) throws JAXBException {
         XoXMLStreamReader reader = new XoXMLStreamReaderImpl(xsr);
         try {
             int event = reader.getEventType();
@@ -248,7 +137,7 @@ public class UnmarshallerImpl implements Unmarshaller {
 
             if (event == XMLStreamConstants.START_ELEMENT) {
                 QName name = reader.getName();
-                
+
                 Object o = null;
                 if (reader.isXsiNil()) {
                     // its null
@@ -277,14 +166,14 @@ public class UnmarshallerImpl implements Unmarshaller {
                 } else {
                     QName type = c2type.get(cls);
                     if (type == null) {
-                        o = unmarshaller.read(reader, null);
+                        o = context.createReader().read(reader, null);
                     } else {
-                        return (JAXBElement<T>) unmarshaller.read(reader, null, type);
+                        return (JAXBElement<T>) context.createReader().read(reader, null, type);
                     }
                 }
-                return new JAXBElement<T>(name, cls, cast(o, cls));
+                return new JAXBElement<T>(name, cls, cls.cast(o));
             } else {
-                // TODO: figure out what is appropriate per spec 
+                // TODO: figure out what is appropriate per spec
                 return null;
             }
         } catch (Exception e) {
@@ -295,17 +184,40 @@ public class UnmarshallerImpl implements Unmarshaller {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    protected static <T> T cast(Object p, Class<T> cls) {
-        return (T)p;
-    }
-    
-    public Object unmarshal(XMLStreamReader reader) throws JAXBException {
-        try {
-            return unmarshaller.read(reader);
-        } catch (Exception e) {
-            throw new JAXBException(e);
-        }
+    @SuppressWarnings({"unchecked"})
+    public <A extends XmlAdapter> A getAdapter(Class<A> type) {
+        return (A) adapters.get(type);
     }
 
+    public <A extends XmlAdapter> void setAdapter(Class<A> type, A adapter) {
+        adapters.put(type, adapter);
+    }
+
+    public AttachmentUnmarshaller getAttachmentUnmarshaller() {
+        return attachmentUnmarshaller;
+    }
+
+    public void setAttachmentUnmarshaller(AttachmentUnmarshaller attachmentUnmarshaller) {
+        this.attachmentUnmarshaller = attachmentUnmarshaller;
+    }
+
+    public Listener getListener() {
+        return listener;
+    }
+
+    public void setListener(Listener listener) {
+        this.listener = listener;
+    }
+
+    public Schema getSchema() {
+        return schema;
+    }
+
+    public void setSchema(Schema schema) {
+        this.schema = schema;
+    }
+
+    public UnmarshallerHandler getUnmarshallerHandler() {
+        throw new UnsupportedOperationException();
+    }
 }
