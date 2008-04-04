@@ -39,7 +39,7 @@ import static com.envoisolutions.sxc.jaxb.JavaUtils.isPrivate;
 import com.envoisolutions.sxc.jaxb.model.Bean;
 import com.envoisolutions.sxc.jaxb.model.Model;
 import com.envoisolutions.sxc.jaxb.model.Property;
-import com.envoisolutions.sxc.jaxb.model.XmlMapping;
+import com.envoisolutions.sxc.jaxb.model.ElementMapping;
 import com.envoisolutions.sxc.util.Base64;
 import com.envoisolutions.sxc.util.FieldAccessor;
 import com.sun.codemodel.JBlock;
@@ -185,19 +185,17 @@ public class WriterIntrospector {
                         propertyName,
                         getValue(classBuilder, property));
 
-                for (XmlMapping mapping : property.getXmlMappings()) {
-                    if (!property.isCollection()) {
+                if (!property.isCollection()) {
 
-                        JBlock block = classBuilder.getCurrentBlock();
-                        if (!toClass(property.getType()).isPrimitive()) {
-                            JConditional nilCond = block._if(propertyVar.ne(JExpr._null()));
-                            block = nilCond._then();
-                        }
-
-                        writeSimpleTypeAttribute(classBuilder, block, mapping.getXmlName(), toClass(property.getType()), propertyVar);
-                    } else {
-                        logger.info("(JAXB Writer) Attribute lists are not supported yet!");
+                    JBlock block = classBuilder.getCurrentBlock();
+                    if (!toClass(property.getType()).isPrimitive()) {
+                        JConditional nilCond = block._if(propertyVar.ne(JExpr._null()));
+                        block = nilCond._then();
                     }
+
+                    writeSimpleTypeAttribute(classBuilder, block, property.getXmlName(), toClass(property.getType()), propertyVar);
+                } else {
+                    logger.info("(JAXB Writer) Attribute lists are not supported yet!");
                 }
             }
         }
@@ -224,8 +222,8 @@ public class WriterIntrospector {
                     JBlock outerBlock = origBlock;
 
                     // determine types that may be substuited for this value
-                    Map<Class, XmlMapping> expectedTypes = new TreeMap<Class, XmlMapping>(new ClassComparator());
-                    for (XmlMapping mapping : property.getXmlMappings()) {
+                    Map<Class, ElementMapping> expectedTypes = new TreeMap<Class, ElementMapping>(new ClassComparator());
+                    for (ElementMapping mapping : property.getElementMappings()) {
                         if (mapping.getComponentType() != null) {
                             expectedTypes.put(toClass(mapping.getComponentType()), mapping);
                             for (Bean substitutionBean : getSubstitutionTypes(toClass(mapping.getComponentType()))) {
@@ -281,7 +279,7 @@ public class WriterIntrospector {
                     }
 
                     if (expectedTypes.size() == 1) {
-                        XmlMapping mapping = property.getXmlMappings().iterator().next();
+                        ElementMapping mapping = property.getElementMappings().iterator().next();
 
                         // null check for non-nillable elements
                         JBlock block = outerBlock;
@@ -309,11 +307,11 @@ public class WriterIntrospector {
                         JIfElseBlock conditional = new JIfElseBlock();
                         outerBlock.add(conditional);
 
-                        XmlMapping nilMapping = null;
+                        ElementMapping nilMapping = null;
                         String itemName = classBuilder.getVariableManager().createId( property.getName() + "Item");
-                        for (Map.Entry<Class, XmlMapping> entry : expectedTypes.entrySet()) {
+                        for (Map.Entry<Class, ElementMapping> entry : expectedTypes.entrySet()) {
                             Class itemType = entry.getKey();
-                            XmlMapping mapping = entry.getValue();
+                            ElementMapping mapping = entry.getValue();
 
                             if (mapping.isNillable()) {
                                 if (nilMapping != null && nilMapping != mapping) {
@@ -421,7 +419,7 @@ public class WriterIntrospector {
         }
     }
 
-    private void writeElement(ElementWriterBuilder classBuilder, JBlock block, XmlMapping mapping, JVar itemVar, Class type, boolean nillable) {
+    private void writeElement(ElementWriterBuilder classBuilder, JBlock block, ElementMapping mapping, JVar itemVar, Class type, boolean nillable) {
         // write start element
         QName name = mapping.getXmlName();
         block.add(getXSW(classBuilder).invoke("writeStartElement").arg(name.getPrefix()).arg(name.getLocalPart()).arg(name.getNamespaceURI()));
@@ -445,7 +443,7 @@ public class WriterIntrospector {
                     type,
                     elementWriteBlock);
         } else {
-            if (mapping.getTargetBean() != targetBean) {
+            if (!mapping.getComponentType().equals(type)) {
                 QName typeName = targetBean.getSchemaTypeName();
                 elementWriteBlock.add(getXSW(classBuilder).invoke("writeXsiType").arg(typeName.getNamespaceURI()).arg(typeName.getLocalPart()));
             }

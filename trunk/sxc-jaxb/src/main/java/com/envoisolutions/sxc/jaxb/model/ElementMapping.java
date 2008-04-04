@@ -3,7 +3,7 @@ package com.envoisolutions.sxc.jaxb.model;
 import java.lang.reflect.Type;
 import javax.xml.namespace.QName;
 
-public class XmlMapping {
+public class ElementMapping {
     private final Property property;
 
     private final QName xmlName;
@@ -12,10 +12,9 @@ public class XmlMapping {
 
     private Type componentType;
 
-    private Bean targetBean;
-
-    public XmlMapping(Property property, QName xmlName) {
+    public ElementMapping(Property property, QName xmlName) {
         if (property == null) throw new NullPointerException("property is null");
+        if (xmlName == null) throw new NullPointerException("xmlName is null");
         this.property = property;
         this.xmlName = xmlName;
     }
@@ -44,36 +43,24 @@ public class XmlMapping {
         this.componentType = componentType;
     }
 
-    public Bean getTargetBean() {
-        return targetBean;
-    }
-
-    public void setTargetBean(Bean targetBean) {
-        this.targetBean = targetBean;
-    }
-
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        XmlMapping mapping = (XmlMapping) o;
+        ElementMapping mapping = (ElementMapping) o;
 
         return property.equals(mapping.property) &&
-                !(xmlName != null ? !xmlName.equals(mapping.xmlName) : mapping.xmlName != null);
+               xmlName.equals(mapping.xmlName);
     }
 
     public int hashCode() {
         int result;
         result = property.hashCode();
-        result = 31 * result + (xmlName != null ? xmlName.hashCode() : 0);
+        result = 31 * result + xmlName.hashCode();
         return result;
     }
 
     public String toString() {
-        if (xmlName != null) {
-            return property.toString() + " - " + xmlName;
-        } else {
-            return property.toString() + " - [value]";
-        }
+        return property.toString() + " - " + xmlName;
     }
 }
