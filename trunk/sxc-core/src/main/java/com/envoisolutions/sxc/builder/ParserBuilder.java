@@ -45,6 +45,5 @@ public interface ParserBuilder {
     ParserBuilder newState();
     ParserBuilder newState(JBlock block);
 
-    IdentityManager getFieldManager();
     IdentityManager getVariableManager();
 }

@@ -1,31 +1,29 @@
 package com.envoisolutions.sxc.builder.impl;
 
+import javax.xml.namespace.QName;
+
 import com.envoisolutions.sxc.builder.WriterBuilder;
+import static com.envoisolutions.sxc.builder.impl.IdentityManager.capitalize;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
-import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JVar;
-
-import javax.xml.namespace.QName;
+import com.sun.codemodel.JType;
 
 public class AttributeWriterBuilder extends AbstractWriterBuilder implements WriterBuilder {
-
-    public AttributeWriterBuilder(ElementWriterBuilderImpl parent, 
-                                  QName name, JMethod method, JVar objectVar) {
-        this.buildContext = parent.buildContext;
-        this.method = method;
-        this.objectVar = objectVar;
+    public AttributeWriterBuilder(ElementWriterBuilderImpl parent, QName name, JType type) {
         this.parent = parent;
         this.name = name;
-        this.xswVar = parent.xswVar;
-        this.rtContextVar = parent.rtContextVar;
+        this.buildContext = parent.buildContext;
+
+        method = buildContext.createMethod(parent.getWriterClass(), "write" + capitalize(type.name()));
+        objectVar = addBasicArgs(method, type, "_obj");
+
         this.writerClass = parent.writerClass;
         this.model = parent.model;
         currentBlock = method.body();
     }
-    
+
     public void writeAs(Class cls) {
         JBlock block = currentBlock._if(objectVar.ne(JExpr._null()))._then();
         

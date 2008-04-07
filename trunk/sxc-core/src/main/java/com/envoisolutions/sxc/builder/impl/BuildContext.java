@@ -30,7 +30,7 @@ public class BuildContext {
         return model;
     }
 
-    JClass getStringToObjectMap() {
+    public JClass getStringToObjectMap() {
         return stringToObjectMap;
     }
 

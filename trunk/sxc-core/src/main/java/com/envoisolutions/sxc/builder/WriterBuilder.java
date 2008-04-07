@@ -49,6 +49,5 @@ public interface WriterBuilder {
     void declareException(Class cls);
 
 
-    IdentityManager getFieldManager();
     IdentityManager getVariableManager();
 }

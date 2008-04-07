@@ -30,6 +30,7 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
+import com.sun.codemodel.JDefinedClass;
 
 public class ElementParserBuilderImpl extends AbstractParserBuilder implements ElementParserBuilder {
 
@@ -74,6 +75,26 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         
         addBasicArgs(method);
         
+        root = true;
+
+        reserveVariables();
+    }
+
+    public ElementParserBuilderImpl(BuildContext buildContext, JDefinedClass readerClass, Class returnType) throws BuildException {
+        if (buildContext == null) throw new NullPointerException("buildContext is null");
+        if (readerClass == null) throw new NullPointerException("readerClass is null");
+        if (returnType == null) throw new NullPointerException("returnType is null");
+
+        this.buildContext = buildContext;
+        this.readerClass = readerClass;
+        model = buildContext.getCodeModel();
+
+        this.returnType = model._ref(returnType);
+
+        method = readerClass.method(JMod.PUBLIC | JMod.FINAL, returnType, "read");
+
+        addBasicArgs(method);
+
         root = true;
 
         reserveVariables();
@@ -387,7 +408,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         return tailBlock;
     }
 
-    protected void write() {
+    public void write() {
         if (written) return;
         
         written = true;
@@ -416,19 +437,19 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
 
         // Add return statement to the end of the block
         if (returnType != null) {
-            if(root)
-                throw new IllegalStateException("root builder is not allowed to have the return type");
             setReturnType(returnType);
             preElementBlock._return(_return);
-        } 
+        }
         
-        if (root) {
+        if (root && returnType == null) {
             b._return(JExpr._null());
         }
 
         if (root) {
             writeReadAsType();
-            readerClass._extends(baseClass);
+            if (baseClass != null) {
+                readerClass._extends(baseClass);
+            }
         }
     }
     
@@ -453,7 +474,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         JBlock b = method.body();
         
         // Add XSI checks
-        if (!valueType && depth > 1) {
+        if (returnType != null || !valueType && depth > 1) {
             writeXsiChecks(b);
         }
         
@@ -469,15 +490,8 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
 
         if (!elements.isEmpty() || !xsiTypes.isEmpty() || allowUnknown ) {
             // declare variables used during element reading
-            JVar targetDepthVar;
-            JVar event;
-            if (depth == 1) {
-                targetDepthVar = b.decl(model._ref(int.class), "targetDepth", JExpr.lit(depth));
-                event = b.decl(model._ref(int.class), "event", xsrVar.invoke("getEventType"));
-            } else {
-                targetDepthVar = b.decl(model._ref(int.class), "targetDepth", xsrVar.invoke("getDepth").plus(JExpr.lit(1)));
-                event = b.decl(model._ref(int.class), "event", xsrVar.invoke("nextTagIgnoreAll"));
-            }
+            JVar targetDepthVar = b.decl(model._ref(int.class), "targetDepth", xsrVar.invoke("getDepth").plus(JExpr.lit(1)));
+            JVar event = b.decl(model._ref(int.class), "event", xsrVar.invoke("nextTagIgnoreAll"));
             JVar depthVar = b.decl(model._ref(int.class), "depth", xsrVar.invoke("getDepth"));
 
 //        JClass sysType = (JClass) model._ref(System.class);
@@ -581,7 +595,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
     }
 
     private void writeElementReader(Map<QName, ExpectedElement> elements, JBlock block, boolean global) {
-        if (depth == 1 && !global && checkXsiTypes) {
+        if (depth == 1 && !global && checkXsiTypes && returnType == null) {
             writeXsiChecks(block);
         }
 

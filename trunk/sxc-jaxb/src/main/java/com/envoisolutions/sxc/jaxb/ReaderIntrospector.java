@@ -1,16 +1,17 @@
 package com.envoisolutions.sxc.jaxb;
 
-import static java.beans.Introspector.decapitalize;
+import java.awt.Image;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.lang.reflect.WildcardType;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -18,42 +19,31 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.SortedSet;
-import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.LinkedHashMap;
 import java.util.logging.Logger;
-import java.awt.Image;
+import javax.activation.DataHandler;
 import javax.xml.bind.JAXBElement;
-import javax.xml.datatype.DatatypeConfigurationException;
-import javax.xml.datatype.DatatypeFactory;
 import javax.xml.datatype.Duration;
 import javax.xml.datatype.XMLGregorianCalendar;
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamException;
-import javax.activation.DataHandler;
 
 import com.envoisolutions.sxc.builder.BuildException;
-import com.envoisolutions.sxc.builder.Builder;
-import com.envoisolutions.sxc.builder.CodeBody;
-import com.envoisolutions.sxc.builder.ElementParserBuilder;
-import com.envoisolutions.sxc.builder.ParserBuilder;
-import com.envoisolutions.sxc.builder.impl.ElementParserBuilderImpl;
-import com.envoisolutions.sxc.builder.impl.AbstractParserBuilder;
 import com.envoisolutions.sxc.builder.impl.JIfElseBlock;
+import com.envoisolutions.sxc.builder.impl.JStaticImports;
+import static com.envoisolutions.sxc.jaxb.JavaUtils.isPrivate;
+import static com.envoisolutions.sxc.jaxb.JavaUtils.toClass;
 import com.envoisolutions.sxc.jaxb.model.Bean;
+import com.envoisolutions.sxc.jaxb.model.ElementMapping;
 import com.envoisolutions.sxc.jaxb.model.Model;
 import com.envoisolutions.sxc.jaxb.model.Property;
-import com.envoisolutions.sxc.jaxb.model.ElementMapping;
-import static com.envoisolutions.sxc.jaxb.JavaUtils.toClass;
-import static com.envoisolutions.sxc.jaxb.JavaUtils.capitalize;
-import static com.envoisolutions.sxc.jaxb.JavaUtils.isPrivate;
 import com.envoisolutions.sxc.util.ArrayUtil;
 import com.envoisolutions.sxc.util.Base64;
-import com.envoisolutions.sxc.util.FieldAccessor;
 import com.sun.codemodel.JArray;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCatchBlock;
 import com.sun.codemodel.JClass;
+import com.sun.codemodel.JClassAlreadyExistsException;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JConditional;
 import com.sun.codemodel.JDefinedClass;
@@ -66,74 +56,48 @@ import com.sun.codemodel.JMod;
 import com.sun.codemodel.JTryBlock;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
-import com.sun.codemodel.JAnnotationUse;
-import com.sun.codemodel.JAnnotationArrayMember;
 
 public class ReaderIntrospector {
     private static final Logger logger = Logger.getLogger(ReaderIntrospector.class.getName());
-	
-    private final ElementParserBuilder rootReader;
-    private final Builder builder;
-    private final JFieldVar dtf;
-    private final JCodeModel codeModel;
-    private final Map<Bean, ElementParserBuilder> beanParsers = new LinkedHashMap<Bean, ElementParserBuilder>();
-    private final Map<Class, String> enumParsers = new LinkedHashMap<Class, String>();
 
-    private final Map<Class, JVar> adapters = new HashMap<Class, JVar>();
-    private final Map<String, JFieldVar> privateFieldAccessors = new TreeMap<String, JFieldVar>();
+    private final JCodeModel codeModel;
+    private final Map<Bean, MarshallerBuilder> builders = new LinkedHashMap<Bean, MarshallerBuilder>();
+    private final Map<Class, JClass> enumParsers = new LinkedHashMap<Class, JClass>();
+
     private final Model model;
 
-    public ReaderIntrospector(Builder builder, Model model) {
-        this.builder = builder;
+    public ReaderIntrospector(BuilderContext builderContext, Model model) {
         this.model = model;
-        rootReader = builder.getParserBuilder();
-        rootReader.setAllowUnkown(false);
-        codeModel = rootReader.getCodeModel();
-
-        JDefinedClass readerCls = rootReader.getReaderClass();
-        // static DatatypeFactory dtFactory;
-        dtf = readerCls.field(JMod.PRIVATE | JMod.STATIC, toJClass(DatatypeFactory.class), "dtFactory");
-
-        // @SuppressWarnings({"StringEquality"})
-        JAnnotationUse suppressWarnings = readerCls.annotate(SuppressWarnings.class);
-        JAnnotationArrayMember member = suppressWarnings.paramArray("value");
-        member.param("StringEquality");
-
-        // add code to constructor which initializes the static dtFactory field
-        // todo why do this in the constructor instead of a static block
-        JMethod constructor = builder.getParserConstructor();
-        JTryBlock tb = constructor.body()._try();
-        JBlock body = tb.body();
-        body.assign(dtf, toJClass(DatatypeFactory.class).staticInvoke("newInstance"));
-        tb._catch((toJClass(DatatypeConfigurationException.class)));
+        codeModel = builderContext.getCodeModel();
 
         // declare all parser methods first, so everything exists when we build the
         for (Bean bean : this.model.getBeans()) {
             if (Modifier.isAbstract(bean.getType().getModifiers())) continue;
             if (bean.getType().isEnum()) continue;
 
-            ElementParserBuilder classBuilder;
-            if (bean.getRootElementName() != null) {
-                // global root element
-                classBuilder = rootReader.expectElement(bean.getRootElementName(), bean.getType().getSimpleName());
-            } else if (bean.getSchemaTypeName() != null) {
-                // global schema type
-                classBuilder = rootReader.expectXsiType(bean.getSchemaTypeName(), bean.getType().getSimpleName());
+            MarshallerBuilder builder = builderContext.getMarshallerBuilder(bean.getType(), bean.getRootElementName(), bean.getSchemaTypeName());
 
-                // wrap result in JAXBElement
-                JBlock block = new JBlock();
-                String varName = decapitalize(bean.getType().getSimpleName());
-                varName = classBuilder.getVariableManager().createId(varName);
-                JVar var = block.decl(toJClass(bean.getType()), varName);
-                rootReader.setXsiTypeBlock(classBuilder.getName(), var, block);
-
-                block._return(newJaxBElement(classBuilder, bean.getType(), var));
-            } else {
-                // anonymous type (no root element name or schema type name)
-                classBuilder = rootReader.newState(new JBlock(), bean.getType().getSimpleName());
+            LinkedHashSet<Property> allProperties = new LinkedHashSet<Property>();
+            for (Bean b = bean; b != null; b = b.getBaseClass()) {
+                allProperties.addAll(b.getProperties());
             }
-            classBuilder.setAllowUnkown(false);
-            beanParsers.put(bean, classBuilder);
+
+            // declare all private field accessors (so they are grouped)
+            for (Property property : allProperties) {
+                Field field = property.getField();
+                if (field != null && isPrivate(field)) {
+                    builder.getPrivateFieldAccessor(property.getField());
+                }
+            }
+
+            // declare all adapter classes
+            for (Property property : allProperties) {
+                if (property.getAdapterType() != null) {
+                    builder.getAdapter(property.getAdapterType());
+                }
+            }
+
+            builders.put(bean, builder);
         }
 
         // declare all parse enum methods (after read methods so they are grouped together)
@@ -143,86 +107,62 @@ public class ReaderIntrospector {
             }
         }
 
-        // declare all adapters(so they are grouped)
-        for (Bean bean : model.getBeans()) {
-            for (Property property : bean.getProperties()) {
-                if (property.getAdapterType() != null) {
-                    getAdapter(property.getAdapterType());
-                }
-            }
-        }
-
-        // declare all private field accessors (so they are grouped)
-        for (Bean bean : model.getBeans()) {
-            for (Property property : bean.getProperties()) {
-                Field field = property.getField();
-                if (field != null && isPrivate(field)) {
-                    getPrivateFieldAccessor(field);
-                }
-            }
-        }
-
         // build parsers
         for (Bean bean : model.getBeans()) {
             if (!bean.getType().isEnum()) {
-                ElementParserBuilder classBuilder = beanParsers.get(bean);
-                if (classBuilder != null) {
-                    add(classBuilder, bean);
-                }
-            } else {
-                JBlock block = new JBlock();
-                if (bean.getRootElementName() != null) {
-                    rootReader.setElementBlock(bean.getRootElementName(), null, block);
-                } else if (bean.getSchemaTypeName() != null) {
-                    rootReader.setXsiTypeBlock(bean.getSchemaTypeName(), null, block);
-                }
-                if (block != null) {
-                    block._return(coerce(getXSR(rootReader).invoke("getElementAsString"), bean.getType()));
+                MarshallerBuilder builder = builders.get(bean);
+                if (builder != null) {
+                    add(builder, bean);
                 }
             }
         }
     }
 
-    private ElementParserBuilder add(ElementParserBuilder classBuilder, Bean bean) {
-        CodeBody body = classBuilder.getBody();
-        JClass type = toJClass(bean.getType());
+    private JInvocation invokeParser(MarshallerBuilder caller, MarshallerBuilder parser) {
+        JStaticImports staticImports = JStaticImports.getStaticImports(caller.getMarshallerClass());
 
-        JBlock xsiNilReturnBlock = body.getBlock()._if(getXSR(classBuilder).invoke("isXsiNil"))._then();
-        xsiNilReturnBlock._return(JExpr._null());
+        String methodName = "read" + parser.getReadMethod().type().name();
+        staticImports.addStaticImport(parser.getMarshallerClass().fullName() + "." + methodName);
 
-        String varName = decapitalize(bean.getType().getSimpleName());
-        varName = classBuilder.getVariableManager().createId(varName);
-        JVar var = body.decl(type, decapitalize(varName), JExpr._new(type));
-        body._return(var);
+        JInvocation invocation = JExpr.invoke(methodName).arg(caller.getXSR()).arg(caller.getReadContextVar());
+        return invocation;
+    }
 
-        handleProperties(classBuilder, bean, var);
+    private MarshallerBuilder add(MarshallerBuilder builder, Bean bean) {
+        // read properties
+        handleProperties(builder, bean, builder.getReadObject());
 
         // This element may be replaced with another type using the xsi:type override
         // Add xsi type support for an other Bean that can be assigned to this property according to Java type assignment rules
         for (Bean xsiTypeBean : model.getBeans()) {
             Class xsiTypeClass = xsiTypeBean.getType();
             if (bean.getType().isAssignableFrom(xsiTypeClass) && bean.getType() != xsiTypeClass && !Modifier.isAbstract(xsiTypeClass.getModifiers())) {
-                JBlock block = new JBlock();
-                classBuilder.setXsiTypeBlock(xsiTypeBean.getSchemaTypeName(), null, block);
+                JBlock block = builder.expectXsiType(xsiTypeBean.getSchemaTypeName());
 
-                ElementParserBuilderImpl elementBuilder = (ElementParserBuilderImpl) beanParsers.get(xsiTypeBean);
+                MarshallerBuilder elementBuilder = builders.get(xsiTypeBean);
                 if (elementBuilder == null) {
                     throw new BuildException("Unknown bean " + bean);
                 }
 
                 // invoke the reader method
-                JMethod readMethod = elementBuilder.getMethod();
-                JExpression method = JExpr.invoke(readMethod).arg(getXSR(classBuilder)).arg(getContextVar(classBuilder));
+                JInvocation method = invokeParser(builder, elementBuilder);
                 block._return(method);
             }
         }
 
-        return classBuilder;
+        return builder;
     }
 
     private void addEnum(Bean bean) {
+        JDefinedClass jaxbClass;
+        try {
+            jaxbClass = codeModel._class("generated.sxc." + bean.getType().getName() + "JaxB");
+        } catch (JClassAlreadyExistsException e) {
+            throw new BuildException(e);
+        }
+
         JClass type = toJClass(bean.getType());
-        JMethod method = rootReader.getReaderClass().method(JMod.PRIVATE, type, "parse" + bean.getType().getSimpleName());
+        JMethod method = jaxbClass.method(JMod.PUBLIC | JMod.STATIC, type, "parse");
         JVar value = method.param(String.class, "value");
 
         JIfElseBlock enumCond = new JIfElseBlock();
@@ -241,10 +181,10 @@ public class ReaderIntrospector {
         enumCond._else()._throw(JExpr._new(toJClass(IllegalArgumentException.class))
                 .arg(JExpr.lit("No enum const " + type + ".").plus(value)));
 
-        enumParsers.put(bean.getType(), method.name());
+        enumParsers.put(bean.getType(), jaxbClass);
     }
 
-    private void handleProperties(ElementParserBuilder classBuilder, Bean bean, JVar beanVar) {
+    private void handleProperties(MarshallerBuilder builder, Bean bean, JVar beanVar) {
         for (Property property : bean.getProperties()) {
             // DS: the JaxB spec does not define the mapping for char or char[]
             // the RI reads the string as an int and then converts it to a char so 42 becomes '*'
@@ -260,25 +200,23 @@ public class ReaderIntrospector {
             switch (property.getXmlStyle()) {
                 case ATTRIBUTE: {
                     // create attribute block
-                    JBlock block = new JBlock();
-                    classBuilder.setAttributeBlock(property.getXmlName(), null, block);
+                    JBlock block = builder.expectAttribute(property.getXmlName());
 
                     // create collection var if necessary
-                    JVar collectionVar = handleCollection(classBuilder, property, beanVar);
+                    JVar collectionVar = handleCollection(builder, property, beanVar);
 
                     // read and set
-                    JExpression toSet = handleAttribute(classBuilder, block, property);
-                    doSet(block, property, beanVar, toSet, collectionVar);
+                    JExpression toSet = handleAttribute(builder, block, property);
+                    doSet(builder, block, property, beanVar, toSet, collectionVar);
                 }
                 break;
 
                 case ELEMENT:
                 case ELEMENT_REF: {
-                    ElementParserBuilder elementBuilder = classBuilder;
+                    MarshallerBuilder elementBuilder = builder;
                     JVar parentVar = beanVar;
                     if (property.getXmlName() != null) {
-                        elementBuilder = classBuilder.expectElement(property.getXmlName(), property.getName());
-                        parentVar = elementBuilder.passParentVariable(beanVar);
+                        elementBuilder = builder.expectWrapperElement(property.getXmlName(), beanVar, property.getName());
                     }
                     
                     // create collection var if necessary
@@ -286,12 +224,11 @@ public class ReaderIntrospector {
 
                     for (ElementMapping mapping : property.getElementMappings()) {
                         // create element block
-                        JBlock block = new JBlock();
-                        elementBuilder.setElementBlock(mapping.getXmlName(), null, block);
+                        JBlock block = elementBuilder.expectElement(mapping.getXmlName());
 
                         // read and set
-                        JExpression toSet = handleElement(classBuilder, block, property, mapping.isNillable(), mapping.getComponentType());
-                        doSet(block, property, parentVar, toSet, collectionVar);
+                        JExpression toSet = handleElement(builder, block, property, mapping.isNillable(), mapping.getComponentType());
+                        doSet(builder, block, property, parentVar, toSet, collectionVar);
                     }
 
                 }
@@ -299,14 +236,14 @@ public class ReaderIntrospector {
 
                 case VALUE: {
                     // value is read in class block
-                    JBlock block = classBuilder.getBody().getBlock();
+                    JBlock block = builder.expectValue();
 
                     // create collection var if necessary
-                    JVar collectionVar = handleCollection(classBuilder, property, beanVar);
+                    JVar collectionVar = handleCollection(builder, property, beanVar);
 
                     // read and set
-                    JExpression toSet = handleElement(classBuilder, block, property, false, null);
-                    doSet(block, property, beanVar, toSet, collectionVar);
+                    JExpression toSet = handleElement(builder, block, property, false, null);
+                    doSet(builder, block, property, beanVar, toSet, collectionVar);
                 }
                 break;
             }
@@ -314,11 +251,11 @@ public class ReaderIntrospector {
 
         // handle properties of the base class
         if (bean.getBaseClass() != null) {
-            handleProperties(classBuilder, bean.getBaseClass(), beanVar);
+            handleProperties(builder, bean.getBaseClass(), beanVar);
         }
     }
 
-    private JExpression handleAttribute(ElementParserBuilder classBuilder, JBlock block, Property property) {
+    private JExpression handleAttribute(MarshallerBuilder builder, JBlock block, Property property) {
         // Collections are not supported yet
         if (property.isCollection()) {
             logger.info("Reader: attribute lists are not supported yet!");
@@ -330,19 +267,19 @@ public class ReaderIntrospector {
 
         JExpression toSet;
         if (property.getAdapterType() != null) {
-            JVar adapterVar = getAdapter(property.getAdapterType());
+            JVar adapterVar = builder.getAdapter(property.getAdapterType());
             toSet = adapterVar.invoke("unmarshal").arg(valueVar);
         } else {
             String propertyName = property.getName();
             if (property.isCollection()) propertyName += "Item";
-            propertyName = classBuilder.getVariableManager().createId(propertyName);
+            propertyName = builder.getReadVariableManager().createId(propertyName);
 
             Class clazz = toClass(property.getType());
             if (isBuiltinType(clazz)) {
-                toSet = block.decl(toJClass(clazz), propertyName, coerce(valueVar, clazz));
+                toSet = block.decl(toJClass(clazz), propertyName, coerce(builder, valueVar, clazz));
             } else if (clazz.equals(QName.class)) {
-                JVar var = as(valueVar, block, String.class, propertyName);
-                toSet = getXSR(classBuilder).invoke("getAsQName").arg(var);
+                JVar var = as(builder, valueVar, block, String.class, propertyName);
+                toSet = builder.getXSR().invoke("getAsQName").arg(var);
             } else if (clazz.equals(byte[].class)) {
                 toSet = toJClass(Base64.class).staticInvoke("decode").arg(valueVar);
             } else {
@@ -353,7 +290,7 @@ public class ReaderIntrospector {
         return toSet;
     }
 
-    private JExpression handleElement(ElementParserBuilder classBuilder, JBlock block, Property property, boolean nillable, Type componentType) {
+    private JExpression handleElement(MarshallerBuilder builder, JBlock block, Property property, boolean nillable, Type componentType) {
 
         Class targetType = toClass(property.getType());
         if (property.isCollection()) {
@@ -362,53 +299,53 @@ public class ReaderIntrospector {
 
         String propertyName = property.getName();
         if (property.isCollection()) propertyName += "Item";
-        propertyName = classBuilder.getVariableManager().createId(propertyName);
+        propertyName = builder.getReadVariableManager().createId(propertyName);
 
         JExpression toSet;
         if (property.getAdapterType() != null) {
-            JVar adapterVar = getAdapter(property.getAdapterType());
+            JVar adapterVar = builder.getAdapter(property.getAdapterType());
 
             JVar valueVar = block.decl(toJClass(targetType), propertyName);
             JTryBlock tryBlock = block._try();
-            tryBlock.body().assign(valueVar, adapterVar.invoke("unmarshal").arg(getXSR(classBuilder).invoke("getElementText")));
+            tryBlock.body().assign(valueVar, adapterVar.invoke("unmarshal").arg(builder.getXSR().invoke("getElementText")));
             JCatchBlock catchBlock = tryBlock._catch(toJClass(Exception.class));
             catchBlock.body()._throw(JExpr._new(toJClass(XMLStreamException.class)).arg(catchBlock.param("e")));
 
             toSet = valueVar;
         } else if (targetType.equals(Byte.class) || targetType.equals(byte.class)) {
             // todo why the special read method for byte?
-            toSet = JExpr.cast(toJType(byte.class), getXSR(classBuilder).invoke("getElementAsInt"));
+            toSet = JExpr.cast(toJType(byte.class), builder.getXSR().invoke("getElementAsInt"));
         } else if (isBuiltinType(targetType)) {
-            toSet = as(classBuilder, block, targetType, propertyName, nillable);
+            toSet = as(builder, block, targetType, propertyName, nillable);
         } else if (targetType.equals(byte[].class)) {
-            toSet = toJClass(BinaryUtils.class).staticInvoke("decodeAsBytes").arg(getXSR(classBuilder));
+            toSet = toJClass(BinaryUtils.class).staticInvoke("decodeAsBytes").arg(builder.getXSR());
         } else if (targetType.equals(QName.class)) {
-            toSet = getXSR(classBuilder).invoke("getElementAsQName");
+            toSet = builder.getXSR().invoke("getElementAsQName");
         } else if (targetType.equals(DataHandler.class) || targetType.equals(Image.class)) {
             // attac
             toSet = JExpr._null();
         } else {
             // Complex type which will already have an element builder defined
             Bean targetBean = model.getBean(toClass(componentType));
-            ElementParserBuilderImpl elementBuilder = (ElementParserBuilderImpl) beanParsers.get(targetBean);
+            MarshallerBuilder elementBuilder = builders.get(targetBean);
             if (elementBuilder == null) {
-                throw new BuildException("Unknown bean " + targetBean);
+                throw new BuildException("Unknown bean " + toClass(componentType));
             }
 
             // invoke the reader method
-            JMethod readMethod = elementBuilder.getMethod();
-            toSet = JExpr.invoke(readMethod).arg(getXSR(classBuilder)).arg(getContextVar(classBuilder));
+            JInvocation invocation = invokeParser(builder, elementBuilder);
+            toSet = invocation;
         }
 
         // JaxB refs need to be wrapped with a JAXBElement
         if (Property.XmlStyle.ELEMENT_REF.equals(property.getXmlStyle())) {
-            toSet = newJaxBElement(classBuilder, targetType, toSet);
+            toSet = newJaxBElement(builder, targetType, toSet);
         }
 
         return toSet;
     }
 
-    private JVar handleCollection(ElementParserBuilder classBuilder, Property property, JVar beanVar) {
+    private JVar handleCollection(MarshallerBuilder builder, Property property, JVar beanVar) {
         if (!property.isCollection()) {
             return null;
         }
@@ -439,8 +376,8 @@ public class ReaderIntrospector {
             collectionType = getGenericType(property.getType());
         }
 
-        String collectionVarName = classBuilder.getVariableManager().createId(property.getName());
-        JVar collectionVar = classBuilder.getBody().decl(collectionType, collectionVarName, JExpr._null());
+        String collectionVarName = builder.getReadVariableManager().createId(property.getName());
+        JVar collectionVar = builder.getReadMethod().body().decl(collectionType, collectionVarName, JExpr._null());
 
         // inside of the tail block of the expect element method (at the bottom)...
         //
@@ -459,12 +396,12 @@ public class ReaderIntrospector {
         if (property.getField() != null) {
             Field field = property.getField();
 
-            JBlock assignCollectionBlock = classBuilder.getTailBlock()._if(collectionVar.ne(JExpr._null()))._then();
+            JBlock assignCollectionBlock = builder.getReadTailBlock()._if(collectionVar.ne(JExpr._null()))._then();
 
             if (!isPrivate(field)) {
                 assignCollectionBlock.assign(beanVar.ref(field.getName()), collectionAssignment);
             } else {
-                JFieldVar fieldAccessorField = getPrivateFieldAccessor(field);
+                JFieldVar fieldAccessorField = builder.getPrivateFieldAccessor(field);
                 assignCollectionBlock.add(fieldAccessorField.invoke("setObject").arg(beanVar).arg(collectionAssignment));
             }
         } else {
@@ -473,33 +410,33 @@ public class ReaderIntrospector {
             if (setter != null) {
                 // if there is no setter method, the collection is not assigned into the class
                 // this assumes that the getter returned the a collection instance and held on to a reference
-                JBlock assignCollectionBlock = classBuilder.getTailBlock()._if(collectionVar.ne(JExpr._null()))._then();
+                JBlock assignCollectionBlock = builder.getReadTailBlock()._if(collectionVar.ne(JExpr._null()))._then();
                 assignCollectionBlock.add(beanVar.invoke(setter.getName()).arg(collectionAssignment));
             }
         }
         return collectionVar;
     }
 
-    private void doSet(JBlock block, Property property, JVar beanVar, JExpression toSet, JVar collectionVar) {
+    private void doSet(MarshallerBuilder builder, JBlock block, Property property, JVar beanVar, JExpression toSet, JVar collectionVar) {
         if (toSet == null) {
             return;
         }
 
         if (!property.isCollection()) {
-            setSingleValue(block, property, beanVar, toSet);
+            setSingleValue(builder, block, property, beanVar, toSet);
         } else {
-            addCollectionItem(block, property, beanVar, toSet, collectionVar);
+            addCollectionItem(builder, block, property, beanVar, toSet, collectionVar);
         }
     }
 
-    private void setSingleValue(JBlock block, Property property, JVar bean, JExpression value) {
+    private void setSingleValue(MarshallerBuilder builder, JBlock block, Property property, JVar bean, JExpression value) {
         if (property.getField() != null) {
             Field field = property.getField();
 
             if (!isPrivate(field)) {
                 block.assign(bean.ref(field.getName()), value);
             } else {
-                JFieldVar fieldAccessorField = getPrivateFieldAccessor(field);
+                JFieldVar fieldAccessorField = builder.getPrivateFieldAccessor(field);
 
                 String methodName;
                 if (Boolean.TYPE.equals(field.getType())) {
@@ -531,7 +468,7 @@ public class ReaderIntrospector {
         }
     }
 
-    private void addCollectionItem(JBlock block, Property property, JVar beanVar, JExpression toSet, JVar collectionVar) {
+    private void addCollectionItem(MarshallerBuilder builder, JBlock block, Property property, JVar beanVar, JExpression toSet, JVar collectionVar) {
         // if (collection == null) {
         JBlock createCollectionBlock = block._if(collectionVar.eq(JExpr._null()))._then();
 
@@ -544,7 +481,7 @@ public class ReaderIntrospector {
                 if (!isPrivate(field)) {
                     createCollectionBlock.assign(collectionVar, beanVar.ref(field.getName()));
                 } else {
-                    JFieldVar fieldAccessorField = getPrivateFieldAccessor(field);
+                    JFieldVar fieldAccessorField = builder.getPrivateFieldAccessor(field);
                     createCollectionBlock.assign(collectionVar, fieldAccessorField.invoke("getObject").arg(beanVar));
                 }
             } else if (property.getGetter() != null) {
@@ -579,17 +516,6 @@ public class ReaderIntrospector {
         block.add(collectionVar.invoke("add").arg(toSet));
     }
 
-    private JVar getAdapter(Class adapterType) {
-        JVar var = adapters.get(adapterType);
-        if (var == null) {
-            String fieldName = rootReader.getFieldManager().createId(decapitalize(adapterType.getSimpleName()) + "Adapter");
-            JClass jClass = toJClass(adapterType);
-            var = rootReader.getReaderClass().field(JMod.PRIVATE | JMod.STATIC | JMod.FINAL, jClass, fieldName, JExpr._new(jClass));
-            adapters.put(adapterType, var);
-        }
-        return var;
-    }
-
     private JType getCollectionClass(Type collectionType, Type itemType) {
         Class collectionClass = toClass(collectionType);
         if (!collectionClass.isInterface()) {
@@ -612,28 +538,10 @@ public class ReaderIntrospector {
         return null;
     }
 
-    private JFieldVar getPrivateFieldAccessor(Field field) {
-        String fieldId = field.getDeclaringClass().getName() + "." + field.getName();
-        JFieldVar fieldAccessorField = privateFieldAccessors.get(fieldId);
-        if (fieldAccessorField == null) {
-            JDefinedClass readerCls = rootReader.getReaderClass();
-
-            JClass fieldAccessorType = toJClass(FieldAccessor.class).narrow(toJClass(field.getDeclaringClass()), getGenericType(field.getGenericType()));
-            JInvocation newFieldAccessor = JExpr._new(fieldAccessorType)
-                    .arg(builder.getCodeModel().ref(field.getDeclaringClass()).staticRef("class"))
-                    .arg(JExpr.lit(field.getName()));
-
-            String fieldName = rootReader.getFieldManager().createId(decapitalize(field.getDeclaringClass().getSimpleName()) + capitalize(field.getName()));
-            fieldAccessorField = readerCls.field(JMod.PRIVATE | JMod.STATIC | JMod.FINAL, fieldAccessorType, fieldName, newFieldAccessor);
-            privateFieldAccessors.put(fieldId, fieldAccessorField);
-        }
-        return fieldAccessorField;
-    }
-
-    private JInvocation newJaxBElement(ElementParserBuilder classBuilder, Class type, JExpression expression) {
+    private JInvocation newJaxBElement(MarshallerBuilder builder, Class type, JExpression expression) {
         JType jaxbElementType = toJClass(JAXBElement.class).narrow(type);
         JInvocation newJaxBElement = JExpr._new(jaxbElementType)
-                .arg(getXSR(classBuilder).invoke("getName"))
+                .arg(builder.getXSR().invoke("getName"))
                 .arg(JExpr.dotclass(toJClass(type)))
                 .arg(expression);
         return newJaxBElement;
@@ -667,6 +575,13 @@ public class ReaderIntrospector {
             raw = raw.narrow(types);
 
             return raw;
+        } else if (type instanceof WildcardType) {
+            WildcardType wildcardType = (WildcardType) type;
+            Type[] upperBounds = wildcardType.getUpperBounds();
+            if (upperBounds.length > 0) {
+                return getGenericType(upperBounds[0]);
+            }
+            return toJClass(Object.class);
         }
         throw new IllegalStateException();
     }
@@ -692,13 +607,13 @@ public class ReaderIntrospector {
         return type;
     }
 
-    private JVar as(JExpression attributeVar, JBlock block, Class<?> cls, String name) {
-        return block.decl(toJType(cls), name, coerce(attributeVar, cls));
+    private JVar as(MarshallerBuilder builder, JExpression attributeVar, JBlock block, Class<?> cls, String name) {
+        return block.decl(toJType(cls), name, coerce(builder, attributeVar, cls));
     }
 
-    private JVar as(ElementParserBuilder classBuilder, JBlock block, Class<?> cls, String name, boolean nillable) {
-        JVar xsrVar = getXSR(classBuilder);
-        JExpression value = coerce(xsrVar.invoke("getElementAsString"), cls);
+    private JVar as(MarshallerBuilder builder, JBlock block, Class<?> cls, String name, boolean nillable) {
+        JVar xsrVar = builder.getXSR();
+        JExpression value = coerce(builder, xsrVar.invoke("getElementAsString"), cls);
 
         JVar var;
         if (!cls.isPrimitive() && nillable) {
@@ -736,7 +651,7 @@ public class ReaderIntrospector {
                 type.isEnum();
     }
 
-    private JExpression coerce(JExpression stringValue, Class<?> destType) {
+    private JExpression coerce(MarshallerBuilder builder, JExpression stringValue, Class<?> destType) {
         if (destType.isPrimitive()) {
             if (destType.equals(boolean.class)) {
                 return JExpr.lit("1").invoke("equals").arg(stringValue).cor(JExpr.lit("true").invoke("equals").arg(stringValue));
@@ -771,29 +686,21 @@ public class ReaderIntrospector {
             } else if (destType.equals(Double.class)) {
                 return toJClass(Double.class).staticInvoke("valueOf").arg(stringValue);
             } else if (destType.equals(XMLGregorianCalendar.class)) {
-                return dtf.invoke("newXMLGregorianCalendar").arg(stringValue);
+                return builder.getDatatypeFactory().invoke("newXMLGregorianCalendar").arg(stringValue);
             } else if (destType.equals(Duration.class)) {
-                return dtf.invoke("newDuration").arg(stringValue);
+                return builder.getDatatypeFactory().invoke("newDuration").arg(stringValue);
             } else if (destType.equals(BigDecimal.class)) {
                 return JExpr._new(toJClass(BigDecimal.class)).arg(stringValue);
             } else if (destType.equals(BigInteger.class)) {
                 return JExpr._new(toJClass(BigInteger.class)).arg(stringValue);
             } else if (destType.isEnum()) {
-                String methodName = enumParsers.get(destType);
-                if (methodName == null) {
+                JClass parserClass = enumParsers.get(destType);
+                if (parserClass == null) {
                     throw new BuildException("Unknown enum type " + destType);
                 }
-                return JExpr.invoke(methodName).arg(stringValue);
+                return parserClass.staticInvoke("parse").arg(stringValue);
             }
         }
         throw new UnsupportedOperationException("Invalid type " + destType);
-    }
-
-    private JVar getXSR(ParserBuilder builder) {
-        return builder.getXSR();
-    }
-
-    private JVar getContextVar(ParserBuilder builder) {
-        return ((AbstractParserBuilder) builder).getContextVar();
     }
 }

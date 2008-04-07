@@ -1,11 +1,22 @@
 package com.envoisolutions.sxc.jaxb.node;
 
 import java.io.ByteArrayOutputStream;
+import java.io.StringReader;
+import java.util.Iterator;
 
 import javax.xml.bind.JAXBElement;
 import javax.xml.bind.Marshaller;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPath;
+import javax.xml.xpath.XPathFactory;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.XMLConstants;
+import javax.xml.namespace.NamespaceContext;
 
 import org.w3c.dom.Document;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 
 import com.envoisolutions.node.NamedNode;
 import com.envoisolutions.node.Node;
@@ -103,9 +114,10 @@ public class NodeTest extends XoTestCase {
         addNamespace("n", "http://envoisolutions.com/node");
         addNamespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
         assertValid("/n:Node", d);
-        assertValid("/n:Node[@xsi:type='ns1:NamedNode']", d);
+        // NOTE: xsi:type contains a hardcoded namespace prefix wich will break if prefix selection algorithm is changed
+        assertValid("/n:Node[@xsi:type='NamedNode']", d);
         assertValid("/n:Node/n:node/n:node/n:node/n:node/n:node/n:node/n:node", d);
-        assertValid("/n:Node/n:node[@xsi:type='ns1:NamedNode']", d);
-        assertValid("/n:Node/n:node[@xsi:type='ns1:NamedNode']/n:name[text()='child']", d);
+        assertValid("/n:Node/n:node[@xsi:type='NamedNode']", d);
+        assertValid("/n:Node/n:node[@xsi:type='NamedNode']/n:name[text()='child']", d);
     }
 }
