@@ -208,8 +208,14 @@ public class RiModelBuilder {
             RuntimeReferencePropertyInfo referenceProperty = (RuntimeReferencePropertyInfo) runtimePropertyInfo;
             property.setXmlStyle(Property.XmlStyle.ELEMENT_REF);
             for (RuntimeElement re : referenceProperty.getElements()) {
-                RuntimeElementInfo runtimeElement = (RuntimeElementInfo) re;
-                ElementMapping elementMapping = createXmlMapping(property, runtimeElement);
+                ElementMapping elementMapping;
+                if (re instanceof RuntimeElementInfo) {
+                    RuntimeElementInfo runtimeElement = (RuntimeElementInfo) re;
+                    elementMapping = createXmlMapping(property, runtimeElement);
+                } else {
+                    RuntimeClassInfo runtimeClassInfo = (RuntimeClassInfo) re;
+                    elementMapping = createXmlMapping(property, runtimeClassInfo);
+                }
                 property.getElementMappings().add(elementMapping);
             }
             property.setNillable(referenceProperty.isCollectionNillable());
@@ -236,6 +242,14 @@ public class RiModelBuilder {
         ElementMapping mapping = new ElementMapping(property, runtimeElement.getElementName());
 
         mapping.setComponentType(runtimeElement.getContentType().getType());
+
+        return mapping;
+    }
+
+    private ElementMapping createXmlMapping(Property property, RuntimeClassInfo runtimeClassInfo) {
+        ElementMapping mapping = new ElementMapping(property, runtimeClassInfo.getElementName());
+
+        mapping.setComponentType(runtimeClassInfo.getClazz());
 
         return mapping;
     }

@@ -11,11 +11,12 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.Set;
 import java.util.logging.Logger;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.UnmarshalException;
@@ -24,27 +25,20 @@ import javax.xml.datatype.XMLGregorianCalendar;
 import javax.xml.namespace.QName;
 
 import com.envoisolutions.sxc.builder.BuildException;
-import com.envoisolutions.sxc.builder.Builder;
-import com.envoisolutions.sxc.builder.ElementWriterBuilder;
-import com.envoisolutions.sxc.builder.WriterBuilder;
-import com.envoisolutions.sxc.builder.impl.AbstractWriterBuilder;
-import com.envoisolutions.sxc.builder.impl.ElementWriterBuilderImpl;
 import com.envoisolutions.sxc.builder.impl.JBlankLine;
 import com.envoisolutions.sxc.builder.impl.JIfElseBlock;
 import com.envoisolutions.sxc.builder.impl.JLineComment;
-import static com.envoisolutions.sxc.jaxb.JavaUtils.toClass;
-import static com.envoisolutions.sxc.jaxb.JavaUtils.toPrimitiveWrapper;
-import static com.envoisolutions.sxc.jaxb.JavaUtils.capitalize;
-import static com.envoisolutions.sxc.jaxb.JavaUtils.isPrivate;
+import com.envoisolutions.sxc.builder.impl.JStaticImports;
+import static com.envoisolutions.sxc.jaxb.JavaUtils.*;
 import com.envoisolutions.sxc.jaxb.model.Bean;
+import com.envoisolutions.sxc.jaxb.model.ElementMapping;
 import com.envoisolutions.sxc.jaxb.model.Model;
 import com.envoisolutions.sxc.jaxb.model.Property;
-import com.envoisolutions.sxc.jaxb.model.ElementMapping;
 import com.envoisolutions.sxc.util.Base64;
-import com.envoisolutions.sxc.util.FieldAccessor;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCatchBlock;
 import com.sun.codemodel.JClass;
+import com.sun.codemodel.JClassAlreadyExistsException;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JConditional;
 import com.sun.codemodel.JDefinedClass;
@@ -61,27 +55,15 @@ import com.sun.codemodel.JVar;
 
 public class WriterIntrospector {
 	private static final Logger logger = Logger.getLogger(WriterIntrospector.class.getName());
-	
-	private final ElementWriterBuilder rootWriter;
-    private final Builder builder;
+
     private final Model model;
     private final JCodeModel codeModel;
-    private final Map<Bean, ElementWriterBuilder> beanWriters = new LinkedHashMap<Bean, ElementWriterBuilder>();
-    private final Map<Class, String> enumWriters = new LinkedHashMap<Class, String>();
+    private final Map<Bean, MarshallerBuilder> builders = new LinkedHashMap<Bean, MarshallerBuilder>();
+    private final Map<Class, JClass> enumWriters = new LinkedHashMap<Class, JClass>();
 
-    private final Map<Class, JVar> adapters = new HashMap<Class, JVar>();
-    private final Map<String, JFieldVar> privateFieldAccessors = new TreeMap<String, JFieldVar>();
-
-    public WriterIntrospector(Builder builder, Model model) throws JAXBException {
-        this.builder = builder;
+    public WriterIntrospector(BuilderContext context, Model model) throws JAXBException {
         this.model = model;
-        rootWriter = builder.getWriterBuilder();
-        rootWriter.declareException(JAXBException.class);
-        this.codeModel = rootWriter.getCodeModel();
-
-        // reserve variables
-        rootWriter.getVariableManager().addId("item");
-        rootWriter.getVariableManager().addId("marshaller");
+        this.codeModel = context.getCodeModel();
 
         List<Bean> mybeans = new ArrayList<Bean>(model.getBeans());
         // TODO sort classes by hierarchy
@@ -92,8 +74,33 @@ public class WriterIntrospector {
             if (Modifier.isAbstract(bean.getType().getModifiers())) continue;
             if (bean.getType().isEnum()) continue;
 
-            ElementWriterBuilder classBuilder = rootWriter.newCondition(rootWriter.getObject()._instanceof(toJType(bean.getType())), toJType(bean.getType()));
-            beanWriters.put(bean, classBuilder);
+            MarshallerBuilder builder = context.getMarshallerBuilder(bean.getType(), bean.getRootElementName(), bean.getSchemaTypeName());
+
+            LinkedHashSet<Property> allProperties = new LinkedHashSet<Property>();
+            for (Bean b = bean; b != null; b = b.getBaseClass()) {
+                allProperties.addAll(b.getProperties());
+            }
+
+            // set the default namespace to the most popular namespace used in properties
+            String mostPopularNS = getMostPopularNS(allProperties);
+            if (mostPopularNS != null) builder.setWriterDefaultNS(mostPopularNS);
+
+            // declare all private field accessors (so they are grouped)
+            for (Property property : allProperties) {
+                Field field = property.getField();
+                if (field != null && isPrivate(field)) {
+                    builder.getPrivateFieldAccessor(field);
+                }
+            }
+
+            // declare all adapter classes
+            for (Property property : allProperties) {
+                if (property.getAdapterType() != null) {
+                    builder.getAdapter(property.getAdapterType());
+                }
+            }
+
+            builders.put(bean, builder);
         }
 
         // declare all parse enum methods (after read methods so they are grouped together)
@@ -103,44 +110,27 @@ public class WriterIntrospector {
             }
         }
         
-        // declare all adapters(so they are grouped)
-        for (Bean bean : model.getBeans()) {
-            for (Property property : bean.getProperties()) {
-                if (property.getAdapterType() != null) {
-                    getAdapter(property.getAdapterType());
-                }
-            }
-        }
-
-        // declare all private field accessors (so they are grouped)
-        for (Bean bean : model.getBeans()) {
-            for (Property property : bean.getProperties()) {
-                Field field = property.getField();
-                if (field != null && isPrivate(field)) {
-                    getPrivateFieldAccessor(field);
-                }
-            }
-        }
-
         // build the writer methods
         for (Bean bean : model.getBeans()) {
             if (!bean.getType().isEnum()) {
-                ElementWriterBuilder classBuilder = beanWriters.get(bean);
-                if (classBuilder != null) {
-                    writeProperties(classBuilder, bean);
+                MarshallerBuilder builder = builders.get(bean);
+                if (builder != null) {
+                    writeProperties(builder, bean);
                 }
-            } else {
-                JExpression inst = rootWriter.getObject()._instanceof(toJType(bean.getType()));
-                JBlock block = ((ElementWriterBuilderImpl)rootWriter).newBlock(inst);
-
-                writeSimpleTypeElement(rootWriter, null, JExpr.cast(toJClass(bean.getType()), rootWriter.getObject()), bean.getType(), block);
             }
         }
     }
 
     private void addEnum(Bean bean) {
+        JDefinedClass jaxbClass;
+        try {
+            jaxbClass = codeModel._class("generated.sxc." + bean.getType().getName() + "JaxBW");
+        } catch (JClassAlreadyExistsException e) {
+            throw new BuildException(e);
+        }
+
         JClass type = toJClass(bean.getType());
-        JMethod method = rootWriter.getWriterClass().method(JMod.PRIVATE, String.class, "toString");
+        JMethod method = jaxbClass.method(JMod.PUBLIC | JMod.STATIC, String.class, "toString");
         JVar value = method.param(type, decapitalize(bean.getType().getSimpleName()));
 
         JIfElseBlock enumSwitch = new JIfElseBlock();
@@ -170,30 +160,31 @@ public class WriterIntrospector {
         // enumSwitch._default().body()._throw(JExpr._new(toJClass(IllegalArgumentException.class))
         //         .arg(JExpr.lit("No value mapped to ").plus(value).plus(JExpr.lit(" for enum " + bean.getType().getName()))));
 
-        enumWriters.put(bean.getType(), method.name());
+        enumWriters.put(bean.getType(), jaxbClass);
     }
 
-    private void writeProperties(ElementWriterBuilder classBuilder, Bean bean) {
+    private void writeProperties(MarshallerBuilder builder, Bean bean) {
         for (Property property : bean.getProperties()) {
             if (property.getXmlStyle() == Property.XmlStyle.ATTRIBUTE) {
-                classBuilder.getCurrentBlock().add(new JBlankLine());
-                classBuilder.getCurrentBlock().add(new JLineComment(property.getXmlStyle() + ": " + property.getName()));
 
-                String propertyName = classBuilder.getVariableManager().createId(property.getName());
-                JVar propertyVar = classBuilder.getCurrentBlock().decl(
+                JBlock block = builder.getWriteMethod().body();
+                block.add(new JBlankLine());
+                block.add(new JLineComment(property.getXmlStyle() + ": " + property.getName()));
+
+                String propertyName = builder.getWriteVariableManager().createId(property.getName());
+                JVar propertyVar = block.decl(
                         toJType(toClass(property.getType())),
                         propertyName,
-                        getValue(classBuilder, property));
+                        getValue(builder, property));
 
                 if (!property.isCollection()) {
 
-                    JBlock block = classBuilder.getCurrentBlock();
                     if (!toClass(property.getType()).isPrimitive()) {
                         JConditional nilCond = block._if(propertyVar.ne(JExpr._null()));
                         block = nilCond._then();
                     }
 
-                    writeSimpleTypeAttribute(classBuilder, block, property.getXmlName(), toClass(property.getType()), propertyVar);
+                    writeSimpleTypeAttribute(builder, block, property.getXmlName(), toClass(property.getType()), propertyVar);
                 } else {
                     logger.info("(JAXB Writer) Attribute lists are not supported yet!");
                 }
@@ -203,23 +194,21 @@ public class WriterIntrospector {
         for (Property property : bean.getProperties()) {
             if (property.getXmlStyle() == Property.XmlStyle.ATTRIBUTE) continue;
 
-            classBuilder.getCurrentBlock().add(new JBlankLine());
-            classBuilder.getCurrentBlock().add(new JLineComment(property.getXmlStyle() + ": " + property.getName()));
+            builder.getWriteMethod().body().add(new JBlankLine());
+            builder.getWriteMethod().body().add(new JLineComment(property.getXmlStyle() + ": " + property.getName()));
 
-            String propertyName = classBuilder.getVariableManager().createId(property.getName());
-            JVar propertyVar = classBuilder.getCurrentBlock().decl(
+            String propertyName = builder.getWriteVariableManager().createId(property.getName());
+            JVar propertyVar = builder.getWriteMethod().body().decl(
                     getGenericType(property.getType()),
                     propertyName,
-                    getValue(classBuilder, property));
+                    getValue(builder, property));
 
             switch (property.getXmlStyle()) {
                 case ELEMENT:
-                    JBlock origBlock = classBuilder.getCurrentBlock();
-
                     // if the element is required, add a null check that writes xsi nil
                     Class type = toClass(property.getType());
                     JVar outerVar = propertyVar;
-                    JBlock outerBlock = origBlock;
+                    JBlock outerBlock = builder.getWriteMethod().body();
 
                     // determine types that may be substuited for this value
                     Map<Class, ElementMapping> expectedTypes = new TreeMap<Class, ElementMapping>(new ClassComparator());
@@ -238,7 +227,7 @@ public class WriterIntrospector {
                         // if collection is not null, process it; otherwise write xsi:nil
                         JConditional nullCond = outerBlock._if(outerVar.ne(JExpr._null()));
                         if (property.isNillable()) {
-                            nullCond._else().add(classBuilder.getXSW().invoke("writeXsiNil"));
+                            nullCond._else().add(builder.getXSW().invoke("writeXsiNil"));
                         }
 
                         // write wraper element opening tag
@@ -248,10 +237,10 @@ public class WriterIntrospector {
                             if (property.isRequired() || property.isNillable()) {
                                 wrapperElementBlock = nullCond._then();
                             }
-                            wrapperElementBlock.add(getXSW(classBuilder).invoke("writeStartElement").arg(wrapperElement.getPrefix()).arg(wrapperElement.getLocalPart()).arg(wrapperElement.getNamespaceURI()));
-                            if (classBuilder.getName() == null || !classBuilder.getName().getNamespaceURI().equals(wrapperElement.getNamespaceURI())) {
-                                wrapperElementBlock.add(getXSW(classBuilder).invoke("writeAndDeclareIfUndeclared").arg(JExpr.lit("")).arg(wrapperElement.getNamespaceURI()));
-                            }
+                            wrapperElementBlock.add(builder.getXSW().invoke("writeStartElement")
+                                    .arg(builder.getWriterPrefix(wrapperElement.getNamespaceURI()))
+                                    .arg(wrapperElement.getLocalPart())
+                                    .arg(wrapperElement.getNamespaceURI()));
                         }
 
                         JType itemType;
@@ -263,7 +252,7 @@ public class WriterIntrospector {
 
                         String itemName;
                         if (expectedTypes.size() == 1) {
-                            itemName = classBuilder.getVariableManager().createId( property.getName() + "Item");
+                            itemName = builder.getWriteVariableManager().createId( property.getName() + "Item");
                         } else {
                             itemName = "item";
                         }
@@ -271,7 +260,7 @@ public class WriterIntrospector {
 
                         // write wraper element closing tag
                         if (wrapperElement != null) {
-                            wrapperElementBlock.add(getXSW(classBuilder).invoke("writeEndElement"));
+                            wrapperElementBlock.add(builder.getXSW().invoke("writeEndElement"));
                         }
 
                         outerBlock = each.body();
@@ -290,7 +279,7 @@ public class WriterIntrospector {
                         }
 
                         // write element
-                        writeElement(classBuilder, block, mapping, outerVar, toClass(property.getComponentType()), mapping.isNillable());
+                        writeElement(builder, block, mapping, outerVar, toClass(property.getComponentType()), mapping.isNillable());
 
                         // property is required and does not support nill, then an error is reported if the value was null
                         if (property.isRequired() && !mapping.isNillable() && nullCond != null) {
@@ -308,7 +297,7 @@ public class WriterIntrospector {
                         outerBlock.add(conditional);
 
                         ElementMapping nilMapping = null;
-                        String itemName = classBuilder.getVariableManager().createId( property.getName() + "Item");
+                        String itemName = builder.getWriteVariableManager().createId( property.getName() + "Item");
                         for (Map.Entry<Class, ElementMapping> entry : expectedTypes.entrySet()) {
                             Class itemType = entry.getKey();
                             ElementMapping mapping = entry.getValue();
@@ -327,7 +316,7 @@ public class WriterIntrospector {
 
                             // declare item variable
                             JVar itemVar = block.decl(toJClass(itemType), itemName, JExpr.cast(toJClass(itemType), outerVar));
-                            writeElement(classBuilder, block, mapping, itemVar, itemType, false);
+                            writeElement(builder, block, mapping, itemVar, itemType, false);
                         }
 
                         // if item was null, write xsi:nil or report an error
@@ -335,16 +324,16 @@ public class WriterIntrospector {
                         if (nilMapping != null) {
                             // write start element
                             QName name = nilMapping.getXmlName();
-                            nullBlock.add(getXSW(classBuilder).invoke("writeStartElement").arg(name.getPrefix()).arg(name.getLocalPart()).arg(name.getNamespaceURI()));
-                            if (classBuilder.getName() == null || !classBuilder.getName().getNamespaceURI().equals(name.getNamespaceURI())) {
-                                nullBlock.add(getXSW(classBuilder).invoke("writeAndDeclareIfUndeclared").arg(JExpr.lit("")).arg(name.getNamespaceURI()));
-                            }
+                            nullBlock.add(builder.getXSW().invoke("writeStartElement")
+                                    .arg(builder.getWriterPrefix(name.getNamespaceURI()))
+                                    .arg(name.getLocalPart())
+                                    .arg(name.getNamespaceURI()));
 
                             // write xsi:nil
-                            nullBlock.add(classBuilder.getXSW().invoke("writeXsiNil"));
+                            nullBlock.add(builder.getXSW().invoke("writeXsiNil"));
 
                             // close element
-                            nullBlock.add(getXSW(classBuilder).invoke("writeEndElement"));
+                            nullBlock.add(builder.getXSW().invoke("writeEndElement"));
                         } else {
                             JExpression message;
                             if (property.isCollection()) {
@@ -380,10 +369,10 @@ public class WriterIntrospector {
                     }
                     break;
                 case ELEMENT_REF:
-                    JBlock block = classBuilder.getCurrentBlock().block();
+                    JBlock block = builder.getWriteMethod().body();
 
                     JClass marshallerType = toJClass(MarshallerImpl.class);
-                    JVar marshaller = block.decl(marshallerType, "marshaller", JExpr.cast(marshallerType, getContextVar(classBuilder).invoke("get").arg(JExpr.lit(MarshallerImpl.MARSHALLER))));
+                    JVar marshaller = block.decl(marshallerType, "marshaller", JExpr.cast(marshallerType, builder.getWriteContextVar().invoke("get").arg(JExpr.lit(MarshallerImpl.MARSHALLER))));
 
                     JVar itemVar = propertyVar;
                     if (property.isCollection()) {
@@ -396,7 +385,7 @@ public class WriterIntrospector {
                             itemType = toJType(toClass(property.getComponentType()));
                         }
 
-                        String itemName = classBuilder.getVariableManager().createId( property.getName() + "Item");
+                        String itemName = builder.getWriteVariableManager().createId( property.getName() + "Item");
                         JForEach each = collectionNotNull.forEach(itemType, itemName, propertyVar);
 
                         JBlock newBody = each.body();
@@ -404,10 +393,10 @@ public class WriterIntrospector {
                         itemVar = each.var();
                     }
 
-                    block.add(marshaller.invoke("marshal").arg(itemVar).arg(classBuilder.getXSW()));
+                    block.add(marshaller.invoke("marshal").arg(itemVar).arg(builder.getXSW()));
                     break;
                 case VALUE:
-                    writeSimpleTypeElement(classBuilder, property.getAdapterType(), propertyVar, toClass(property.getType()), classBuilder.getCurrentBlock());
+                    writeSimpleTypeElement(builder, property.getAdapterType(), propertyVar, toClass(property.getType()), builder.getWriteMethod().body());
                     break;
                 default:
                     throw new BuildException("Unknown XmlMapping type " + property.getXmlStyle());
@@ -415,29 +404,29 @@ public class WriterIntrospector {
         }
         
         if (bean.getBaseClass() != null) {
-            writeProperties(classBuilder, bean.getBaseClass());
+            writeProperties(builder, bean.getBaseClass());
         }
     }
 
-    private void writeElement(ElementWriterBuilder classBuilder, JBlock block, ElementMapping mapping, JVar itemVar, Class type, boolean nillable) {
+    private void writeElement(MarshallerBuilder builder, JBlock block, ElementMapping mapping, JVar itemVar, Class type, boolean nillable) {
         // write start element
         QName name = mapping.getXmlName();
-        block.add(getXSW(classBuilder).invoke("writeStartElement").arg(name.getPrefix()).arg(name.getLocalPart()).arg(name.getNamespaceURI()));
-        if (classBuilder.getName() == null || !classBuilder.getName().getNamespaceURI().equals(name.getNamespaceURI())) {
-            block.add(getXSW(classBuilder).invoke("writeAndDeclareIfUndeclared").arg(JExpr.lit("")).arg(name.getNamespaceURI()));
-        }
+        block.add(builder.getXSW().invoke("writeStartElement")
+                .arg(builder.getWriterPrefix(name.getNamespaceURI()))
+                .arg(name.getLocalPart())
+                .arg(name.getNamespaceURI()));
 
         JBlock elementWriteBlock = block;
         if (nillable && !type.isPrimitive()) {
             JConditional nilCond = block._if(itemVar.ne(JExpr._null()));
             elementWriteBlock = nilCond._then();
-            nilCond._else().add(classBuilder.getXSW().invoke("writeXsiNil"));
+            nilCond._else().add(builder.getXSW().invoke("writeXsiNil"));
         }
 
         // write element
         Bean targetBean = model.getBean(type);
         if (targetBean == null || targetBean.getType().isEnum()) {
-            writeSimpleTypeElement(classBuilder,
+            writeSimpleTypeElement(builder,
                     mapping.getProperty().getAdapterType(),
                     itemVar,
                     type,
@@ -445,26 +434,26 @@ public class WriterIntrospector {
         } else {
             if (!mapping.getComponentType().equals(type)) {
                 QName typeName = targetBean.getSchemaTypeName();
-                elementWriteBlock.add(getXSW(classBuilder).invoke("writeXsiType").arg(typeName.getNamespaceURI()).arg(typeName.getLocalPart()));
+                elementWriteBlock.add(builder.getXSW().invoke("writeXsiType").arg(typeName.getNamespaceURI()).arg(typeName.getLocalPart()));
             }
 
-            writeClassWriter(classBuilder, targetBean, elementWriteBlock, itemVar);
+            writeClassWriter(builder, targetBean, elementWriteBlock, itemVar);
         }
 
         // close element
-        block.add(getXSW(classBuilder).invoke("writeEndElement"));
+        block.add(builder.getXSW().invoke("writeEndElement"));
     }
 
-    private JExpression getValue(ElementWriterBuilder classBuilder, Property property) {
+    private JExpression getValue(MarshallerBuilder builder, Property property) {
         final JExpression valueExp;
         Class propertyType = toClass(property.getType());
         if (property.getField() != null) {
             Field field = property.getField();
 
             if (!isPrivate(field)) {
-                valueExp = classBuilder.getObject().ref(field.getName());
+                valueExp = builder.getWriteObject().ref(field.getName());
             } else {
-                JFieldVar fieldAccessorField = getPrivateFieldAccessor(field);
+                JFieldVar fieldAccessorField = builder.getPrivateFieldAccessor(field);
 
                 String methodName;
                 if (Boolean.TYPE.equals(propertyType)) {
@@ -487,47 +476,31 @@ public class WriterIntrospector {
                     methodName = "getObject";
                 }
 
-                valueExp = fieldAccessorField.invoke(methodName).arg(classBuilder.getObject());
+                valueExp = fieldAccessorField.invoke(methodName).arg(builder.getWriteObject());
             }
         } else if (property.getGetter() != null) {
             Method getter = property.getGetter();
-            valueExp = classBuilder.getObject().invoke(getter.getName());
+            valueExp = builder.getWriteObject().invoke(getter.getName());
         } else {
             throw new BuildException("Property does not have a getter " + property.getBean().getClass().getName() + "." + property.getName());
         }
         return valueExp;
     }
 
-    private JFieldVar getPrivateFieldAccessor(Field field) {
-        String fieldId = field.getDeclaringClass().getName() + "." + field.getName();
-        JFieldVar fieldAccessorField = privateFieldAccessors.get(fieldId);
-        if (fieldAccessorField == null) {
-            JDefinedClass readerCls = rootWriter.getWriterClass();
-
-            JClass fieldAccessorType = toJClass(FieldAccessor.class).narrow(toJClass(field.getDeclaringClass()), getGenericType(field.getGenericType()));
-            JInvocation newFieldAccessor = JExpr._new(fieldAccessorType)
-                    .arg(builder.getCodeModel().ref(field.getDeclaringClass()).staticRef("class"))
-                    .arg(JExpr.lit(field.getName()));
-
-            String fieldName = rootWriter.getFieldManager().createId(decapitalize(field.getDeclaringClass().getSimpleName()) + capitalize(field.getName()));
-            fieldAccessorField = readerCls.field(JMod.PRIVATE | JMod.STATIC | JMod.FINAL, fieldAccessorType, fieldName, newFieldAccessor);
-            privateFieldAccessors.put(fieldId, fieldAccessorField);
-        }
-        return fieldAccessorField;
-    }
-
-    private void writeClassWriter(ElementWriterBuilder classBuilder, Bean bean, JBlock block, JExpression propertyVar) {
+    private void writeClassWriter(MarshallerBuilder builder, Bean bean, JBlock block, JExpression propertyVar) {
         // Complex type which will already have an element builder defined
-        WriterBuilder existingBuilder = beanWriters.get(bean);
+        MarshallerBuilder existingBuilder = builders.get(bean);
         if (existingBuilder == null) {
             throw new BuildException("Unknown bean " + bean);
         }
 
-        block.invoke(((AbstractWriterBuilder) existingBuilder).getMethod())
-                .arg(getXSW(classBuilder))
-                .arg(propertyVar)
-                .arg(getContextVar(classBuilder));
+        JStaticImports staticImports = JStaticImports.getStaticImports(builder.getMarshallerClass());
 
+        String methodName = "write" + bean.getType().getSimpleName();
+        staticImports.addStaticImport(existingBuilder.getMarshallerClass().fullName() + "." + methodName);
+
+        JInvocation invocation = JExpr.invoke(methodName).arg(builder.getXSW()).arg(propertyVar).arg(builder.getWriteContextVar());
+        block.add(invocation);
     }
 
     private List<Bean> getSubstitutionTypes(Class<?> c) {
@@ -542,65 +515,88 @@ public class WriterIntrospector {
         return beans;
     }
 
-    private void writeSimpleTypeElement(ElementWriterBuilder classBuilder,
+    private void writeSimpleTypeElement(MarshallerBuilder builder,
             Class adapterType,
             JExpression object,
             Class type,
             JBlock block) {
 
         if (adapterType != null) {
-            JVar adapterVar = getAdapter(adapterType);
+            JVar adapterVar = builder.getAdapter(adapterType);
             JVar valueVar = block.decl(toJClass(String.class), "marshalValue");
             JTryBlock tryBlock = block._try();
             tryBlock.body().assign(valueVar, adapterVar.invoke("marshal").arg(object));
             JCatchBlock catchBlock = tryBlock._catch(toJClass(Exception.class));
             catchBlock.body()._throw(JExpr._new(toJClass(UnmarshalException.class)).arg(catchBlock.param("e")));
 
-            block.add(classBuilder.getXSW().invoke("writeCharacters").arg(valueVar));
+            block.add(builder.getXSW().invoke("writeCharacters").arg(valueVar));
         } else if(isBuiltinType(type)) {
-            block.add(getXSW(classBuilder).invoke("writeCharacters").arg(toString(object, type)));
+            block.add(builder.getXSW().invoke("writeCharacters").arg(toString(object, type)));
         } else if (type.equals(byte[].class)) {
-            block.add(toJClass(BinaryUtils.class).staticInvoke("encodeBytes").arg(getXSW(classBuilder)).arg(object));
+            block.add(toJClass(BinaryUtils.class).staticInvoke("encodeBytes").arg(builder.getXSW()).arg(object));
         } else if (type.equals(QName.class)) {
-            block.add(getXSW(classBuilder).invoke("writeQName").arg(object));
+            block.add(builder.getXSW().invoke("writeQName").arg(object));
         } else {
         	logger.info("(JAXB Writer) Cannot map simple type yet: " + type);
         }
     }
 
-    private void writeSimpleTypeAttribute(WriterBuilder classBuilder, JBlock block, QName name, Class type, JExpression value) {
+    private void writeSimpleTypeAttribute(MarshallerBuilder builder, JBlock block, QName name, Class type, JExpression value) {
         if(isBuiltinType(type)) {
             value = toString(value, type);
         } else if (type.equals(byte[].class)) {
             value = toJClass(Base64.class).staticInvoke("encode").arg(value);
         } else if (type.equals(QName.class)) {
-            value = getXSW(classBuilder).invoke("getQNameAsString").arg(value);
+            value = builder.getXSW().invoke("getQNameAsString").arg(value);
         } else {
             logger.info("(JAXB Writer) Cannot map simple attribute type yet: " + type);
             return;
         }
 
-        String prefix = name.getPrefix();
-        // stax is not handling the "xml" namespace correctly
-        if ("http://www.w3.org/XML/1998/namespace".equals(name.getNamespaceURI())) {
-            prefix = "xml";
+        JExpression prefix;
+        if (name.getNamespaceURI().length() > 0) {
+            prefix = builder.getWriterPrefix(name.getNamespaceURI());
+        } else {
+            prefix = JExpr.lit("");
         }
-        block.add(getXSW(classBuilder).invoke("writeAttribute")
-                  .arg(JExpr.lit(prefix))
+        block.add(builder.getXSW().invoke("writeAttribute")
+                  .arg(prefix)
                   .arg(JExpr.lit(name.getNamespaceURI()))
                   .arg(JExpr.lit(name.getLocalPart()))
                   .arg(value));
     }
 
-    private JVar getAdapter(Class adapterType) {
-        JVar var = adapters.get(adapterType);
-        if (var == null) {
-            String fieldName = rootWriter.getFieldManager().createId(decapitalize(adapterType.getSimpleName()) + "Adapter");
-            JClass jClass = toJClass(adapterType);
-            var = rootWriter.getWriterClass().field(JMod.PRIVATE | JMod.STATIC | JMod.FINAL, jClass, fieldName, JExpr._new(jClass));
-            adapters.put(adapterType, var);
+    private String getMostPopularNS(Set<Property> properties) {
+        List<QName> names = new ArrayList<QName>();
+        for (Property property : properties) {
+            if (property.getXmlName() != null) {
+                names.add(property.getXmlName());
+            }
+            for (ElementMapping mapping : property.getElementMappings()) {
+                if (mapping.getXmlName() != null) {
+                    names.add(mapping.getXmlName());
+                }
+            }
         }
-        return var;
+
+        String  mostPopularNS = null;
+        int mostPopularCount = 0;
+
+        Map<String, Integer> nsCount = new TreeMap<String, Integer>();
+        for (QName name : names) {
+            String namespace = name.getNamespaceURI();
+            if (namespace.length() > 0) {
+                Integer count = nsCount.get(namespace);
+                count = count == null ? 0 : count + 1;
+                nsCount.put(namespace, count);
+                if (count > mostPopularCount) {
+                    mostPopularNS = namespace;
+                    mostPopularCount = count;
+                }
+            }
+        }
+
+        return mostPopularNS;
     }
 
     private JClass toJClass(Class clazz) {
@@ -635,9 +631,6 @@ public class WriterIntrospector {
         throw new IllegalStateException();
     }
 
-    public Builder getBuilder() {
-        return builder;
-    }
     private boolean isBuiltinType(Class type) {
         return type.equals(boolean.class) ||
                 type.equals(byte.class) ||
@@ -704,25 +697,16 @@ public class WriterIntrospector {
             } else if (type.equals(BigInteger.class)) {
                 return value.invoke("toString");
             } else if (type.isEnum()) {
-                String methodName = enumWriters.get(type);
-                if (methodName == null) {
+                JClass writerClass = enumWriters.get(type);
+                if (writerClass == null) {
                     throw new BuildException("Unknown enum type " + type);
                 }
-                return JExpr.invoke(methodName).arg(value);
+                return writerClass.staticInvoke("toString").arg(value);
             }
 
         }
         throw new UnsupportedOperationException("Invalid type " + type);
     }
-
-    private JVar getXSW(WriterBuilder builder) {
-        return builder.getXSW();
-    }
-
-    private JVar getContextVar(WriterBuilder builder) {
-        return ((AbstractWriterBuilder) builder).getContextVar();
-    }
-
 
     private static class BeanComparator implements Comparator<Bean> {
         public int compare(Bean left, Bean right) {

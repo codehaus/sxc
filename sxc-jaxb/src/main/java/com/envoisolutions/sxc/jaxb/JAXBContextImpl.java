@@ -23,10 +23,7 @@ import javax.xml.bind.SchemaOutputResolver;
 import javax.xml.bind.Unmarshaller;
 import javax.xml.namespace.QName;
 
-import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.builder.BuildException;
-import com.envoisolutions.sxc.builder.Builder;
-import com.envoisolutions.sxc.builder.impl.BuilderImpl;
 import com.envoisolutions.sxc.jaxb.model.Bean;
 import com.envoisolutions.sxc.jaxb.model.Model;
 import com.envoisolutions.sxc.jaxb.model.RiModelBuilder;
@@ -92,7 +89,7 @@ public class JAXBContextImpl extends JAXBContext {
     }
 
     private final Model model;
-    private final Context context;
+    private final ClassLoader generatedCL;
     private final Callable<JAXBContext> schemaGenerator;
 
     public JAXBContextImpl(Class[] classes, Map<String, Object> properties) throws JAXBException {
@@ -108,23 +105,23 @@ public class JAXBContextImpl extends JAXBContext {
         model = modelBuilder.getModel();
         schemaGenerator = modelBuilder.getContext();
 
-        Builder builder = new BuilderImpl();
+        BuilderContext builder = new BuilderContext();
         new ReaderIntrospector(builder, model);
         new WriterIntrospector(builder, model);
 
-        context = builder.compile();
+        generatedCL = builder.compile();
 
         logger.info("Created SXC JAXB Context.");
     }
     
     @Override
     public Marshaller createMarshaller() throws JAXBException {
-        return new MarshallerImpl(this, model, context);
+        return new MarshallerImpl(model, generatedCL);
     }
 
     @Override
     public Unmarshaller createUnmarshaller() throws JAXBException {
-        return new UnmarshallerImpl(model, context);
+        return new UnmarshallerImpl(model, generatedCL);
     }
 
     @SuppressWarnings("deprecation")

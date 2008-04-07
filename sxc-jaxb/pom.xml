@@ -48,6 +48,14 @@
       <version>1.1</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-jci-eclipse</artifactId>
+      <version>1.0</version>
+      <optional>true</optional>
+    </dependency>
+
+
   </dependencies>
 
   <build>

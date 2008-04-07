@@ -1,11 +1,12 @@
 package com.envoisolutions.sxc.jaxb;
 
+import java.lang.reflect.Field;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import javax.xml.bind.JAXBContext;
+import java.util.TreeMap;
 import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
-import javax.xml.bind.JAXBIntrospector;
 import javax.xml.bind.MarshalException;
 import javax.xml.bind.ValidationEventHandler;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
@@ -22,7 +23,6 @@ import javax.xml.transform.Result;
 import javax.xml.transform.dom.DOMResult;
 import javax.xml.validation.Schema;
 
-import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.jaxb.model.Bean;
 import com.envoisolutions.sxc.jaxb.model.Model;
 import com.envoisolutions.sxc.util.PrettyPrintXMLStreamWriter;
@@ -37,8 +37,9 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
 	public static final String MARSHALLER = "sxc.marshaller";
 
     private final Model model;
-    private final Context context;
     private final XMLOutputFactory xmlOutputFactory = XMLOutputFactory.newInstance();
+    private final Map<Class, JAXBMarshaller> class2Reader = new LinkedHashMap<Class, JAXBMarshaller>();
+    private final Map<Class, QName> class2Element = new LinkedHashMap<Class, QName>();
 
     private final Map<Class<?>, ? super XmlAdapter> adapters = new HashMap<Class<?>, XmlAdapter>();
     private AttachmentMarshaller attachmentMarshaller;
@@ -46,14 +47,36 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
     private Listener listener;
     private Schema schema;
 
-    private final JAXBIntrospector introspector;
-
-    public MarshallerImpl(JAXBContext jaxbContext, Model model, Context context) {
+    public MarshallerImpl(Model model, ClassLoader generatedCL) {
         super();
         this.model = model;
-        this.context = context;
-        this.introspector = jaxbContext.createJAXBIntrospector();
-        context.put(MARSHALLER, this);
+
+        for (Bean bean : model.getBeans()) {
+            try {
+                Class<?> readerClass = generatedCL.loadClass("generated.sxc." + bean.getType().getName() + "JaxB");
+
+                JAXBMarshaller reader = null;
+                try {
+                    Field instanceField = readerClass.getField("INSTANCE");
+                    reader = (JAXBMarshaller) instanceField.get(null);
+                } catch (Exception e) {
+                }
+                if (reader == null) {
+                    try {
+                        reader = (JAXBMarshaller) readerClass.newInstance();
+                    } catch (Exception e) {
+                    }
+                }
+                if (reader != null) {
+                    class2Reader.put(bean.getType(), reader);
+                    if (bean.getRootElementName() != null) {
+                        class2Element.put(bean.getType(), bean.getRootElementName());
+                    }
+                }
+
+            } catch (ClassNotFoundException ignore) {
+            }
+        }
     }
 
     public void marshal(Object jaxbElement, Result result) throws JAXBException {
@@ -93,10 +116,10 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
     }
 
     public void marshal(Object jaxbElement, XMLStreamWriter writer) throws JAXBException {
-        if (jaxbElement == null) throw new IllegalArgumentException("o is null");
+        if (jaxbElement == null) throw new IllegalArgumentException("jaxbElement is null");
         if (writer == null) throw new IllegalArgumentException("xsw is null");
         try {
-            if (!introspector.isElement(jaxbElement)) {
+            if (!(jaxbElement instanceof JAXBElement) && !class2Element.containsKey(jaxbElement.getClass())) {
                 throw new MarshalException("Object must be annotated with @XmlRootElement or be a JAXBElement!");
             }
 
@@ -136,8 +159,9 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
 
             // write root element
             w.writeStartElement("",  name.getLocalPart(), name.getNamespaceURI());
-            w.writeAndDeclareIfUndeclared("ns1", name.getNamespaceURI());
-            w.writeDefaultNamespace(name.getNamespaceURI());
+            if (name.getNamespaceURI().length() > 0) {
+                w.writeDefaultNamespace(name.getNamespaceURI());
+            }
 
             if (xsiType != null) {
                 w.writeXsiType(xsiType.getNamespaceURI(), xsiType.getLocalPart());
@@ -170,7 +194,14 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
                 } else if (c == byte[].class) {
                     BinaryUtils.encodeBytes(w, (byte[]) jaxbElement);
                 } else {
-                    context.createWriter().write(w, jaxbElement);
+                    JAXBMarshaller jaxbMarshaller = class2Reader.get(c);
+                    if (jaxbMarshaller != null) {
+                        TreeMap<String, Object> context = new TreeMap<String, Object>();
+                        context.put(MARSHALLER, this);
+
+                        //noinspection unchecked
+                        jaxbMarshaller.write(w, jaxbElement, context);
+                    }
                 }
             }
 

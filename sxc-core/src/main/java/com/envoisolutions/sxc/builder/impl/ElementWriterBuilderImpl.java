@@ -17,14 +17,15 @@ import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JType;
-import com.sun.codemodel.JVar;
+import com.sun.codemodel.JDefinedClass;
 
 public class ElementWriterBuilderImpl extends AbstractWriterBuilder implements ElementWriterBuilder {
 
     private final JIfElseBlock conditions = new JIfElseBlock();
     private JBlock attributeBlock;
+    private Class writeType;
 
-    public ElementWriterBuilderImpl(BuildContext buildContext,String className) {
+    public ElementWriterBuilderImpl(BuildContext buildContext, String className) {
         this.buildContext = buildContext;
         this.model = buildContext.getCodeModel();
         
@@ -42,31 +43,37 @@ public class ElementWriterBuilderImpl extends AbstractWriterBuilder implements E
         objectVar = addBasicArgs(method, model.ref(Object.class), "o");
         currentBlock = method.body();
         currentBlock.add(conditions);
-
-        variableManager.addId(objectVar.name());
-        variableManager.addId(getXSW().name());
-        variableManager.addId(getContextVar().name());
     }
     
-    public ElementWriterBuilderImpl(ElementWriterBuilderImpl parent, QName name, JMethod method, JVar objectVar) {
-        this.buildContext = parent.buildContext;
-        this.method = method;
-        this.objectVar = objectVar;
+    public ElementWriterBuilderImpl(BuildContext buildContext, JDefinedClass writerClass, Class type) {
+        writeType = type;
+        this.buildContext = buildContext;
+        this.writerClass = writerClass;
+        this.model = buildContext.getCodeModel();
+
+        method = writerClass.method(JMod.PUBLIC | JMod.FINAL, void.class, "write");
+        objectVar = addBasicArgs(method, model.ref(type), decapitalize(type.getSimpleName()));
+        currentBlock = method.body();
+        currentBlock.add(conditions);
+    }
+
+    public ElementWriterBuilderImpl(ElementWriterBuilderImpl parent, QName name, JType type) {
         this.parent = parent;
         this.name = name;
-        this.xswVar = parent.xswVar;
-        this.rtContextVar = parent.rtContextVar;
+        this.buildContext = parent.buildContext;
+        this.method = parent.buildContext.createMethod(parent.getWriterClass(), "write" + capitalize(type.name()));
+        this.objectVar = addBasicArgs(method, type, decapitalize(type.name()));
         this.writerClass = parent.writerClass;
         this.model = parent.model;
         exceptions.addAll(parent.exceptions);
-        
+
         currentBlock = method.body();
         currentBlock.add(conditions);
         attributeBlock = method.body().block();
+    }
 
-        variableManager.addId(objectVar.name());
-        variableManager.addId(getXSW().name());
-        variableManager.addId(getContextVar().name());
+    public Class getWriteType() {
+        return writeType;
     }
 
     public ElementWriterBuilder newCondition(JExpression condition) {
@@ -74,14 +81,12 @@ public class ElementWriterBuilderImpl extends AbstractWriterBuilder implements E
     }
     
     public ElementWriterBuilder newCondition(JExpression condition, JType type) {
-        JBlock block = conditions.addCondition(condition);
-        
-        JMethod m = buildContext.createMethod(writerClass, "write" + capitalize(type.name()));
-        JVar newObjectVar = addBasicArgs(m, type, decapitalize(type.name()));
+        ElementWriterBuilderImpl builder = new ElementWriterBuilderImpl(this, name, type);
 
-        block.invoke(m).arg(xswVar).arg(JExpr.cast(type, objectVar)).arg(rtContextVar);
-        
-        return new ElementWriterBuilderImpl(this, name, m, newObjectVar);
+        JBlock block = conditions.addCondition(condition);
+        block.invoke(builder.getMethod()).arg(builder.getXSW()).arg(JExpr.cast(type, builder.getObject())).arg(builder.getContextVar());
+
+        return builder;
     }
 
     public JBlock newBlock(JExpression condition) {
@@ -107,14 +112,12 @@ public class ElementWriterBuilderImpl extends AbstractWriterBuilder implements E
             block.add(xswVar.invoke("writeAndDeclareIfUndeclared").arg(JExpr.lit("")).arg(name.getNamespaceURI()));
         }
         
-        JMethod m = buildContext.createMethod(writerClass, "write" + capitalize(type.name()));
-        JVar newObjectVar = addBasicArgs(m, type, decapitalize(type.name()));
-        
-        block.invoke(m).arg(xswVar).arg(JExpr.cast(type, var)).arg(rtContextVar);
+        ElementWriterBuilderImpl builder = new ElementWriterBuilderImpl(this, name, type);
+        block.invoke(builder.getMethod()).arg(builder.getXSW()).arg(JExpr.cast(type, var)).arg(builder.getContextVar());
 
         block.add(xswVar.invoke("writeEndElement"));
-        
-        return new ElementWriterBuilderImpl(this, name, m, newObjectVar);
+
+        return builder;
     }
 
     public ElementWriterBuilder writeElement(QName qname, JType type, JExpression var) {
@@ -132,13 +135,10 @@ public class ElementWriterBuilderImpl extends AbstractWriterBuilder implements E
     }
 
     public WriterBuilder writeAttribute(QName name, JType type, JExpression var) {
-        JMethod m = buildContext.createMethod(writerClass, "write" + capitalize(type.name()));
-        JVar newObjectVar = addBasicArgs(m, type, "_obj");
+        AttributeWriterBuilder builder = new AttributeWriterBuilder(this, name, type);
+        attributeBlock.invoke(builder.getMethod()).arg(builder.getXSW()).arg(JExpr.cast(type, var)).arg(builder.getContextVar());
 
-        JBlock block = attributeBlock;
-        block.invoke(m).arg(xswVar).arg(JExpr.cast(type, var)).arg(rtContextVar);
-
-        return new AttributeWriterBuilder(this, name, m, newObjectVar);
+        return builder;
     }
 
     public void writeNilIfNull() {

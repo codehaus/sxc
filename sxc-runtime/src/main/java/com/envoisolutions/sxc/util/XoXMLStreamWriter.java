@@ -20,4 +20,6 @@ public interface XoXMLStreamWriter extends XMLStreamWriter {
     void writeXsiType(String namespace, String local) throws XMLStreamException;
     
     void writeAndDeclareIfUndeclared(String prefix, String namespace) throws XMLStreamException ;
+
+    String getUniquePrefix(String namespaceURI) throws XMLStreamException;
 }

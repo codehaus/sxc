@@ -37,7 +37,6 @@ public abstract class AbstractParserBuilder implements ParserBuilder {
     JType returnType;
     JBlock codeBlock = new JBlock(false, false);
 
-    protected final IdentityManager fieldManager = new IdentityManager();
     protected final IdentityManager variableManager = new IdentityManager();
 
     static class Prop {
@@ -125,10 +124,6 @@ public abstract class AbstractParserBuilder implements ParserBuilder {
 
     public void setRequired(boolean required) {
         this.required = required;
-    }
-
-    public IdentityManager getFieldManager() {
-        return fieldManager;
     }
 
     public IdentityManager getVariableManager() {
