@@ -122,11 +122,14 @@ public class WriterIntrospector {
     }
 
     private void addEnum(Bean bean) {
-        JDefinedClass jaxbClass;
-        try {
-            jaxbClass = codeModel._class("generated.sxc." + bean.getType().getName() + "JaxBW");
-        } catch (JClassAlreadyExistsException e) {
-            throw new BuildException(e);
+        String className = "generated.sxc." + bean.getType().getName() + "JaxB";
+        JDefinedClass jaxbClass = codeModel._getClass(className);
+        if (jaxbClass == null) {
+            try {
+                jaxbClass = codeModel._class(className);
+            } catch (JClassAlreadyExistsException e) {
+                throw new BuildException(e);
+            }
         }
 
         JClass type = toJClass(bean.getType());
@@ -494,8 +497,13 @@ public class WriterIntrospector {
             throw new BuildException("Unknown bean " + bean);
         }
 
+        // Declare dependency from builder to existingBuilder
+        builder.addDependency(existingBuilder.getMarshallerClass());
+
+        // Add a static import for the write method on the existing builder class
         JStaticImports staticImports = JStaticImports.getStaticImports(builder.getMarshallerClass());
 
+        // Call the static method
         String methodName = "write" + bean.getType().getSimpleName();
         staticImports.addStaticImport(existingBuilder.getMarshallerClass().fullName() + "." + methodName);
 

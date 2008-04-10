@@ -6,9 +6,13 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.WildcardType;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
 import javax.xml.namespace.QName;
 
 import com.envoisolutions.sxc.builder.BuildException;
@@ -16,7 +20,8 @@ import com.envoisolutions.sxc.builder.impl.BuildContext;
 import com.envoisolutions.sxc.compiler.Compiler;
 import com.envoisolutions.sxc.compiler.EclipseCompiler;
 import static com.envoisolutions.sxc.jaxb.JavaUtils.toClass;
-import com.envoisolutions.sxc.util.Util;
+import com.envoisolutions.sxc.jaxb.model.Model;
+import com.envoisolutions.sxc.jaxb.model.RiModelBuilder;
 import com.sun.codemodel.CodeWriter;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
@@ -24,15 +29,22 @@ import com.sun.codemodel.JType;
 import com.sun.codemodel.writer.FileCodeWriter;
 
 public class BuilderContext {
-    private File file;
     private BuildContext buildContext;
     private JCodeModel codeModel;
-    private final Map<Class, MarshallerBuilder> marshallers = new HashMap<Class, MarshallerBuilder>();
-    private Compiler compiler = new EclipseCompiler();
+    private final Map<Class, MarshallerBuilder> marshallerBuilders = new HashMap<Class, MarshallerBuilder>();
+    private final Map<Class, JAXBMarshaller> marshallers = new HashMap<Class, JAXBMarshaller>();
+    private Callable<JAXBContext> schemaGenerator;
 
-    public BuilderContext() {
-        this.buildContext = new BuildContext();
+    public BuilderContext(Map<String, Object> properties, Class... classes) throws JAXBException {
+        buildContext = new BuildContext();
         codeModel = buildContext.getCodeModel();
+
+        RiModelBuilder modelBuilder = new RiModelBuilder(properties, classes);
+        Model model = modelBuilder.getModel();
+        schemaGenerator = modelBuilder.getContext();
+
+        new ReaderIntrospector(this, model);
+        new WriterIntrospector(this, model);
     }
 
     public BuildContext getBuildContext() {
@@ -43,26 +55,21 @@ public class BuilderContext {
         return buildContext.getCodeModel();
     }
 
+    public Callable<JAXBContext> getSchemaGenerator() {
+        return schemaGenerator;
+    }
+
     public MarshallerBuilder getMarshallerBuilder(Class type, QName xmlRootElement, QName xmlType) {
-        MarshallerBuilder builder = marshallers.get(type);
+        MarshallerBuilder builder = marshallerBuilders.get(type);
         if (builder == null) {
             builder = new MarshallerBuilder(this, type, xmlRootElement, xmlType);
-            marshallers.put(type, builder);
+            marshallerBuilders.put(type, builder);
         }
         return builder;
     }
 
-    public void write(File dir) throws IOException, BuildException {
-        this.file = dir;
-
-        // file = new File(file, new Long(System.currentTimeMillis()).toString());
-        file.mkdirs();
-
-        write(new FileCodeWriter(file));
-    }
-
     public void write(CodeWriter codeWriter) throws IOException, BuildException {
-        for (MarshallerBuilder builder : marshallers.values()) {
+        for (MarshallerBuilder builder : marshallerBuilders.values()) {
             builder.getParserBuilder().write();
             builder.getWriterBuilder().write();
         }
@@ -70,49 +77,46 @@ public class BuilderContext {
         buildContext.getCodeModel().build(codeWriter);
     }
 
-    public ClassLoader compile() {
-        boolean delete = true;
-        File dir = null;
-        if (file == null) {
+    public Collection<JAXBMarshaller> compile() {
+        if (!marshallerBuilders.isEmpty()) {
+            // write generated to code to ouput dir
+            File dir;
             try {
-                String cdir = System.getProperty("com.envoisolutions.sxc.output.directory");
+                String outputDir = System.getProperty("com.envoisolutions.sxc.output.directory");
 
-                if (cdir == null) {
+                if (outputDir == null) {
                     dir = File.createTempFile("compile", "");
+                    dir.delete();
                 } else {
-                    dir = new File(cdir);
-                    delete = false;
+                    dir = new File(outputDir);
                 }
-
-                dir.delete();
-
                 dir.mkdirs();
-                write(dir);
 
-
+                write(new FileCodeWriter(dir));
             } catch (IOException e) {
                 throw new BuildException(e);
             }
+
+            // compile the generated code
+            Compiler compiler = new EclipseCompiler();
+            ClassLoader classLoader = compiler.compile(dir);
+
+            // load the generated classes
+            for (Class type : marshallerBuilders.keySet()) {
+                JAXBMarshaller marshaller = JAXBIntrospectorImpl.loadJAXBMarshaller(type, classLoader);
+                if (marshaller != null) {
+                    marshallers.put(type, marshaller);
+                }
+            }
+
+            // all generated so we can clear the generation state
+            buildContext = null;
+            codeModel = null;
+            marshallerBuilders.clear();
         }
 
-        ClassLoader classLoader = compiler.compile(file);
-
-        // Only delete if the output directory hasn't been set
-        if (delete && file == null) {
-            Util.delete(dir);
-        }
-
-        return classLoader;
+        return marshallers.values();
     }
-
-    public Compiler getCompiler() {
-        return compiler;
-    }
-
-    public void setCompiler(Compiler compiler) {
-        this.compiler = compiler;
-    }
-
 
     public JClass toJClass(Class clazz) {
         if (clazz.isPrimitive()) {
