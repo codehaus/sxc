@@ -1,8 +1,6 @@
 package com.envoisolutions.sxc.jaxb;
 
-import java.lang.reflect.Field;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeMap;
 import javax.xml.bind.JAXBElement;
@@ -27,8 +25,6 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.sax.SAXSource;
 import javax.xml.validation.Schema;
 
-import com.envoisolutions.sxc.jaxb.model.Bean;
-import com.envoisolutions.sxc.jaxb.model.Model;
 import com.envoisolutions.sxc.util.XoXMLStreamReader;
 import com.envoisolutions.sxc.util.XoXMLStreamReaderImpl;
 import org.w3c.dom.Node;
@@ -37,9 +33,7 @@ import org.xml.sax.XMLReader;
 
 @SuppressWarnings({"unchecked"})
 public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
-    private final Map<Class, JAXBMarshaller> class2Reader = new LinkedHashMap<Class, JAXBMarshaller>();
-    private final Map<QName, Class> element2Reader = new LinkedHashMap<QName, Class>();
-    private final Map<QName, Class> schmaType2Reader = new LinkedHashMap<QName, Class>();
+    private final JAXBIntrospectorImpl introspector;
 
     private final XMLInputFactory xif = XMLInputFactory.newInstance();
     private final DatatypeFactory dtFactory;
@@ -48,41 +42,9 @@ public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
     private Listener listener;
     private Schema schema;
     private AttachmentUnmarshaller attachmentUnmarshaller;
-    private final Model model;
 
-    public UnmarshallerImpl(Model model, ClassLoader classLoader) throws JAXBException {
-        this.model = model;
-
-        for (Bean bean : model.getBeans()) {
-            try {
-                Class<?> readerClass = classLoader.loadClass("generated.sxc." + bean.getType().getName() + "JaxB");
-
-                JAXBMarshaller reader = null;
-                try {
-                    Field instanceField = readerClass.getField("INSTANCE");
-                    reader = (JAXBMarshaller) instanceField.get(null);
-                } catch (Exception e) {
-                }
-                if (reader == null) {
-                    try {
-                        reader = (JAXBMarshaller) readerClass.newInstance();
-                    } catch (Exception e) {
-                    }
-                }
-                if (reader != null) {
-                    class2Reader.put(bean.getType(), reader);
-                    if (bean.getRootElementName() != null) {
-                        element2Reader.put(bean.getRootElementName(), bean.getType());
-                    }
-                    if (bean.getSchemaTypeName() != null) {
-                        schmaType2Reader.put(bean.getSchemaTypeName(), bean.getType());
-                    }
-                }
-
-            } catch (ClassNotFoundException ignore) {
-            }
-        }
-
+    public UnmarshallerImpl(JAXBIntrospectorImpl introspector) throws JAXBException {
+        this.introspector = introspector;
         try {
             dtFactory = DatatypeFactory.newInstance();
         } catch (DatatypeConfigurationException e) {
@@ -195,23 +157,23 @@ public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
                 String s = reader.getElementAsString();
                 o = dtFactory.newDuration(s);
             } else {
-                JAXBMarshaller instance = class2Reader.get(cls);
+                JAXBMarshaller instance = introspector.getJaxbMarshaller(cls);
                 if (instance == null) {
-                    cls = schmaType2Reader.get(reader.getXsiType());
-                    instance = class2Reader.get(cls);
+                    instance = introspector.getJaxbMarshallerBySchemaType(reader.getXsiType());
                 }
                 if (instance == null) {
-                    cls = element2Reader.get(name);
-                    instance = class2Reader.get(cls);
+                    instance = introspector.getJaxbMarshallerByElementName(name);
                 }
                 if (instance != null) {
                     o = instance.read(reader, new TreeMap<String, Object>());
-                    Bean bean = model.getBean(cls);
-                    jaxbElementWrap = jaxbElementWrap || (bean != null && bean.getRootElementName() == null);
+                    if (cls == null) {
+                        cls = instance.getType();
+                    }
+                    jaxbElementWrap = jaxbElementWrap || instance.getXmlRootElement() == null;
                 }
             }
             if (jaxbElementWrap) {
-                return new JAXBElement(name, cls, cls.cast(o));
+                return new JAXBElement(name, cls, o);
             } else {
                 return o;
             }

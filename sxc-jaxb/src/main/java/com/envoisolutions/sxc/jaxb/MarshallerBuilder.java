@@ -2,6 +2,8 @@ package com.envoisolutions.sxc.jaxb;
 
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.Set;
+import java.util.TreeSet;
 import java.lang.reflect.Field;
 import static java.beans.Introspector.decapitalize;
 import javax.xml.stream.XMLStreamException;
@@ -34,6 +36,7 @@ import com.envoisolutions.sxc.util.XoXMLStreamWriter;
 import com.envoisolutions.sxc.util.FieldAccessor;
 
 public class MarshallerBuilder {
+    private final MarshallerBuilder parent;
     private final BuilderContext builderContext;
     private final Class type;
     private final QName xmlRootElement;
@@ -50,8 +53,11 @@ public class MarshallerBuilder {
     private JVar readObject;
     private JVar writerDefaultPrefix;
     private String writerDefaultNS;
+    private JInvocation superInvocation;
+    private Set<String> dependencies = new TreeSet<String>();
 
     public MarshallerBuilder(MarshallerBuilder parent, ElementParserBuilderImpl parserBuilder) {
+        this.parent = parent;
         this.builderContext = parent.builderContext;
         this.type = parent.type;
         this.xmlRootElement = parent.xmlRootElement;
@@ -62,6 +68,7 @@ public class MarshallerBuilder {
     }
 
     public MarshallerBuilder(BuilderContext builderContext, Class type, QName xmlRootElement, QName xmlType) {
+        this.parent = null;
         this.builderContext = builderContext;
         this.type = type;
         this.xmlRootElement = xmlRootElement;
@@ -76,7 +83,12 @@ public class MarshallerBuilder {
         }
 
         constructor = marshallerClass.constructor(JMod.PUBLIC);
-        constructor.body().invoke("super").arg(constructor.param(Context.class,"context"));
+        superInvocation = constructor.body().invoke("super")
+                .arg(constructor.param(Context.class, "context"))
+                .arg(JExpr.dotclass(builderContext.toJClass(type)))
+                .arg(newQName(xmlRootElement))
+                .arg(newQName(xmlType));
+        
 
         // INSTANCE static field
         JVar instance = marshallerClass.field(JMod.PUBLIC | JMod.STATIC | JMod.FINAL, marshallerClass, "INSTANCE", JExpr._new(marshallerClass).arg(JExpr._null()));
@@ -95,6 +107,15 @@ public class MarshallerBuilder {
         method.body().add(instance.invoke("write").arg(xsrVar).arg(item).arg(contextVar));
     }
 
+    private JExpression newQName(QName xmlRootElement) {
+        if (xmlRootElement == null) {
+            return JExpr._null();
+        }
+        return JExpr._new(builderContext.toJClass(QName.class))
+                .arg(JExpr.lit(xmlRootElement.getNamespaceURI()).invoke("intern"))
+                .arg(JExpr.lit(xmlRootElement.getLocalPart()).invoke("intern"));
+    }
+
     public Class getType() {
         return type;
     }
@@ -109,6 +130,18 @@ public class MarshallerBuilder {
 
     public JDefinedClass getMarshallerClass() {
         return marshallerClass;
+    }
+
+    public void addDependency(JClass dependency) {
+        if (marshallerClass.fullName().equals(dependency.fullName())) return;
+        
+        if (parent == null) {
+            if (!dependencies.add(dependency.fullName())) {
+                superInvocation.arg(dependency.dotclass());
+            }
+        } else {
+            parent.addDependency(dependency);
+        }
     }
 
     public ElementParserBuilderImpl getParserBuilder() {

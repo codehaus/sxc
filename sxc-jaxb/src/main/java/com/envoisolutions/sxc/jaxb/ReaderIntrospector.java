@@ -119,8 +119,13 @@ public class ReaderIntrospector {
     }
 
     private JInvocation invokeParser(MarshallerBuilder caller, MarshallerBuilder parser) {
+        // Declare dependency from caller to parser
+        caller.addDependency(parser.getMarshallerClass());
+
+        // Add a static import for the write method on the existing builder class
         JStaticImports staticImports = JStaticImports.getStaticImports(caller.getMarshallerClass());
 
+        // Call the static method
         String methodName = "read" + parser.getReadMethod().type().name();
         staticImports.addStaticImport(parser.getMarshallerClass().fullName() + "." + methodName);
 
@@ -154,11 +159,14 @@ public class ReaderIntrospector {
     }
 
     private void addEnum(Bean bean) {
-        JDefinedClass jaxbClass;
-        try {
-            jaxbClass = codeModel._class("generated.sxc." + bean.getType().getName() + "JaxB");
-        } catch (JClassAlreadyExistsException e) {
-            throw new BuildException(e);
+        String className = "generated.sxc." + bean.getType().getName() + "JaxB";
+        JDefinedClass jaxbClass = codeModel._getClass(className);
+        if (jaxbClass == null) {
+            try {
+                jaxbClass = codeModel._class(className);
+            } catch (JClassAlreadyExistsException e) {
+                throw new BuildException(e);
+            }
         }
 
         JClass type = toJClass(bean.getType());
