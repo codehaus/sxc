@@ -1,39 +1,40 @@
 package com.envoisolutions.sxc.jaxb;
 
-import java.util.Map;
-import java.util.TreeMap;
-import java.util.Set;
-import java.util.TreeSet;
-import java.lang.reflect.Field;
 import static java.beans.Introspector.decapitalize;
-import javax.xml.stream.XMLStreamException;
-import javax.xml.bind.JAXBException;
-import javax.xml.datatype.DatatypeFactory;
+import java.lang.reflect.Field;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import javax.xml.datatype.DatatypeConfigurationException;
+import javax.xml.datatype.DatatypeFactory;
 import javax.xml.namespace.QName;
 
-import com.sun.codemodel.JDefinedClass;
-import com.sun.codemodel.JFieldVar;
-import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JClassAlreadyExistsException;
-import com.sun.codemodel.JMod;
-import com.sun.codemodel.JVar;
-import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JInvocation;
-import com.sun.codemodel.JTryBlock;
-import com.sun.codemodel.JCatchBlock;
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JType;
-import com.sun.codemodel.JExpression;
+import com.envoisolutions.sxc.Context;
+import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.impl.ElementParserBuilderImpl;
 import com.envoisolutions.sxc.builder.impl.ElementWriterBuilderImpl;
 import com.envoisolutions.sxc.builder.impl.IdentityManager;
-import com.envoisolutions.sxc.builder.BuildException;
-import com.envoisolutions.sxc.Context;
+import com.envoisolutions.sxc.builder.impl.JLineComment;
+import com.envoisolutions.sxc.builder.impl.JBlankLine;
+import com.envoisolutions.sxc.util.FieldAccessor;
 import com.envoisolutions.sxc.util.XoXMLStreamReader;
 import com.envoisolutions.sxc.util.XoXMLStreamWriter;
-import com.envoisolutions.sxc.util.FieldAccessor;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JCatchBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JClassAlreadyExistsException;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JMod;
+import com.sun.codemodel.JTryBlock;
+import com.sun.codemodel.JType;
+import com.sun.codemodel.JVar;
 
 public class MarshallerBuilder {
     private final MarshallerBuilder parent;
@@ -51,6 +52,8 @@ public class MarshallerBuilder {
     private JFieldVar datatypeFactory;
     private JMethod constructor;
     private JVar readObject;
+    private final Set<QName> expectedElements = new LinkedHashSet<QName>();
+    private final Set<QName> expectedAttributes = new LinkedHashSet<QName>();
     private JVar writerDefaultPrefix;
     private String writerDefaultNS;
     private JInvocation superInvocation;
@@ -94,16 +97,16 @@ public class MarshallerBuilder {
         JVar instance = marshallerClass.field(JMod.PUBLIC | JMod.STATIC | JMod.FINAL, marshallerClass, "INSTANCE", JExpr._new(marshallerClass).arg(JExpr._null()));
 
         // add static read method
-        JMethod method = marshallerClass.method(JMod.PUBLIC | JMod.STATIC, type, "read" + type.getSimpleName())._throws(XMLStreamException.class);
+        JMethod method = marshallerClass.method(JMod.PUBLIC | JMod.STATIC, type, "read" + type.getSimpleName())._throws(Exception.class);
         JVar xsrVar = method.param(XoXMLStreamReader.class, "reader");
-        JVar contextVar = method.param(builderContext.getBuildContext().getStringToObjectMap(), "properties");
+        JVar contextVar = method.param(builderContext.getBuildContext().getUnmarshalContextClass(), "context");
         method.body()._return(instance.invoke("read").arg(xsrVar).arg(contextVar));
 
         // add static write method
-        method = marshallerClass.method(JMod.PUBLIC | JMod.STATIC, void.class, "write" + type.getSimpleName())._throws(XMLStreamException.class)._throws(JAXBException.class);
+        method = marshallerClass.method(JMod.PUBLIC | JMod.STATIC, void.class, "write" + type.getSimpleName())._throws(Exception.class);
         xsrVar = method.param(XoXMLStreamWriter.class, "writer");
         JVar item = method.param(type, java.beans.Introspector.decapitalize(type.getSimpleName()));
-        contextVar = method.param(builderContext.getBuildContext().getStringToObjectMap(), "properties");
+        contextVar = method.param(builderContext.getBuildContext().getMarshalContextClass(), "context");
         method.body().add(instance.invoke("write").arg(xsrVar).arg(item).arg(contextVar));
     }
 
@@ -144,11 +147,39 @@ public class MarshallerBuilder {
         }
     }
 
+    public void write() {
+        getParserBuilder();
+        JBlock block = new JBlock();
+        parserBuilder.setAnyAttributeBlock(null, block);
+        JInvocation invocation = block.invoke(parserBuilder.getContextVar(), "unexpectedAttribute").arg(getAttributeVar());
+        for (QName expectedAttribute : expectedAttributes) {
+            invocation.arg(JExpr._new(builderContext.toJClass(QName.class)).arg(expectedAttribute.getNamespaceURI()).arg(expectedAttribute.getLocalPart()));
+        }
+
+        block = new JBlock();
+        parserBuilder.setAnyElementBlock(null, block);
+        invocation = block.invoke(parserBuilder.getContextVar(), "unexpectedElement").arg(getChildElementVar());
+        for (QName expectedElement : expectedElements) {
+            invocation.arg(JExpr._new(builderContext.toJClass(QName.class)).arg(expectedElement.getNamespaceURI()).arg(expectedElement.getLocalPart()));
+        }
+
+        block = new JBlock();
+        parserBuilder.setUnexpectedXsiTypeBlock(null, block);
+        block._return(parserBuilder.getContextVar().invoke("unexpectedXsiType").arg(getXSR()).arg(JExpr.dotclass(builderContext.toJClass(type))));
+
+        parserBuilder.write();
+
+        getWriterBuilder();
+        writerBuilder.write();
+    }
+
     public ElementParserBuilderImpl getParserBuilder() {
         if (parserBuilder == null) {
             parserBuilder = new ElementParserBuilderImpl(builderContext.getBuildContext(), marshallerClass, type);
+            parserBuilder.setXmlType(xmlType);
             parserBuilder.setAllowUnkown(false);
             parserBuilder.setBaseClass(builderContext.getCodeModel().ref(JAXBMarshaller.class).narrow(type));
+            parserBuilder.getMethod()._throws(Exception.class);
 
             // @SuppressWarnings({"StringEquality"})
             parserBuilder.getReaderClass().annotate(SuppressWarnings.class).paramArray("value").param("StringEquality");
@@ -156,7 +187,14 @@ public class MarshallerBuilder {
             if (!type.isEnum()) {
                 // if isXsiNil return null;
                 JBlock body = parserBuilder.getMethod().body();
+                body.add(new JBlankLine());
+                body.add(new JLineComment("Check for xsi:nil"));
                 body._if(parserBuilder.getXSR().invoke("isXsiNil"))._then()._return(JExpr._null());
+
+                // if context is null, initialize context
+                body.add(new JBlankLine());
+                JBlock contextNullBlock = body._if(parserBuilder.getContextVar().eq(JExpr._null()))._then();
+                contextNullBlock.assign(parserBuilder.getContextVar(), JExpr._new(builderContext.toJClass(ReadContext.class)));
 
                 // create bean instance
                 String varName = decapitalize(type.getSimpleName());
@@ -177,7 +215,7 @@ public class MarshallerBuilder {
         if (wrapperElement) throw new IllegalStateException("Wrapper elements do not have a write builder");
         if (writerBuilder == null) {
             writerBuilder = new ElementWriterBuilderImpl(builderContext.getBuildContext(), marshallerClass, type);
-            writerBuilder.getMethod()._throws(JAXBException.class);
+            writerBuilder.getMethod()._throws(Exception.class);
         }
         return writerBuilder;
     }
@@ -235,12 +273,18 @@ public class MarshallerBuilder {
     }
 
     public JBlock expectAttribute(QName attributeName) {
+        if (expectedAttributes.contains(attributeName)) throw new IllegalArgumentException("Attribute is alredy expected " + attributeName);
+        expectedAttributes.add(attributeName);
+
         JBlock block = new JBlock();
         getParserBuilder().setAttributeBlock(attributeName, null, block);
         return block;
     }
 
     public JBlock expectElement(QName elementName) {
+        if (expectedElements.contains(elementName)) throw new IllegalArgumentException("Element is alredy expected " + elementName);
+        expectedElements.add(elementName);
+
         JBlock block = new JBlock();
         getParserBuilder().setElementBlock(elementName, null, block);
         return block;
@@ -251,8 +295,22 @@ public class MarshallerBuilder {
     }
 
     public MarshallerBuilder expectWrapperElement(QName elementName, JVar beanVar, String propertyName) {
-        ElementParserBuilderImpl parserBuilder = (ElementParserBuilderImpl) getParserBuilder().expectElement(elementName, propertyName);
-        parserBuilder.passParentVariable(beanVar);
+        if (expectedElements.contains(elementName)) throw new IllegalArgumentException("Element is alredy expected " + elementName);
+        expectedElements.add(elementName);
+
+        ElementParserBuilderImpl parserBuilder = new ElementParserBuilderImpl(builderContext.getBuildContext(), marshallerClass, null, 2, propertyName);
+        parserBuilder.setAllowUnkown(false);
+
+        String name = parserBuilder.getVariableManager().createId(decapitalize(beanVar.type().name()));
+        parserBuilder.getMethod().param(beanVar.type(), name);
+
+        parserBuilder.getMethod()._throws(Exception.class);
+
+        getParserBuilder().expectElement(elementName, parserBuilder, beanVar);
+
+        JBlock block = new JBlock();
+        block.add(new JLineComment("ELEMENT WRAPPER: " + propertyName));
+        getParserBuilder().setElementBlock(elementName, null, block);
 
         MarshallerBuilder builder = new MarshallerBuilder(this, parserBuilder);
         return builder;
@@ -283,6 +341,14 @@ public class MarshallerBuilder {
 
     public JMethod getWriteMethod() {
         return getWriterBuilder().getMethod();
+    }
+
+    public JVar getAttributeVar() {
+        return getParserBuilder().getAttributeVar();
+    }
+
+    public JVar getChildElementVar() {
+        return getParserBuilder().getChildElementVar();
     }
 
     public IdentityManager getWriteVariableManager() {

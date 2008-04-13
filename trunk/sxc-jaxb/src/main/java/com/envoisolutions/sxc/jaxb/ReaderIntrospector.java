@@ -31,6 +31,7 @@ import javax.xml.stream.XMLStreamException;
 import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.impl.JIfElseBlock;
 import com.envoisolutions.sxc.builder.impl.JStaticImports;
+import com.envoisolutions.sxc.builder.impl.JLineComment;
 import static com.envoisolutions.sxc.jaxb.JavaUtils.isPrivate;
 import static com.envoisolutions.sxc.jaxb.JavaUtils.toClass;
 import com.envoisolutions.sxc.jaxb.model.Bean;
@@ -118,7 +119,7 @@ public class ReaderIntrospector {
         }
     }
 
-    private JInvocation invokeParser(MarshallerBuilder caller, MarshallerBuilder parser) {
+    private JInvocation invokeParser(MarshallerBuilder caller, JVar callerXsrVar, MarshallerBuilder parser) {
         // Declare dependency from caller to parser
         caller.addDependency(parser.getMarshallerClass());
 
@@ -129,7 +130,7 @@ public class ReaderIntrospector {
         String methodName = "read" + parser.getReadMethod().type().name();
         staticImports.addStaticImport(parser.getMarshallerClass().fullName() + "." + methodName);
 
-        JInvocation invocation = JExpr.invoke(methodName).arg(caller.getXSR()).arg(caller.getReadContextVar());
+        JInvocation invocation = JExpr.invoke(methodName).arg(callerXsrVar).arg(caller.getReadContextVar());
         return invocation;
     }
 
@@ -150,7 +151,7 @@ public class ReaderIntrospector {
                 }
 
                 // invoke the reader method
-                JInvocation method = invokeParser(builder, elementBuilder);
+                JInvocation method = invokeParser(builder, builder.getXSR(), elementBuilder);
                 block._return(method);
             }
         }
@@ -184,10 +185,9 @@ public class ReaderIntrospector {
             block._return(type.staticRef(enumValue.name()));
         }
 
-        // java.lang.IllegalArgumentException: No enum const class com.envoisolutions.sxc.jaxb.enums.AnnotatedEnum.ssssss
-        // todo inaccurate message... enums mapped
+        // java.lang.IllegalArgumentException: Unexpected XML value FOO for enum some.EnumClass, expected [BAR, BAZ]
         enumCond._else()._throw(JExpr._new(toJClass(IllegalArgumentException.class))
-                .arg(JExpr.lit("No enum const " + type + ".").plus(value)));
+                .arg(JExpr.lit("Unexpected XML value ").plus(value).plus(JExpr.lit(" for enum " + type.fullName() + ", expected " + bean.getEnumMap().values()))));
 
         enumParsers.put(bean.getType(), jaxbClass);
     }
@@ -209,6 +209,9 @@ public class ReaderIntrospector {
                 case ATTRIBUTE: {
                     // create attribute block
                     JBlock block = builder.expectAttribute(property.getXmlName());
+
+                    // add comment for readability
+                    block.add(new JLineComment(property.getXmlStyle() + ": " + property.getName()));
 
                     // create collection var if necessary
                     JVar collectionVar = handleCollection(builder, property, beanVar);
@@ -234,8 +237,11 @@ public class ReaderIntrospector {
                         // create element block
                         JBlock block = elementBuilder.expectElement(mapping.getXmlName());
 
+                        // add comment for readability
+                        block.add(new JLineComment(property.getXmlStyle() + ": " + property.getName()));
+
                         // read and set
-                        JExpression toSet = handleElement(builder, block, property, mapping.isNillable(), mapping.getComponentType());
+                        JExpression toSet = handleElement(builder, builder.getChildElementVar(), block, property, mapping.isNillable(), mapping.getComponentType());
                         doSet(builder, block, property, parentVar, toSet, collectionVar);
                     }
 
@@ -246,11 +252,14 @@ public class ReaderIntrospector {
                     // value is read in class block
                     JBlock block = builder.expectValue();
 
+                    // add comment for readability
+                    block.add(new JLineComment(property.getXmlStyle() + ": " + property.getName()));
+
                     // create collection var if necessary
                     JVar collectionVar = handleCollection(builder, property, beanVar);
 
                     // read and set
-                    JExpression toSet = handleElement(builder, block, property, false, null);
+                    JExpression toSet = handleElement(builder, builder.getXSR(), block, property, false, null);
                     doSet(builder, block, property, beanVar, toSet, collectionVar);
                 }
                 break;
@@ -270,8 +279,7 @@ public class ReaderIntrospector {
             return null;
         }
 
-        // this variable is automatically defined in the attribute read block in ElementParserBuilderImpl
-        JExpression valueVar = JExpr.direct("attValue");
+        JExpression valueVar = builder.getAttributeVar().invoke("getValue");
 
         JExpression toSet;
         if (property.getAdapterType() != null) {
@@ -298,7 +306,7 @@ public class ReaderIntrospector {
         return toSet;
     }
 
-    private JExpression handleElement(MarshallerBuilder builder, JBlock block, Property property, boolean nillable, Type componentType) {
+    private JExpression handleElement(MarshallerBuilder builder, JVar xsrVar, JBlock block, Property property, boolean nillable, Type componentType) {
 
         Class targetType = toClass(property.getType());
         if (property.isCollection()) {
@@ -315,20 +323,20 @@ public class ReaderIntrospector {
 
             JVar valueVar = block.decl(toJClass(targetType), propertyName);
             JTryBlock tryBlock = block._try();
-            tryBlock.body().assign(valueVar, adapterVar.invoke("unmarshal").arg(builder.getXSR().invoke("getElementText")));
+            tryBlock.body().assign(valueVar, adapterVar.invoke("unmarshal").arg(xsrVar.invoke("getElementText")));
             JCatchBlock catchBlock = tryBlock._catch(toJClass(Exception.class));
             catchBlock.body()._throw(JExpr._new(toJClass(XMLStreamException.class)).arg(catchBlock.param("e")));
 
             toSet = valueVar;
         } else if (targetType.equals(Byte.class) || targetType.equals(byte.class)) {
             // todo why the special read method for byte?
-            toSet = JExpr.cast(toJType(byte.class), builder.getXSR().invoke("getElementAsInt"));
+            toSet = JExpr.cast(toJType(byte.class), xsrVar.invoke("getElementAsInt"));
         } else if (isBuiltinType(targetType)) {
-            toSet = as(builder, block, targetType, propertyName, nillable);
+            toSet = as(builder, xsrVar, block, targetType, propertyName, nillable);
         } else if (targetType.equals(byte[].class)) {
-            toSet = toJClass(BinaryUtils.class).staticInvoke("decodeAsBytes").arg(builder.getXSR());
+            toSet = toJClass(BinaryUtils.class).staticInvoke("decodeAsBytes").arg(xsrVar);
         } else if (targetType.equals(QName.class)) {
-            toSet = builder.getXSR().invoke("getElementAsQName");
+            toSet = xsrVar.invoke("getElementAsQName");
         } else if (targetType.equals(DataHandler.class) || targetType.equals(Image.class)) {
             // attac
             toSet = JExpr._null();
@@ -341,13 +349,13 @@ public class ReaderIntrospector {
             }
 
             // invoke the reader method
-            JInvocation invocation = invokeParser(builder, elementBuilder);
+            JInvocation invocation = invokeParser(builder, builder.getChildElementVar(), elementBuilder);
             toSet = invocation;
         }
 
         // JaxB refs need to be wrapped with a JAXBElement
         if (Property.XmlStyle.ELEMENT_REF.equals(property.getXmlStyle())) {
-            toSet = newJaxBElement(builder, targetType, toSet);
+            toSet = newJaxBElement(xsrVar, targetType, toSet);
         }
 
         return toSet;
@@ -546,10 +554,10 @@ public class ReaderIntrospector {
         return null;
     }
 
-    private JInvocation newJaxBElement(MarshallerBuilder builder, Class type, JExpression expression) {
+    private JInvocation newJaxBElement(JVar xsrVar, Class type, JExpression expression) {
         JType jaxbElementType = toJClass(JAXBElement.class).narrow(type);
         JInvocation newJaxBElement = JExpr._new(jaxbElementType)
-                .arg(builder.getXSR().invoke("getName"))
+                .arg(xsrVar.invoke("getName"))
                 .arg(JExpr.dotclass(toJClass(type)))
                 .arg(expression);
         return newJaxBElement;
@@ -619,8 +627,7 @@ public class ReaderIntrospector {
         return block.decl(toJType(cls), name, coerce(builder, attributeVar, cls));
     }
 
-    private JVar as(MarshallerBuilder builder, JBlock block, Class<?> cls, String name, boolean nillable) {
-        JVar xsrVar = builder.getXSR();
+    private JVar as(MarshallerBuilder builder, JVar xsrVar, JBlock block, Class<?> cls, String name, boolean nillable) {
         JExpression value = coerce(builder, xsrVar.invoke("getElementAsString"), cls);
 
         JVar var;

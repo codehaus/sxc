@@ -1,5 +1,7 @@
 package com.envoisolutions.sxc.util;
 
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 import javax.xml.namespace.NamespaceContext;
 import javax.xml.namespace.QName;
 import javax.xml.stream.Location;
@@ -312,10 +314,176 @@ public class XoXMLStreamReaderImpl implements XoXMLStreamReader {
         return reader.standaloneSet();
     }
 
+    public Iterable<XoXMLStreamReader> getChildElements() {
+        return new Iterable<XoXMLStreamReader>() {
+            public Iterator<XoXMLStreamReader> iterator() {
+                return new ChildElementsIterator();
+            }
+        };
+    }
+
+    private class ChildElementsIterator implements Iterator<XoXMLStreamReader> {
+        private final int targetDepth;
+        private boolean moveToNext;
+        private boolean hasMoreEvents;
+
+        public ChildElementsIterator() {
+            targetDepth = depth + 1;
+//            try {
+//                event = nextTagIgnoreAll();
+//            } catch (XMLStreamException e) {
+//                throw new RuntimeXMLStreamException(e);
+//            }
+            moveToNext = true;
+        }
+
+        public boolean hasNext() {
+            if (moveToNext) {
+                advanceToNext();
+            }
+            return hasMoreEvents;
+        }
+
+        public XoXMLStreamReader next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            moveToNext = true;
+            return XoXMLStreamReaderImpl.this;
+        }
+
+        public void remove() {
+            throw new UnsupportedOperationException();
+        }
+
+        private void advanceToNext() {
+            moveToNext = false;
+
+            do {
+                // advance one event
+                int event;
+                try {
+                    // are we are at the end of the stream?
+                    if (!XoXMLStreamReaderImpl.this.hasNext()) {
+                        hasMoreEvents = false;
+                        return;
+                    }
+                    event = XoXMLStreamReaderImpl.this.next();
+                } catch (XMLStreamException e) {
+                    throw new RuntimeXMLStreamException(e);
+                }
+
+                // if we are at a start element event and the proper depth,
+                // then we are at the next child element
+                if (event == START_ELEMENT && depth == targetDepth) {
+                    hasMoreEvents = true;
+                    return;
+                }
+            } while(depth >= targetDepth - 1);
+//
+//            // Advance stream until we hit a START_ELEMENT event at our target depth, or
+//            // we either run out of elements or step out our our element (depth is less
+//            // then our target depth)
+//            for(int depth = getDepth(); depth >= targetDepth - 1; depth = getDepth()) {
+//                // if are at a start element event and the proper depth,
+//                // then we are at the next element
+//                if (event == START_ELEMENT && depth == targetDepth) {
+//                    hasMoreEvents = true;
+//                    return;
+//                }
+//
+//                // advance one event
+//                try {
+//                    if (!XoXMLStreamReaderImpl.this.hasNext()) {
+//                        hasMoreEvents = false;
+//                        return;
+//                    }
+//                    event = XoXMLStreamReaderImpl.this.next();
+//                } catch (XMLStreamException e) {
+//                    throw new RuntimeXMLStreamException(e);
+//                }
+//            }
+
+            // we stepped out of our element so there will be no more child elements
+            hasMoreEvents = false;
+        }
+    }
+
+    public Iterable<Attribute> getAttributes() {
+        return new Iterable<Attribute>() {
+            public Iterator<Attribute> iterator() {
+                return new AttributesIterator();
+            }
+        };
+    }
+
+    private final class AttributesIterator implements Iterator<Attribute> {
+        private final Attribute attribute = new AttributeImpl(this);
+        private int index = -1;
+
+        public boolean hasNext() {
+            return index + 1 < getAttributeCount();
+        }
+
+        public Attribute next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            index++;
+            return attribute;
+        }
+
+        public void remove() {
+            throw new UnsupportedOperationException();
+        }
+
+    }
+
+    public final class AttributeImpl implements Attribute {
+        private final AttributesIterator attributesIterator;
+
+        public AttributeImpl(AttributesIterator attributesIterator) {
+            this.attributesIterator = attributesIterator;
+        }
+
+        public QName getName() {
+            return XoXMLStreamReaderImpl.this.getAttributeName(attributesIterator.index);
+        }
+
+        public String getLocalName() {
+            return XoXMLStreamReaderImpl.this.getAttributeLocalName(attributesIterator.index);
+        }
+
+        public String getNamespace() {
+            return XoXMLStreamReaderImpl.this.getAttributeNamespace(attributesIterator.index);
+        }
+
+        public String getPrefix() {
+            return XoXMLStreamReaderImpl.this.getAttributePrefix(attributesIterator.index);
+        }
+
+        public String getType() {
+            return XoXMLStreamReaderImpl.this.getAttributeType(attributesIterator.index);
+        }
+
+        public String getValue() {
+            return XoXMLStreamReaderImpl.this.getAttributeValue(attributesIterator.index);
+        }
+
+        public int getIndex() {
+            return attributesIterator.index;
+        }
+
+        public XoXMLStreamReader getReader() {
+            return XoXMLStreamReaderImpl.this;
+        }
+    }
+
     public int hashCode() {
         return reader.hashCode();
     }
 
+    @SuppressWarnings({"EqualsWhichDoesntCheckParameterClass"})
     public boolean equals(Object arg0) {
         return reader.equals(arg0);
     }
@@ -323,5 +491,4 @@ public class XoXMLStreamReaderImpl implements XoXMLStreamReader {
     public String toString() {
         return reader.toString();
     }
-
 }

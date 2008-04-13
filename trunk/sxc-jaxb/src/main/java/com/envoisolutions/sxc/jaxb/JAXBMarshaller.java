@@ -55,10 +55,10 @@ public abstract class JAXBMarshaller<T> {
         return read(is, null);
     }
 
-    public T read(InputStream is, Map<String, Object> properties) throws Exception {
+    public T read(InputStream is,ReadContext context) throws Exception {
         XMLStreamReader reader = xif.createXMLStreamReader(is);
         try {
-            return read(reader, properties);
+            return read(reader, context);
         } finally {
             reader.close();
         }
@@ -68,11 +68,11 @@ public abstract class JAXBMarshaller<T> {
         return read(reader, null);
     }
 
-    public T read(XMLStreamReader reader, Map<String, Object> properties) throws Exception {
-        return read(new XoXMLStreamReaderImpl(reader), properties);
+    public T read(XMLStreamReader reader, ReadContext context) throws Exception {
+        return read(new XoXMLStreamReaderImpl(reader), context);
     }
 
-    public abstract T read(XoXMLStreamReader reader, Map<String, Object> properties) throws Exception;
+    public abstract T read(XoXMLStreamReader reader, ReadContext context) throws Exception;
 
     public void write(OutputStream is, T o) throws Exception {
         write(is, o, null);

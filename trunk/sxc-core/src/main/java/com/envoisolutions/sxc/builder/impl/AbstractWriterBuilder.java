@@ -11,7 +11,6 @@ import com.sun.codemodel.JVar;
 import com.sun.codemodel.JType;
 
 import javax.xml.namespace.QName;
-import javax.xml.stream.XMLStreamException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -41,12 +40,10 @@ public abstract class AbstractWriterBuilder implements WriterBuilder {
 
 	protected JVar addBasicArgs(JMethod method, JType sourceObjectType, String sourceVariableName) {
         xswVar = method.param(XoXMLStreamWriter.class, variableManager.createId("writer"));
-        String rtContextName = variableManager.createId("properties");
+        String rtContextName = variableManager.createId("context");
         JVar var = method.param(sourceObjectType, variableManager.createId(sourceVariableName));
-        rtContextVar = method.param(buildContext.getStringToObjectMap(), rtContextName);
+        rtContextVar = method.param(buildContext.getMarshalContextClass(), rtContextName);
 
-        method._throws(XMLStreamException.class);
-        
         for (Class c : exceptions) {
         	method._throws(c);
         }

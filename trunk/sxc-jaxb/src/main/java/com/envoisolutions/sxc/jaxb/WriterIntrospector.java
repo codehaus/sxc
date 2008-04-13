@@ -145,10 +145,9 @@ public class WriterIntrospector {
             JBlock enumCase = enumSwitch.addCondition(type.staticRef(enumValue.name()).eq(value));
             enumCase._return(JExpr.lit(enumText));
         }
-        // java.lang.IllegalArgumentException: No enum const class com.envoisolutions.sxc.jaxb.enums.AnnotatedEnum.ssssss
-        // todo inaccurate message... enums mapped
+        // java.lang.IllegalArgumentException: Unexpected XML constant FOO for enum some.EnumClass, expected [BAR, BAZ]
         enumSwitch._else()._throw(JExpr._new(toJClass(IllegalArgumentException.class))
-                .arg(JExpr.lit("No value mapped to ").plus(value).plus(JExpr.lit(" for enum " + bean.getType().getName()))));
+                .arg(JExpr.lit("Unexpected constant ").plus(value).plus(JExpr.lit(" for enum " + type.fullName() + ", expected " + bean.getEnumMap().keySet()))));
 
         // switch statements don't seem to compile correctly
         // JSwitch enumSwitch = method.body()._switch(value);

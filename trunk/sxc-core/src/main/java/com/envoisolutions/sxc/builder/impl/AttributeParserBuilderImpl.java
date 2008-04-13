@@ -1,5 +1,7 @@
 package com.envoisolutions.sxc.builder.impl;
 
+import javax.xml.stream.XMLStreamException;
+
 import com.envoisolutions.sxc.builder.ParserBuilder;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
@@ -10,9 +12,7 @@ import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JVar;
 
-
 public class AttributeParserBuilderImpl extends AbstractParserBuilder {
-
     private ElementParserBuilderImpl parent;
 
     public AttributeParserBuilderImpl(ElementParserBuilderImpl parent) {
@@ -23,6 +23,7 @@ public class AttributeParserBuilderImpl extends AbstractParserBuilder {
         
         method = buildContext.getNextReadMethod(readerClass);
         addBasicArgs(method);
+        method._throws(XMLStreamException.class);
     }
 
     public ParserBuilder newState() {

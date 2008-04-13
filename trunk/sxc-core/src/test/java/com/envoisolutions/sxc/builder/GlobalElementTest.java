@@ -27,14 +27,14 @@ public class GlobalElementTest extends TestCase {
         // handle <root>
         ElementParserBuilder root = b.expectElement(new QName("root"));
         CodeBody body = root.getBody();
-        JVar var = body.decl(mapClass, "map", JExpr.direct("context"));
+        JVar var = body.decl(mapClass, "map", JExpr._super().ref("context"));
         body._return(var);
         
         // handle <id>
         ParserBuilder globalBuilder = root.expectGlobalElement(new QName("global"));
         JVar bal = globalBuilder.as(String.class);
         body = globalBuilder.getBody();
-        body.add(JExpr.direct("context").invoke("put").arg(bal).arg(bal));
+        body.add(JExpr._super().ref("context").invoke("put").arg(bal).arg(bal));
 
         builder.write(new File("target/tmp-global"));
         

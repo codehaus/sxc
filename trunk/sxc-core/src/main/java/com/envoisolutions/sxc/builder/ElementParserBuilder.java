@@ -17,12 +17,16 @@ public interface ElementParserBuilder extends ParserBuilder {
     ParserBuilder expectAttribute(QName qname);
     void setAttributeBlock(QName name, JVar readVar, JBlock readBlock);
 
+    ParserBuilder expectAnyAttribute();
+    void setAnyAttributeBlock(JVar readVar, JBlock readBlock);
+
     ElementParserBuilder expectElement(QName qname);
     ElementParserBuilder expectElement(QName qname, String methodNameHint);
     void setElementBlock(QName name, JVar readVar, JBlock readBlock);
 
     ElementParserBuilder expectAnyElement();
     ElementParserBuilder expectAnyElement(String methodNameHint);
+    void setAnyElementBlock(JVar readVar, JBlock readBlock);
 
     ElementParserBuilder expectGlobalElement(QName qname);
     ElementParserBuilder expectGlobalElement(QName qname, String methodNameHint);
@@ -30,6 +34,11 @@ public interface ElementParserBuilder extends ParserBuilder {
     ElementParserBuilder expectXsiType(QName qname);
     ElementParserBuilder expectXsiType(QName qname, String methodNameHint);
     void setXsiTypeBlock(QName name, JVar readVar, JBlock readBlock);
+
+    ElementParserBuilder expectUnexpectedXsiType();
+    ElementParserBuilder expectUnexpectedXsiType(String methodNameHint);
+    void setUnexpectedXsiTypeBlock(JVar readVar, JBlock readBlock);
+
 
     ElementParserBuilder newState();
     ElementParserBuilder newState(JBlock block);

@@ -2,6 +2,7 @@ package com.envoisolutions.sxc.builder.impl;
 
 import static java.beans.Introspector.decapitalize;
 import javax.xml.namespace.QName;
+import javax.xml.stream.XMLStreamException;
 
 import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.Writer;
@@ -41,6 +42,7 @@ public class ElementWriterBuilderImpl extends AbstractWriterBuilder implements E
 
         method = writerClass.method(JMod.PUBLIC | JMod.FINAL, void.class, "write");
         objectVar = addBasicArgs(method, model.ref(Object.class), "o");
+        method._throws(XMLStreamException.class);
         currentBlock = method.body();
         currentBlock.add(conditions);
     }
@@ -63,6 +65,7 @@ public class ElementWriterBuilderImpl extends AbstractWriterBuilder implements E
         this.buildContext = parent.buildContext;
         this.method = parent.buildContext.createMethod(parent.getWriterClass(), "write" + capitalize(type.name()));
         this.objectVar = addBasicArgs(method, type, decapitalize(type.name()));
+        method._throws(XMLStreamException.class);
         this.writerClass = parent.writerClass;
         this.model = parent.model;
         exceptions.addAll(parent.exceptions);

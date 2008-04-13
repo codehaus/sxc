@@ -17,10 +17,8 @@ public class BuildContext {
     private Map<QName, ExpectedElement> globalElements = new HashMap<QName, ExpectedElement>();
     private final IdentityManager methodManager = new IdentityManager();
 
-    /**
-     * {@code Map<String,Object>} type.
-     */
-    private JClass stringToObjectMap = model.ref(Map.class).narrow(String.class,Object.class);
+    private JClass marshalContextClass = model.ref(Map.class).narrow(String.class,Object.class);
+    private JClass unmarshalContextClass = model.ref(Map.class).narrow(String.class,Object.class);
 
     public BuildContext() {
         methodManager.addId("read");
@@ -30,8 +28,20 @@ public class BuildContext {
         return model;
     }
 
-    public JClass getStringToObjectMap() {
-        return stringToObjectMap;
+    public JClass getMarshalContextClass() {
+        return marshalContextClass;
+    }
+
+    public void setMarshalContextClass(JClass marshalContextClass) {
+        this.marshalContextClass = marshalContextClass;
+    }
+
+    public JClass getUnmarshalContextClass() {
+        return unmarshalContextClass;
+    }
+
+    public void setUnmarshalContextClass(JClass unmarshalContextClass) {
+        this.unmarshalContextClass = unmarshalContextClass;
     }
 
     JMethod getNextReadMethod(JDefinedClass contextClass) {
