@@ -12,7 +12,6 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 
-import javax.xml.stream.XMLStreamException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -88,10 +87,8 @@ public abstract class AbstractParserBuilder implements ParserBuilder {
     protected void addBasicArgs(JMethod method) {
         xsrVar = method.param(XoXMLStreamReader.class, "reader");
         variableManager.addId("reader");
-        rtContextVar = method.param(buildContext.getStringToObjectMap(), "properties");
-        variableManager.addId("properties");
-
-        method._throws(XMLStreamException.class);
+        rtContextVar = method.param(buildContext.getUnmarshalContextClass(), "context");
+        variableManager.addId("context");
     }
     
     

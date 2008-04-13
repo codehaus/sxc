@@ -110,7 +110,7 @@ public class XPathBuilder {
         // grab the event handler out of the context
         JVar handlerVar = body.decl(eventHandlerType, varName, 
                                     JExpr.cast(eventHandlerType, 
-                                               JExpr.direct("context").invoke("get").arg(varName)));
+                                               JExpr._super().ref("context").invoke("get").arg(varName)));
 
         body.add(handlerVar.invoke("onMatch").arg(JExpr._new(eventType).arg(JExpr.lit(expr)).arg(xpathBuilder.getXSR())));
     }

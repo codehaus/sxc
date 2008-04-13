@@ -2,7 +2,6 @@ package com.envoisolutions.sxc.jaxb;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.TreeMap;
 import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.UnmarshalException;
@@ -27,6 +26,7 @@ import javax.xml.validation.Schema;
 
 import com.envoisolutions.sxc.util.XoXMLStreamReader;
 import com.envoisolutions.sxc.util.XoXMLStreamReaderImpl;
+import com.envoisolutions.sxc.util.RuntimeXMLStreamException;
 import org.w3c.dom.Node;
 import org.xml.sax.InputSource;
 import org.xml.sax.XMLReader;
@@ -109,14 +109,14 @@ public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
     }
 
     public Object unmarshal(XMLStreamReader reader) throws JAXBException {
-        return read(reader, null, false);
+        return read(reader, null, null, new ReadContext(this));
     }
 
     public <T> JAXBElement<T> unmarshal(XMLStreamReader xsr, Class<T> cls) throws JAXBException {
-        return (JAXBElement<T>) read(xsr, cls, true);
+        return (JAXBElement<T>) read(xsr, cls, true, new ReadContext(this));
     }
 
-    private Object read(XMLStreamReader xsr, Class<?> cls, boolean jaxbElementWrap) throws JAXBException {
+    public Object read(XMLStreamReader xsr, Class<?> expectedType, Boolean jaxbElementWrap, ReadContext readContext) throws JAXBException {
         XoXMLStreamReader reader = new XoXMLStreamReaderImpl(xsr);
         try {
             int event = reader.getEventType();
@@ -129,55 +129,97 @@ public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
                 return null;
             }
 
+            // read and save element name before stream advances
             QName name = reader.getName();
 
-            Object o = null;
+            Object o;
             if (reader.isXsiNil()) {
-                // its null
-            } else if (String.class.equals(cls)) {
-                o = reader.getElementAsString();
-            } else if (Boolean.class.equals(cls)) {
-                o = reader.getElementAsBoolean();
-            } else if (Double.class.equals(cls)) {
-                o = reader.getElementAsDouble();
-            } else if (Long.class.equals(cls)) {
-                o = reader.getElementAsLong();
-            } else if (Float.class.equals(cls)) {
-                o = reader.getElementAsFloat();
-            } else if (Short.class.equals(cls)) {
-                o = reader.getElementAsShort();
-            } else if (QName.class.equals(cls)) {
-                o = reader.getElementAsQName();
-            } else if (byte[].class.equals(cls)) {
-                o = BinaryUtils.decodeAsBytes(reader);
-            } else if (XMLGregorianCalendar.class.equals(cls)) {
-                String s = reader.getElementAsString();
-                o = dtFactory.newXMLGregorianCalendar(s);
-            } else if (Duration.class.equals(cls)) {
-                String s = reader.getElementAsString();
-                o = dtFactory.newDuration(s);
-            } else {
-                JAXBMarshaller instance = introspector.getJaxbMarshaller(cls);
+                // was xsi:nil
+                return null;
+            } else if (reader.getXsiType() != null) {
+                // find the marshaller by xsi:type
+                JAXBMarshaller instance = introspector.getJaxbMarshallerBySchemaType(reader.getXsiType());
                 if (instance == null) {
-                    instance = introspector.getJaxbMarshallerBySchemaType(reader.getXsiType());
+                    throw new UnmarshalException("No JAXB object for XML type " + reader.getXsiType());
                 }
-                if (instance == null) {
-                    instance = introspector.getJaxbMarshallerByElementName(name);
+                if (expectedType == null) expectedType = instance.getType();
+                if (jaxbElementWrap == null)  jaxbElementWrap =  instance.getXmlRootElement() == null;
+
+                // check assignment is possible
+                if (!expectedType.isAssignableFrom(instance.getType())) {
+                    throw new UnmarshalException("Expected instance of " + expectedType.getName() + ", but found xsi:type " +
+                            reader.getXsiType() + " which is mapped to " + instance.getType().getName());
                 }
-                if (instance != null) {
-                    o = instance.read(reader, new TreeMap<String, Object>());
-                    if (cls == null) {
-                        cls = instance.getType();
+
+                // read the object
+                o = instance.read(reader, readContext);
+            } else if (expectedType != null) {
+                // check built in types first
+                if (String.class.equals(expectedType)) {
+                    o = reader.getElementAsString();
+                } else if (Boolean.class.equals(expectedType)) {
+                    o = reader.getElementAsBoolean();
+                } else if (Double.class.equals(expectedType)) {
+                    o = reader.getElementAsDouble();
+                } else if (Long.class.equals(expectedType)) {
+                    o = reader.getElementAsLong();
+                } else if (Float.class.equals(expectedType)) {
+                    o = reader.getElementAsFloat();
+                } else if (Short.class.equals(expectedType)) {
+                    o = reader.getElementAsShort();
+                } else if (QName.class.equals(expectedType)) {
+                    o = reader.getElementAsQName();
+                } else if (byte[].class.equals(expectedType)) {
+                    o = BinaryUtils.decodeAsBytes(reader);
+                } else if (XMLGregorianCalendar.class.equals(expectedType)) {
+                    String s = reader.getElementAsString();
+                    o = dtFactory.newXMLGregorianCalendar(s);
+                } else if (Duration.class.equals(expectedType)) {
+                    String s = reader.getElementAsString();
+                    o = dtFactory.newDuration(s);
+                } else {
+                    // find marshaller by expected type
+                    JAXBMarshaller instance = introspector.getJaxbMarshaller(expectedType);
+                    if (instance == null) {
+                        throw new UnmarshalException(expectedType.getName() + " is not a JAXB object");
                     }
-                    jaxbElementWrap = jaxbElementWrap || instance.getXmlRootElement() == null;
+                    if (expectedType == null) {
+                        expectedType = instance.getType();
+                    }
+                    if (jaxbElementWrap == null)  jaxbElementWrap =  instance.getXmlRootElement() == null;
+
+                    // read the object
+                    o = instance.read(reader, readContext);
                 }
+            } else {
+                // find the marshaller by root element name
+                JAXBMarshaller instance = introspector.getJaxbMarshallerByElementName(name);
+                if (instance == null) {
+                    throw new UnmarshalException("No JAXB object mapped to root element " + name);
+                }
+                expectedType = instance.getType();
+
+                // read the object
+                o = instance.read(reader, readContext);
             }
-            if (jaxbElementWrap) {
-                return new JAXBElement(name, cls, o);
+
+            // wrap if necessary
+            if (jaxbElementWrap != null && jaxbElementWrap) {
+                return new JAXBElement(name, expectedType, o);
             } else {
                 return o;
             }
         } catch (Exception e) {
+            if (e instanceof RuntimeXMLStreamException) {
+                e = ((RuntimeXMLStreamException) e).getCause();
+            }
+            if (e instanceof XMLStreamException) {
+                Throwable cause = e.getCause();
+                if (cause instanceof JAXBException) {
+                    throw (JAXBException) e;
+                }
+                throw new UnmarshalException(cause == null ? e : cause);
+            }
             if (e instanceof JAXBException) {
                 throw (JAXBException) e;
             }

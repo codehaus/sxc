@@ -93,13 +93,13 @@ public class CollectionsTest extends XoTestCase {
     }
 
     public void testUncreatableCollection() throws Exception {
-        assertLoad("collectionField", true); // just verify the code works
+        assertLoad("collection-field", true); // just verify the code works
         assertLoad("uncreatableCollectionField", false);
         assertLoad("uncreatableCollectionProperty", false);
     }
 
     public void testUnknownCollection() throws Exception {
-        assertLoad("collectionField", true); // just verify the code works
+        assertLoad("collection-field", true); // just verify the code works
         assertLoad("unknownCollectionField", false);
         assertLoad("unknownCollectionProperty", false);
     }

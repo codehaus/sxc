@@ -38,6 +38,7 @@ public class BuilderContext {
     public BuilderContext(Map<String, Object> properties, Class... classes) throws JAXBException {
         buildContext = new BuildContext();
         codeModel = buildContext.getCodeModel();
+        buildContext.setUnmarshalContextClass(codeModel.ref(ReadContext.class));
 
         RiModelBuilder modelBuilder = new RiModelBuilder(properties, classes);
         Model model = modelBuilder.getModel();
@@ -70,8 +71,7 @@ public class BuilderContext {
 
     public void write(CodeWriter codeWriter) throws IOException, BuildException {
         for (MarshallerBuilder builder : marshallerBuilders.values()) {
-            builder.getParserBuilder().write();
-            builder.getWriterBuilder().write();
+            builder.write();
         }
         
         buildContext.getCodeModel().build(codeWriter);

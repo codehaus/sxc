@@ -1,6 +1,7 @@
 package com.envoisolutions.sxc.builder.impl;
 
 import javax.xml.namespace.QName;
+import javax.xml.stream.XMLStreamException;
 
 import com.envoisolutions.sxc.builder.WriterBuilder;
 import static com.envoisolutions.sxc.builder.impl.IdentityManager.capitalize;
@@ -18,6 +19,7 @@ public class AttributeWriterBuilder extends AbstractWriterBuilder implements Wri
 
         method = buildContext.createMethod(parent.getWriterClass(), "write" + capitalize(type.name()));
         objectVar = addBasicArgs(method, type, "_obj");
+        method._throws(XMLStreamException.class);
 
         this.writerClass = parent.writerClass;
         this.model = parent.model;

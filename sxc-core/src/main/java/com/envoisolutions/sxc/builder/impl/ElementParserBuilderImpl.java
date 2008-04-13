@@ -9,6 +9,7 @@ import java.util.Map;
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
+import javax.xml.XMLConstants;
 
 import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.Reader;
@@ -18,6 +19,7 @@ import com.envoisolutions.sxc.builder.ElementParserBuilder;
 import com.envoisolutions.sxc.builder.ParserBuilder;
 import static com.envoisolutions.sxc.builder.impl.IdentityManager.capitalize;
 import com.envoisolutions.sxc.util.XoXMLStreamReader;
+import com.envoisolutions.sxc.util.Attribute;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JClassAlreadyExistsException;
@@ -31,23 +33,31 @@ import com.sun.codemodel.JMod;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JForEach;
 
 public class ElementParserBuilderImpl extends AbstractParserBuilder implements ElementParserBuilder {
 
     private final Map<QName, ExpectedAttribute> attributes = new LinkedHashMap<QName, ExpectedAttribute>();
+    private ExpectedAttribute anyAttribute;
     private final Map<QName, ExpectedElement> elements = new LinkedHashMap<QName, ExpectedElement>();
-    private final Map<QName, ExpectedXsiType> xsiTypes = new LinkedHashMap<QName, ExpectedXsiType>();
-    private final List<ElementParserBuilderImpl> states = new ArrayList<ElementParserBuilderImpl>();
     private ExpectedElement anyElement;
+    private final Map<QName, ExpectedXsiType> xsiTypes = new LinkedHashMap<QName, ExpectedXsiType>();
+    private ExpectedXsiType unexpectedXsiType;
+    private final List<ElementParserBuilderImpl> states = new ArrayList<ElementParserBuilderImpl>();
 
     private boolean root;
     private int depth = 1;
     private QName name;
+    private QName xmlType;
     private JMethod constructor;
     private JInvocation methodInvocation;
 
     private boolean valueType;
     private boolean checkXsiTypes = true;
+    private boolean addReadAsType = true;
+
+    private JForEach forEachAttribute;
+    private JForEach forEachChildElement;
 
     private final JBlock preElementBlock = new JBlock(false, false);
 
@@ -55,7 +65,6 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
      * Base class to extend from. Only used when root.
      */
     private JClass baseClass;
-
     private final JBlock tailBlock = new JBlock(false, false);
 
     public ElementParserBuilderImpl(BuildContext buildContext, String className) throws BuildException {
@@ -74,28 +83,43 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         method = readerClass.method(JMod.PUBLIC | JMod.FINAL, Object.class, "read");
         
         addBasicArgs(method);
-        
+        method._throws(XMLStreamException.class);
+
         root = true;
 
         reserveVariables();
     }
 
     public ElementParserBuilderImpl(BuildContext buildContext, JDefinedClass readerClass, Class returnType) throws BuildException {
+        this(buildContext, readerClass, returnType, 1, null);
+    }
+
+    public ElementParserBuilderImpl(BuildContext buildContext, JDefinedClass readerClass, Class returnType, int depth, String methodNameHint) throws BuildException {
         if (buildContext == null) throw new NullPointerException("buildContext is null");
         if (readerClass == null) throw new NullPointerException("readerClass is null");
-        if (returnType == null) throw new NullPointerException("returnType is null");
 
         this.buildContext = buildContext;
         this.readerClass = readerClass;
         model = buildContext.getCodeModel();
 
-        this.returnType = model._ref(returnType);
+        if (returnType != null) {
+            this.returnType = model._ref(returnType);
+        }
 
-        method = readerClass.method(JMod.PUBLIC | JMod.FINAL, returnType, "read");
+        if (methodNameHint == null) methodNameHint = "";
+        method = readerClass.method(JMod.PUBLIC | JMod.FINAL, returnType == null ? void.class : returnType, "read" + capitalize(methodNameHint));
 
         addBasicArgs(method);
 
-        root = true;
+        this.depth = depth;
+
+        if (depth == 1) {
+            root = true;
+        }
+        addReadAsType = false;
+
+        forEachAttribute = new JForEach(model.ref(Attribute.class), variableManager.createId("attribute"), getXSR().invoke("getAttributes"));
+        forEachChildElement = new JForEach(model.ref(XoXMLStreamReader.class), variableManager.createId("elementReader"), getXSR().invoke("getChildElements"));
 
         reserveVariables();
     }
@@ -118,6 +142,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         if (methodNameHint == null) methodNameHint = "";
         method = buildContext.createMethod(readerClass, "read" + capitalize(methodNameHint));
         addBasicArgs(method);
+        method._throws(XMLStreamException.class);
 
         if (increaseDepth) {
             depth = parent.depth + 1;
@@ -142,6 +167,14 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         return name;
     }
 
+    public QName getXmlType() {
+        return xmlType;
+    }
+
+    public void setXmlType(QName xmlType) {
+        this.xmlType = xmlType;
+    }
+
     public JMethod getConstructor() {
         return constructor;
     }
@@ -152,6 +185,28 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
 
     public void setBaseClass(JClass baseClass) {
         this.baseClass = baseClass;
+    }
+
+    public boolean isAddReadAsType() {
+        return addReadAsType;
+    }
+
+    public void setAddReadAsType(boolean addReadAsType) {
+        this.addReadAsType = addReadAsType;
+    }
+
+    public JVar getAttributeVar() {
+        if (forEachAttribute == null) {
+            return null;
+        }
+        return forEachAttribute.var();
+    }
+
+    public JVar getChildElementVar() {
+        if (forEachChildElement == null) {
+            return null;
+        }
+        return forEachChildElement.var();
     }
 
     public ParserBuilder expectAttribute(QName name) {
@@ -182,6 +237,24 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         }
         expectedAttribute.setReadVar(readVar);
         expectedAttribute.setReadBlock(readBlock);
+    }
+
+    public ParserBuilder expectAnyAttribute() {
+        if (anyAttribute == null) {
+            anyAttribute = new ExpectedAttribute();
+        }
+        if (anyAttribute.getParserBuilder() == null) {
+            anyAttribute.setParserBuilder(new AttributeParserBuilderImpl(this));
+        }
+        return anyAttribute.getParserBuilder();
+    }
+
+    public void setAnyAttributeBlock(JVar readVar, JBlock readBlock) {
+        if (anyAttribute == null) {
+            anyAttribute = new ExpectedAttribute();
+        }
+        anyAttribute.setReadVar(readVar);
+        anyAttribute.setReadBlock(readBlock);
     }
 
     public ElementParserBuilder expectElement(QName name) {
@@ -232,6 +305,28 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         expectedElement.setReadBlock(readBlock);
     }
 
+    public ElementParserBuilder expectAnyElement() {
+        return expectAnyElement(null);
+    }
+
+    public ElementParserBuilder expectAnyElement(String methodNameHint) {
+        if (anyElement == null) {
+            anyElement = new ExpectedElement();
+        }
+        if (anyElement.getParserBuilder() == null) {
+            anyElement.setParserBuilder(new ElementParserBuilderImpl(this, true, null, methodNameHint));
+        }
+        return anyElement.getParserBuilder();
+    }
+
+    public void setAnyElementBlock(JVar readVar, JBlock readBlock) {
+        if (anyElement == null) {
+            anyElement = new ExpectedElement();
+        }
+        anyElement.setReadVar(readVar);
+        anyElement.setReadBlock(readBlock);
+    }
+
     public ElementParserBuilder expectXsiType(QName name) {
         return expectXsiType(name, null);
     }
@@ -268,18 +363,26 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         expectedXsiType.setReadBlock(readBlock);
     }
 
-    public ElementParserBuilder expectAnyElement() {
-        return expectAnyElement(null);
+    public ElementParserBuilder expectUnexpectedXsiType() {
+        return expectUnexpectedXsiType(null);
     }
 
-    public ElementParserBuilder expectAnyElement(String methodNameHint) {
-        if (anyElement == null) {
-            anyElement = new ExpectedElement();
+    public ElementParserBuilder expectUnexpectedXsiType(String methodNameHint) {
+        if (unexpectedXsiType == null) {
+            unexpectedXsiType = new ExpectedXsiType();
         }
-        if (anyElement.getParserBuilder() == null) {
-            anyElement.setParserBuilder(new ElementParserBuilderImpl(this, true, null, methodNameHint));
+        if (unexpectedXsiType.getParserBuilder() == null) {
+            unexpectedXsiType.setParserBuilder(new ElementParserBuilderImpl(this, true, null, methodNameHint));
         }
-        return anyElement.getParserBuilder();
+        return unexpectedXsiType.getParserBuilder();
+    }
+
+    public void setUnexpectedXsiTypeBlock(JVar readVar, JBlock readBlock) {
+        if (unexpectedXsiType == null) {
+            unexpectedXsiType = new ExpectedXsiType();
+        }
+        unexpectedXsiType.setReadVar(readVar);
+        unexpectedXsiType.setReadBlock(readBlock);
     }
 
     public ElementParserBuilder expectGlobalElement(QName qname) {
@@ -419,7 +522,9 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
             (elements.size() > 0
             || buildContext.getGlobalElements().size() > 0 
             || xsiTypes.size() > 0
-            || attributes.size() > 0 
+            || attributes.size() > 0
+            || unexpectedXsiType != null
+            || anyAttribute != null
             || anyElement != null)){
             writeMainLoop();
         } else {
@@ -454,9 +559,10 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
     }
     
     protected void writeReadAsType() {
+        if (!addReadAsType) return;
         JMethod m = getReaderClass().method(JMod.PUBLIC, Object.class, "read");
         m.param(XoXMLStreamReader.class, "reader");
-        m.param(buildContext.getStringToObjectMap(), "properties");
+        m.param(buildContext.getMarshalContextClass(), "context");
         JVar typeVar = m.param(QName.class, "type");
         m._throws(XMLStreamException.class);
         
@@ -489,52 +595,76 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         b = preElementBlock;
 
         if (!elements.isEmpty() || !xsiTypes.isEmpty() || allowUnknown ) {
-            // declare variables used during element reading
-            JVar targetDepthVar = b.decl(model._ref(int.class), "targetDepth", xsrVar.invoke("getDepth").plus(JExpr.lit(1)));
-            JVar event = b.decl(model._ref(int.class), "event", xsrVar.invoke("nextTagIgnoreAll"));
-            JVar depthVar = b.decl(model._ref(int.class), "depth", xsrVar.invoke("getDepth"));
+            b.add(new JBlankLine());
+            b.add(new JLineComment("Read elements"));
 
-//        JClass sysType = (JClass) model._ref(System.class);
-//        if (depth != 1)
-//            b.add(sysType.staticRef("out").invoke("println").arg(JExpr.lit("TD ").plus(targetDepthVar)
-//                     .plus(JExpr.lit(" Depth: ")).plus(depthVar)
-//                     .plus(JExpr.lit(" Name: " + name).plus(JExpr.lit(" Current: "))
-//                           .plus(xsrVar.invoke("getName")))));
+            if (forEachChildElement != null && !allowUnknown) {
+                b.add(forEachChildElement);
+                writeElementReader(elements, forEachChildElement.body(), forEachChildElement.var(), false);
+            } else {
+                // declare variables used during element reading
+                JVar targetDepthVar = b.decl(model._ref(int.class), "targetDepth", xsrVar.invoke("getDepth").plus(JExpr.lit(1)));
+                JVar event = b.decl(model._ref(int.class), "event", xsrVar.invoke("nextTagIgnoreAll"));
+                JVar depthVar = b.decl(model._ref(int.class), "depth", xsrVar.invoke("getDepth"));
 
-            JBlock loop = b._while(depthVar.gte(targetDepthVar.minus(JExpr.lit(1)))).body();
+//            JClass sysType = (JClass) model._ref(System.class);
+//            if (depth != 1)
+//                b.add(sysType.staticRef("out").invoke("println").arg(JExpr.lit("TD ").plus(targetDepthVar)
+//                         .plus(JExpr.lit(" Depth: ")).plus(depthVar)
+//                         .plus(JExpr.lit(" Name: " + name).plus(JExpr.lit(" Current: "))
+//                               .plus(xsrVar.invoke("getName")))));
 
-            b = loop._if(event.eq(JExpr.lit(XMLStreamConstants.START_ELEMENT)))._then();
+                JBlock loop = b._while(depthVar.gte(targetDepthVar.minus(JExpr.lit(1)))).body();
+
+                b = loop._if(event.eq(JExpr.lit(XMLStreamConstants.START_ELEMENT)))._then();
 
 
-            JConditional ifDepth = b._if(depthVar.eq(targetDepthVar));
+                JConditional ifDepth = b._if(depthVar.eq(targetDepthVar));
 
-            writeElementReader(elements, ifDepth._then(), false);
+                writeElementReader(elements, ifDepth._then(), xsrVar, false);
 
-            if (allowUnknown) {
-                writeElementReader(buildContext.getGlobalElements(), ifDepth._else(), true);
+                if (allowUnknown) {
+                    writeElementReader(buildContext.getGlobalElements(), ifDepth._else(), xsrVar, true);
+                }
+
+                JConditional ifHasNext = loop._if(xsrVar.invoke("hasNext"));
+                ifHasNext._then().assign(event, xsrVar.invoke("next"));
+                ifHasNext._then().assign(depthVar, xsrVar.invoke("getDepth"));
+                ifHasNext._else()._break();
             }
-
-            JConditional ifHasNext = loop._if(xsrVar.invoke("hasNext"));
-            ifHasNext._then().assign(event, xsrVar.invoke("next"));
-            ifHasNext._then().assign(depthVar, xsrVar.invoke("getDepth"));
-            ifHasNext._else()._break();
         }
+        removeBraces(preElementBlock);
     }
 
     private void writeAttributeReader(JBlock b) {
-        if (attributes.isEmpty()) {
+        if (attributes.isEmpty() && anyAttribute == null) {
             return;
         }
 
-        JForLoop loop = b._for();
-        JVar var = loop.init(model._ref(int.class), "i", JExpr.lit(0));
-        loop.test(var.lt(xsrVar.invoke("getAttributeCount")));
-        loop.update(var.assignPlus(JExpr.lit(1)));
-        
-        b = loop.body();
-        JVar attName = b.decl(model._ref(String.class), "attName", xsrVar.invoke("getAttributeLocalName").arg(var));
-        JVar attNs = b.decl(model._ref(String.class), "attNs", xsrVar.invoke("getAttributeNamespace").arg(var));
-        JVar attValue = b.decl(model._ref(String.class), "attValue", xsrVar.invoke("getAttributeValue").arg(var));
+        b.add(new JBlankLine());
+        b.add(new JLineComment("Read attributes"));
+
+        JExpression attName;
+        JExpression attNs;
+        JExpression attValue;
+        if (forEachAttribute != null) {
+            b.add(forEachAttribute);
+            b = forEachAttribute.body();
+            JVar attributeVar = forEachAttribute.var();
+            attName = attributeVar.invoke("getLocalName");
+            attNs = attributeVar.invoke("getNamespace");
+            attValue = attributeVar.invoke("getValue");
+        } else {
+            JForLoop loop = b._for();
+            JVar var = loop.init(model._ref(int.class), "i", JExpr.lit(0));
+            loop.test(var.lt(xsrVar.invoke("getAttributeCount")));
+            loop.update(var.assignPlus(JExpr.lit(1)));
+
+            b = loop.body();
+            attName = b.decl(model._ref(String.class), "attName", xsrVar.invoke("getAttributeLocalName").arg(var));
+            attNs = b.decl(model._ref(String.class), "attNs", xsrVar.invoke("getAttributeNamespace").arg(var));
+            attValue = b.decl(model._ref(String.class), "attValue", xsrVar.invoke("getAttributeValue").arg(var));
+        }
 
 
         JIfElseBlock attributesBlock = new JIfElseBlock();
@@ -546,55 +676,79 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
             JExpression qnameCompare = buildQNameCompare(name, attName, attNs);
             JBlock block = attributesBlock.addCondition(qnameCompare);
 
-            List<JVar> vars = null;
+            List<JExpression> vars = null;
             if (expectedAttribute.getParserBuilder() != null) {
                 AttributeParserBuilderImpl builder = expectedAttribute.getParserBuilder();
 
                 // if we have a builder we need to pass the attribute value
                 builder.getMethod().param(model._ref(String.class), "_attValue");
-                vars = new ArrayList<JVar>(builder.variables);
+                vars = new ArrayList<JExpression>(builder.variables);
                 vars.add(attValue);
 
                 // todo why?
                 builder.getMethod().body().add(builder.codeBlock);
             }
 
-            writeReader(block, expectedAttribute, vars);
+            writeReader(block, xsrVar, expectedAttribute, vars);
+        }
+
+        if (anyAttribute != null) {
+            JBlock block = attributesBlock.addCondition(model.ref(XMLConstants.class).staticRef("W3C_XML_SCHEMA_INSTANCE_NS_URI").ne(attNs));
+            writeReader(block, xsrVar, anyAttribute, null);
         }
     }
 
     private void writeXsiChecks(JBlock b) {
-        if(xsiTypes.isEmpty()) {
+        if(xsiTypes.isEmpty() && unexpectedXsiType == null) {
             return; // no @xsi:type to look for.
         }
 
+        b.add(new JBlankLine());
+        b.add(new JLineComment("Check xsi:type"));
         JVar xsiType = b.decl(model._ref(QName.class), "xsiType", xsrVar.invoke("getXsiType"));
         JConditional cond = b._if(xsiType.ne(JExpr._null())); 
         
         writeXsiChecks(cond._then(), xsiType);
     }
 
-    private void writeXsiChecks(JBlock b, JVar xsiType) {
-        JIfElseBlock xsiBlock = new JIfElseBlock();
-        b.add(xsiBlock);
+    private void writeXsiChecks(JBlock block, JVar xsiType) {
+        JIfElseBlock xsiTypesBlock = new JIfElseBlock();
+        block.add(xsiTypesBlock);
         for (Map.Entry<QName, ExpectedXsiType> entry : xsiTypes.entrySet()) {
             QName name = entry.getKey();
             ExpectedXsiType expectedXsiType = entry.getValue();
 
             JExpression qnameCompare = buildQNameCompare(name, xsiType.invoke("getLocalPart"), xsiType.invoke("getNamespaceURI"));
-            JBlock block = xsiBlock.addCondition(qnameCompare);
+            JBlock xsiTypeBlock = xsiTypesBlock.addCondition(qnameCompare);
 
             // xsi:type elements are immediately returned to the caller
-            writeReader(block, expectedXsiType, null);
+            writeReader(xsiTypeBlock, xsrVar, expectedXsiType, null);
 
             ElementParserBuilderImpl parserBuilder = expectedXsiType.getParserBuilder();
             if (parserBuilder != null && expectedXsiType.getParserBuilder().returnType == null) {
-                block._return();
+                xsiTypeBlock._return();
             }
+        }
+
+        if (unexpectedXsiType != null) {
+            JBlock anyBlock = block;
+            if (xmlType != null) {
+                JExpression localInv = JExpr.lit(xmlType.getLocalPart()).ne(xsiType.invoke("getLocalPart"));
+                JExpression nsInv = JExpr.lit(xmlType.getNamespaceURI()).ne(xsiType.invoke("getNamespaceURI"));
+                if (xmlType.getNamespaceURI().equals("")) {
+                    nsInv = nsInv.cand(xsiType.invoke("getNamespaceURI").ne(JExpr._null()));
+                }
+                JExpression qnameCompare = localInv.cor(nsInv);
+
+                anyBlock = xsiTypesBlock.addCondition(qnameCompare);
+            } else if (!xsiTypesBlock.ifConditions().isEmpty()) {
+                anyBlock = xsiTypesBlock._else().block();
+            }
+            writeReader(anyBlock, xsrVar, unexpectedXsiType, null);
         }
     }
 
-    private void writeElementReader(Map<QName, ExpectedElement> elements, JBlock block, boolean global) {
+    private void writeElementReader(Map<QName, ExpectedElement> elements, JBlock block, JVar xsrVar, boolean global) {
         if (depth == 1 && !global && checkXsiTypes && returnType == null) {
             writeXsiChecks(block);
         }
@@ -608,7 +762,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
             JExpression qnameCompare = buildQNameCompare(name, xsrVar.invoke("getLocalName"), xsrVar.invoke("getNamespaceURI"));
             JBlock elementBlock = elementsBlock.addCondition(qnameCompare);
 
-            writeReader(elementBlock, expectedElement, expectedElement.getVars());
+            writeReader(elementBlock, xsrVar, expectedElement, expectedElement.getVars());
         }
 
         if (anyElement != null) {
@@ -617,11 +771,11 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
                 anyBlock = elementsBlock._else().block();
             }
             
-            writeReader(anyBlock, anyElement, null);
+            writeReader(anyBlock, xsrVar, anyElement, null);
         }
     }
 
-    private void writeReader(JBlock block, Expected expected, List<? extends JExpression> vars) {
+    private void writeReader(JBlock block, JVar xsrVar, Expected expected, List<? extends JExpression> vars) {
         JBlock readBlock = expected.getReadBlock();
         AbstractParserBuilder builder = expected.getParserBuilder();
         if (builder != null) {
@@ -638,8 +792,12 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
             }
 
             if (readBlock != null) {
-                JVar readVar = expected.getReadVar();
-                readVar.init(invocation);
+                if (expected.getReadVar() != null) {
+                    JVar readVar = expected.getReadVar();
+                    readVar.init(invocation);
+                } else {
+                    readBlock.add(invocation);
+                }
                 block.add(removeBraces(readBlock));
             } else if (root && builder.returnType != null) {
                 block._return(invocation);
@@ -657,9 +815,9 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
     }
 
     private JExpression buildQNameCompare(QName name, JExpression localPart, JExpression namespaceUri) {
-        JExpression localInv = localPart.eq(JExpr.lit(name.getLocalPart()));
+        JExpression localInv = JExpr.lit(name.getLocalPart()).eq(localPart);
         String ns = name.getNamespaceURI();
-        JExpression nsInv = JExpr.lit(name.getNamespaceURI()).eq(namespaceUri);
+        JExpression nsInv = JExpr.lit(ns).eq(namespaceUri);
         if (ns.equals("")) {
             nsInv = nsInv.cor(namespaceUri.eq(JExpr._null()));
         }

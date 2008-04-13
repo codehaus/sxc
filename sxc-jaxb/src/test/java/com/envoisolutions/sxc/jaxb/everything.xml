@@ -24,7 +24,7 @@
     <max1min1>test</max1min1>
     <max1min1Nillable xsi:nil="true"/>
     <max1min1NillableComplex xsi:nil="true"/>
-    <max1min1NillableENum xsi:nil="true"/>
+    <max1min1NillableEnum xsi:nil="true"/>
     
     <maxUnbounded>string1</maxUnbounded>
     <maxUnbounded>string2</maxUnbounded>
