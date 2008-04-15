@@ -15,14 +15,15 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.logging.Logger;
+import java.awt.Image;
 import javax.xml.bind.JAXBException;
-import javax.xml.bind.UnmarshalException;
 import javax.xml.datatype.Duration;
 import javax.xml.datatype.XMLGregorianCalendar;
 import javax.xml.namespace.QName;
+import javax.activation.DataHandler;
 
 import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.impl.JBlankLine;
@@ -56,17 +57,18 @@ import com.sun.codemodel.JVar;
 public class WriterIntrospector {
 	private static final Logger logger = Logger.getLogger(WriterIntrospector.class.getName());
 
+    private final BuilderContext builderContext;
     private final Model model;
     private final JCodeModel codeModel;
     private final Map<Bean, MarshallerBuilder> builders = new LinkedHashMap<Bean, MarshallerBuilder>();
     private final Map<Class, JClass> enumWriters = new LinkedHashMap<Class, JClass>();
 
     public WriterIntrospector(BuilderContext context, Model model) throws JAXBException {
+        builderContext = context;
         this.model = model;
         this.codeModel = context.getCodeModel();
 
         List<Bean> mybeans = new ArrayList<Bean>(model.getBeans());
-        // TODO sort classes by hierarchy
         Collections.sort(mybeans, new BeanComparator());
 
         // declare all writer methods first, so everything exists when we build the
@@ -88,8 +90,14 @@ public class WriterIntrospector {
             // declare all private field accessors (so they are grouped)
             for (Property property : allProperties) {
                 Field field = property.getField();
-                if (field != null && isPrivate(field)) {
-                    builder.getPrivateFieldAccessor(field);
+                if (field != null) {
+                    if (isPrivate(field)) {
+                        builder.getPrivateFieldAccessor(property.getField());
+                    }
+                } else {
+                    if (isPrivate(property.getGetter()) || isPrivate(property.getSetter())) {
+                        builder.getPrivatePropertyAccessor(property.getGetter(), property.getSetter(), property.getName());
+                    }
                 }
             }
 
@@ -133,7 +141,10 @@ public class WriterIntrospector {
         }
 
         JClass type = toJClass(bean.getType());
-        JMethod method = jaxbClass.method(JMod.PUBLIC | JMod.STATIC, String.class, "toString");
+        JMethod method = jaxbClass.method(JMod.PUBLIC | JMod.STATIC, String.class, "toString")._throws(Exception.class);
+        JVar xsrVar = method.param(Object.class, "bean");
+        JVar parameterNameVar = method.param(String.class, "parameterName");
+        JVar contextVar = method.param(toJClass(RuntimeContext.class), "context");
         JVar value = method.param(type, decapitalize(bean.getType().getSimpleName()));
 
         JIfElseBlock enumSwitch = new JIfElseBlock();
@@ -145,9 +156,12 @@ public class WriterIntrospector {
             JBlock enumCase = enumSwitch.addCondition(type.staticRef(enumValue.name()).eq(value));
             enumCase._return(JExpr.lit(enumText));
         }
-        // java.lang.IllegalArgumentException: Unexpected XML constant FOO for enum some.EnumClass, expected [BAR, BAZ]
-        enumSwitch._else()._throw(JExpr._new(toJClass(IllegalArgumentException.class))
-                .arg(JExpr.lit("Unexpected constant ").plus(value).plus(JExpr.lit(" for enum " + type.fullName() + ", expected " + bean.getEnumMap().keySet()))));
+
+        JInvocation unexpectedInvoke = enumSwitch._else().invoke(contextVar, "unexpectedEnumConst").arg(xsrVar).arg(parameterNameVar).arg(value);
+        for (Enum expectedValue : bean.getEnumMap().keySet()) {
+            unexpectedInvoke.arg(type.staticRef(expectedValue.name()));
+        }
+        enumSwitch._else()._return(JExpr._null());
 
         // switch statements don't seem to compile correctly
         // JSwitch enumSwitch = method.body()._switch(value);
@@ -173,11 +187,7 @@ public class WriterIntrospector {
                 block.add(new JBlankLine());
                 block.add(new JLineComment(property.getXmlStyle() + ": " + property.getName()));
 
-                String propertyName = builder.getWriteVariableManager().createId(property.getName());
-                JVar propertyVar = block.decl(
-                        toJType(toClass(property.getType())),
-                        propertyName,
-                        getValue(builder, property));
+                JVar propertyVar = getValue(builder, property, block);
 
                 if (!property.isCollection()) {
 
@@ -199,11 +209,7 @@ public class WriterIntrospector {
             builder.getWriteMethod().body().add(new JBlankLine());
             builder.getWriteMethod().body().add(new JLineComment(property.getXmlStyle() + ": " + property.getName()));
 
-            String propertyName = builder.getWriteVariableManager().createId(property.getName());
-            JVar propertyVar = builder.getWriteMethod().body().decl(
-                    getGenericType(property.getType()),
-                    propertyName,
-                    getValue(builder, property));
+            JVar propertyVar = getValue(builder, property, builder.getWriteMethod().body());
 
             switch (property.getXmlStyle()) {
                 case ELEMENT:
@@ -269,6 +275,9 @@ public class WriterIntrospector {
                         outerVar = each.var();
                     }
 
+                    // process value through adapter
+                    outerVar = writeAdapterConversion(builder, outerBlock, property, outerVar);
+
                     if (expectedTypes.size() == 1) {
                         ElementMapping mapping = property.getElementMappings().iterator().next();
 
@@ -285,14 +294,7 @@ public class WriterIntrospector {
 
                         // property is required and does not support nill, then an error is reported if the value was null
                         if (property.isRequired() && !mapping.isNillable() && nullCond != null) {
-                            JExpression message;
-                            if (property.isCollection()) {
-                                message = JExpr.lit("Property " + property + " collection cannot contain a null item");
-                            } else {
-                                message = JExpr.lit("Property " + property + " cannot be null");
-                            }
-                            // todo report error
-                            nullCond._else().add(toJClass(System.class).staticRef("out").invoke("println").arg(message));
+                            nullCond._else().invoke(builder.getWriteContextVar(), "unexpectedNullValue").arg(builder.getWriteObject()).arg(property.getName());
                         }
                     } else {
                         JIfElseBlock conditional = new JIfElseBlock();
@@ -337,44 +339,18 @@ public class WriterIntrospector {
                             // close element
                             nullBlock.add(builder.getXSW().invoke("writeEndElement"));
                         } else {
-                            JExpression message;
-                            if (property.isCollection()) {
-                                message = JExpr.lit("Property " + property + " collection cannot contain a null item");
-                            } else {
-                                message = JExpr.lit("Property " + property + " cannot be null");
-                            }
-                            // todo report error
-                            nullBlock.add(toJClass(System.class).staticRef("out").invoke("println").arg(message));
+                            nullBlock.invoke(builder.getWriteContextVar(), "unexpectedNullValue").arg(builder.getWriteObject()).arg(property.getName());
                         }
 
                         // if not a recogonized type or null, reprot unknown type error
-                        List<String> expectedTypeNames = new ArrayList<String>(expectedTypes.size());
+                        JInvocation unexpected = conditional._else().invoke(builder.getWriteContextVar(), "unexpectedElement").arg(builder.getXSW()).arg(builder.getWriteObject()).arg(property.getName()).arg(outerVar);
                         for (Class expectedType : expectedTypes.keySet()) {
-                            expectedTypeNames.add(expectedType.getName());
+                            unexpected.arg(builderContext.dotclass(expectedType));
                         }
-                        if (nilMapping != null) {
-                            expectedTypeNames.add("null");
-                        }
-
-                        JExpression message;
-                        if (property.isCollection()) {
-                            message = JExpr.lit("Property " + property + " collection contains an element of the unexpected type ")
-                                    .plus(outerVar.invoke("getClass").invoke("getName"))
-                                    .plus(JExpr.lit("; expected types are " + expectedTypeNames));
-                        } else {
-                            message = JExpr.lit("Property " + property + " value is the unexpected type ")
-                                    .plus(outerVar.invoke("getClass").invoke("getName"))
-                                    .plus(JExpr.lit("; expected types are " + expectedTypeNames));
-                        }
-                        // todo report error
-                        conditional._else().add(toJClass(System.class).staticRef("out").invoke("println").arg(message));
                     }
                     break;
                 case ELEMENT_REF:
                     JBlock block = builder.getWriteMethod().body();
-
-                    JClass marshallerType = toJClass(MarshallerImpl.class);
-                    JVar marshaller = block.decl(marshallerType, "marshaller", JExpr.cast(marshallerType, builder.getWriteContextVar().invoke("get").arg(JExpr.lit(MarshallerImpl.MARSHALLER))));
 
                     JVar itemVar = propertyVar;
                     if (property.isCollection()) {
@@ -395,10 +371,18 @@ public class WriterIntrospector {
                         itemVar = each.var();
                     }
 
-                    block.add(marshaller.invoke("marshal").arg(itemVar).arg(builder.getXSW()));
+                    // process value through adapter
+                    itemVar = writeAdapterConversion(builder, block, property, itemVar);
+
+                    block.invoke(builder.getWriteContextVar(), "unexpectedElementRef").arg(builder.getXSW()).arg(builder.getWriteObject()).arg(property.getName()).arg(itemVar);
                     break;
                 case VALUE:
-                    writeSimpleTypeElement(builder, property.getAdapterType(), propertyVar, toClass(property.getType()), builder.getWriteMethod().body());
+                    block = builder.getWriteMethod().body();
+
+                    // process value through adapter
+                    propertyVar = writeAdapterConversion(builder, block, property, propertyVar);
+
+                    writeSimpleTypeElement(builder, propertyVar, toClass(property.getType()), block);
                     break;
                 default:
                     throw new BuildException("Unknown XmlMapping type " + property.getXmlStyle());
@@ -429,7 +413,6 @@ public class WriterIntrospector {
         Bean targetBean = model.getBean(type);
         if (targetBean == null || targetBean.getType().isEnum()) {
             writeSimpleTypeElement(builder,
-                    mapping.getProperty().getAdapterType(),
                     itemVar,
                     type,
                     elementWriteBlock);
@@ -446,14 +429,24 @@ public class WriterIntrospector {
         block.add(builder.getXSW().invoke("writeEndElement"));
     }
 
-    private JExpression getValue(MarshallerBuilder builder, Property property) {
-        final JExpression valueExp;
+    private JVar getValue(MarshallerBuilder builder, Property property, JBlock block) {
         Class propertyType = toClass(property.getType());
+
+        String propertyName = property.getName();
+        if (property.getAdapterType() != null) {
+            propertyName += "Raw";
+        }
+        propertyName = builder.getWriteVariableManager().createId(propertyName);
+
+        JVar propertyVar = block.decl(
+                getGenericType(property.getType()),
+                propertyName);
+
         if (property.getField() != null) {
             Field field = property.getField();
 
             if (!isPrivate(field)) {
-                valueExp = builder.getWriteObject().ref(field.getName());
+                propertyVar.init(builder.getWriteObject().ref(field.getName()));
             } else {
                 JFieldVar fieldAccessorField = builder.getPrivateFieldAccessor(field);
 
@@ -478,15 +471,32 @@ public class WriterIntrospector {
                     methodName = "getObject";
                 }
 
-                valueExp = fieldAccessorField.invoke(methodName).arg(builder.getWriteObject());
+                propertyVar.init(fieldAccessorField.invoke(methodName).arg(builder.getWriteObject()).arg(builder.getWriteContextVar()).arg(builder.getWriteObject()));
             }
         } else if (property.getGetter() != null) {
             Method getter = property.getGetter();
-            valueExp = builder.getWriteObject().invoke(getter.getName());
+            if (!isPrivate(getter)) {
+                propertyVar.init(JExpr._null());
+
+                JTryBlock tryGetter = block._try();
+                tryGetter.body().assign(propertyVar, builder.getWriteObject().invoke(getter.getName()));
+
+                JCatchBlock catchException = tryGetter._catch(toJClass(Exception.class));
+                catchException.body().invoke(builder.getReadContextVar(), "getterError")
+                        .arg(builder.getWriteObject())
+                        .arg(property.getName())
+                        .arg(builderContext.dotclass(property.getBean().getType()))
+                        .arg(getter.getName())
+                        .arg(catchException.param("e"));
+            } else {
+                JFieldVar propertyAccessorField = builder.getPrivatePropertyAccessor(property.getGetter(), property.getSetter(), property.getName());
+                propertyVar.init(propertyAccessorField.invoke("getObject").arg(builder.getWriteObject()).arg(builder.getWriteContextVar()).arg(builder.getWriteObject()));
+            }
         } else {
             throw new BuildException("Property does not have a getter " + property.getBean().getClass().getName() + "." + property.getName());
         }
-        return valueExp;
+
+        return propertyVar;
     }
 
     private void writeClassWriter(MarshallerBuilder builder, Bean bean, JBlock block, JExpression propertyVar) {
@@ -522,27 +532,38 @@ public class WriterIntrospector {
         return beans;
     }
 
-    private void writeSimpleTypeElement(MarshallerBuilder builder,
-            Class adapterType,
-            JExpression object,
-            Class type,
-            JBlock block) {
+    private JVar writeAdapterConversion(MarshallerBuilder builder, JBlock block, Property property, JVar propertyVar) {
+        if (property.getAdapterType() != null) {
+            JVar adapterVar = builder.getAdapter(property.getAdapterType());
+            JVar valueVar = block.decl(toJClass(String.class), builder.getWriteVariableManager().createId(property.getName()), JExpr._null());
 
-        if (adapterType != null) {
-            JVar adapterVar = builder.getAdapter(adapterType);
-            JVar valueVar = block.decl(toJClass(String.class), "marshalValue");
             JTryBlock tryBlock = block._try();
-            tryBlock.body().assign(valueVar, adapterVar.invoke("marshal").arg(object));
-            JCatchBlock catchBlock = tryBlock._catch(toJClass(Exception.class));
-            catchBlock.body()._throw(JExpr._new(toJClass(UnmarshalException.class)).arg(catchBlock.param("e")));
+            tryBlock.body().assign(valueVar, adapterVar.invoke("marshal").arg(propertyVar));
 
-            block.add(builder.getXSW().invoke("writeCharacters").arg(valueVar));
-        } else if(isBuiltinType(type)) {
-            block.add(builder.getXSW().invoke("writeCharacters").arg(toString(object, type)));
+            JCatchBlock catchException = tryBlock._catch(toJClass(Exception.class));
+            JBlock catchBody = catchException.body();
+            catchBody.invoke(builder.getReadContextVar(), "xmlAdapterError")
+                    .arg(builder.getWriteObject())
+                    .arg(property.getName())
+                    .arg(builderContext.dotclass(property.getAdapterType()))
+                    .arg(builderContext.dotclass(toClass(property.getType())))  // currently we only support conversion between same type
+                    .arg(builderContext.dotclass(toClass(property.getType())))
+                    .arg(catchException.param("e"));
+
+            propertyVar = valueVar;
+        }
+        return propertyVar;
+    }
+
+    private void writeSimpleTypeElement(MarshallerBuilder builder, JExpression object, Class type, JBlock block) {
+        if(isBuiltinType(type)) {
+            block.add(builder.getXSW().invoke("writeCharacters").arg(toString(builder, object, type)));
         } else if (type.equals(byte[].class)) {
             block.add(toJClass(BinaryUtils.class).staticInvoke("encodeBytes").arg(builder.getXSW()).arg(object));
         } else if (type.equals(QName.class)) {
             block.add(builder.getXSW().invoke("writeQName").arg(object));
+        } else if (type.equals(DataHandler.class) || type.equals(Image.class)) {
+            // todo support AttachmentMarshaller
         } else {
         	logger.info("(JAXB Writer) Cannot map simple type yet: " + type);
         }
@@ -550,11 +571,13 @@ public class WriterIntrospector {
 
     private void writeSimpleTypeAttribute(MarshallerBuilder builder, JBlock block, QName name, Class type, JExpression value) {
         if(isBuiltinType(type)) {
-            value = toString(value, type);
+            value = toString(builder, value, type);
         } else if (type.equals(byte[].class)) {
             value = toJClass(Base64.class).staticInvoke("encode").arg(value);
         } else if (type.equals(QName.class)) {
             value = builder.getXSW().invoke("getQNameAsString").arg(value);
+        } else if (type.equals(DataHandler.class) || type.equals(Image.class)) {
+            // todo support AttachmentMarshaller
         } else {
             logger.info("(JAXB Writer) Cannot map simple attribute type yet: " + type);
             return;
@@ -661,7 +684,7 @@ public class WriterIntrospector {
                 type.isEnum();
     }
 
-    private JExpression toString(JExpression value, Class<?> type) {
+    private JExpression toString(MarshallerBuilder builder, JExpression value, Class<?> type) {
         if (type.isPrimitive()) {
             if (type.equals(boolean.class)) {
                 return toJClass(Boolean.class).staticInvoke("toString").arg(value);
@@ -708,7 +731,7 @@ public class WriterIntrospector {
                 if (writerClass == null) {
                     throw new BuildException("Unknown enum type " + type);
                 }
-                return writerClass.staticInvoke("toString").arg(value);
+                return writerClass.staticInvoke("toString").arg(builder.getWriteObject()).arg(JExpr._null()).arg(builder.getWriteContextVar()).arg(value);
             }
 
         }

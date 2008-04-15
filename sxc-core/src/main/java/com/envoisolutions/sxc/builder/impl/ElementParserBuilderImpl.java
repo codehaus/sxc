@@ -542,11 +542,13 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
 
         // Add return statement to the end of the block
         if (returnType != null) {
+            preElementBlock.add(new JBlankLine());
             setReturnType(returnType);
             preElementBlock._return(_return);
         }
         
         if (root && returnType == null) {
+            b.add(new JBlankLine());
             b._return(JExpr._null());
         }
 
@@ -569,6 +571,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         JBlock block = m.body();
         writeXsiChecks(block, typeVar);
         
+        block.add(new JBlankLine());
         block._return(JExpr._null());
     }
 

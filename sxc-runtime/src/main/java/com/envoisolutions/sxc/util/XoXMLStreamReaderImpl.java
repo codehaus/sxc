@@ -323,19 +323,9 @@ public class XoXMLStreamReaderImpl implements XoXMLStreamReader {
     }
 
     private class ChildElementsIterator implements Iterator<XoXMLStreamReader> {
-        private final int targetDepth;
-        private boolean moveToNext;
+        private final int targetDepth = depth + 1;
+        private boolean moveToNext = true;
         private boolean hasMoreEvents;
-
-        public ChildElementsIterator() {
-            targetDepth = depth + 1;
-//            try {
-//                event = nextTagIgnoreAll();
-//            } catch (XMLStreamException e) {
-//                throw new RuntimeXMLStreamException(e);
-//            }
-            moveToNext = true;
-        }
 
         public boolean hasNext() {
             if (moveToNext) {
@@ -380,29 +370,6 @@ public class XoXMLStreamReaderImpl implements XoXMLStreamReader {
                     return;
                 }
             } while(depth >= targetDepth - 1);
-//
-//            // Advance stream until we hit a START_ELEMENT event at our target depth, or
-//            // we either run out of elements or step out our our element (depth is less
-//            // then our target depth)
-//            for(int depth = getDepth(); depth >= targetDepth - 1; depth = getDepth()) {
-//                // if are at a start element event and the proper depth,
-//                // then we are at the next element
-//                if (event == START_ELEMENT && depth == targetDepth) {
-//                    hasMoreEvents = true;
-//                    return;
-//                }
-//
-//                // advance one event
-//                try {
-//                    if (!XoXMLStreamReaderImpl.this.hasNext()) {
-//                        hasMoreEvents = false;
-//                        return;
-//                    }
-//                    event = XoXMLStreamReaderImpl.this.next();
-//                } catch (XMLStreamException e) {
-//                    throw new RuntimeXMLStreamException(e);
-//                }
-//            }
 
             // we stepped out of our element so there will be no more child elements
             hasMoreEvents = false;

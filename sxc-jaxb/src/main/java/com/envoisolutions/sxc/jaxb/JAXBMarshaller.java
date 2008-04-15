@@ -4,7 +4,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Map;
 import java.util.Collection;
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLInputFactory;
@@ -55,7 +54,7 @@ public abstract class JAXBMarshaller<T> {
         return read(is, null);
     }
 
-    public T read(InputStream is,ReadContext context) throws Exception {
+    public T read(InputStream is, RuntimeContext context) throws Exception {
         XMLStreamReader reader = xif.createXMLStreamReader(is);
         try {
             return read(reader, context);
@@ -68,17 +67,17 @@ public abstract class JAXBMarshaller<T> {
         return read(reader, null);
     }
 
-    public T read(XMLStreamReader reader, ReadContext context) throws Exception {
+    public T read(XMLStreamReader reader, RuntimeContext context) throws Exception {
         return read(new XoXMLStreamReaderImpl(reader), context);
     }
 
-    public abstract T read(XoXMLStreamReader reader, ReadContext context) throws Exception;
+    public abstract T read(XoXMLStreamReader reader, RuntimeContext context) throws Exception;
 
     public void write(OutputStream is, T o) throws Exception {
         write(is, o, null);
     }
 
-    public void write(OutputStream is, T o, Map<String, Object> properties) throws Exception {
+    public void write(OutputStream is, T o, RuntimeContext context) throws Exception {
         XMLStreamWriter w = xof.createXMLStreamWriter(is);
         try {
             write(w, o);
@@ -91,13 +90,13 @@ public abstract class JAXBMarshaller<T> {
         write(new XoXMLStreamWriterImpl(writer), o);
     }
 
-    public void write(XMLStreamWriter writer, T o, Map<String, Object> properties) throws Exception {
-        write(new XoXMLStreamWriterImpl(writer), o, properties);
+    public void write(XMLStreamWriter writer, T o, RuntimeContext context) throws Exception {
+        write(new XoXMLStreamWriterImpl(writer), o, context);
     }
 
     public void write(XoXMLStreamWriter writer, T o) throws Exception {
         write(writer, o, null);
     }
 
-    public abstract void write(XoXMLStreamWriter writer, T o, Map<String, Object> properties) throws Exception;
+    public abstract void write(XoXMLStreamWriter writer, T o, RuntimeContext context) throws Exception;
 }

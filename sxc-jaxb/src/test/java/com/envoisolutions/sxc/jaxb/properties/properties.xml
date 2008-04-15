@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<properties>
+    <public-property>-public-</public-property>
+    <package-property>-package-</package-property>
+    <protected-property>-protected-</protected-property>
+    <private-property>-private-</private-property>
+    <booleanProperty>true</booleanProperty>
+    <byteProperty>42</byteProperty>
+    <shortProperty>4242</shortProperty>
+    <intProperty>424242</intProperty>
+    <longProperty>42424242</longProperty>
+    <floatProperty>0.42</floatProperty>
+    <doubleProperty>0.4242</doubleProperty>
+</properties>
