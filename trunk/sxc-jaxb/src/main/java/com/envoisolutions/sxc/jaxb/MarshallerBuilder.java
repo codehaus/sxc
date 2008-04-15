@@ -2,6 +2,8 @@ package com.envoisolutions.sxc.jaxb;
 
 import static java.beans.Introspector.decapitalize;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Type;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -16,9 +18,9 @@ import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.impl.ElementParserBuilderImpl;
 import com.envoisolutions.sxc.builder.impl.ElementWriterBuilderImpl;
 import com.envoisolutions.sxc.builder.impl.IdentityManager;
-import com.envoisolutions.sxc.builder.impl.JLineComment;
 import com.envoisolutions.sxc.builder.impl.JBlankLine;
-import com.envoisolutions.sxc.util.FieldAccessor;
+import com.envoisolutions.sxc.builder.impl.JLineComment;
+import static com.envoisolutions.sxc.jaxb.JavaUtils.capitalize;
 import com.envoisolutions.sxc.util.XoXMLStreamReader;
 import com.envoisolutions.sxc.util.XoXMLStreamWriter;
 import com.sun.codemodel.JBlock;
@@ -49,6 +51,7 @@ public class MarshallerBuilder {
     private final IdentityManager fieldManager = new IdentityManager();
     private final Map<String, JFieldVar> adapters = new TreeMap<String, JFieldVar>();
     private final Map<String, JFieldVar> privateFieldAccessors = new TreeMap<String, JFieldVar>();
+    private final Map<String, JFieldVar> privatePropertyAccessors = new TreeMap<String, JFieldVar>();
     private JFieldVar datatypeFactory;
     private JMethod constructor;
     private JVar readObject;
@@ -105,7 +108,7 @@ public class MarshallerBuilder {
         // add static write method
         method = marshallerClass.method(JMod.PUBLIC | JMod.STATIC, void.class, "write" + type.getSimpleName())._throws(Exception.class);
         xsrVar = method.param(XoXMLStreamWriter.class, "writer");
-        JVar item = method.param(type, java.beans.Introspector.decapitalize(type.getSimpleName()));
+        JVar item = method.param(type, decapitalize(type.getSimpleName()));
         contextVar = method.param(builderContext.getBuildContext().getMarshalContextClass(), "context");
         method.body().add(instance.invoke("write").arg(xsrVar).arg(item).arg(contextVar));
     }
@@ -194,7 +197,7 @@ public class MarshallerBuilder {
                 // if context is null, initialize context
                 body.add(new JBlankLine());
                 JBlock contextNullBlock = body._if(parserBuilder.getContextVar().eq(JExpr._null()))._then();
-                contextNullBlock.assign(parserBuilder.getContextVar(), JExpr._new(builderContext.toJClass(ReadContext.class)));
+                contextNullBlock.assign(parserBuilder.getContextVar(), JExpr._new(builderContext.toJClass(RuntimeContext.class)));
 
                 // create bean instance
                 String varName = decapitalize(type.getSimpleName());
@@ -216,6 +219,16 @@ public class MarshallerBuilder {
         if (writerBuilder == null) {
             writerBuilder = new ElementWriterBuilderImpl(builderContext.getBuildContext(), marshallerClass, type);
             writerBuilder.getMethod()._throws(Exception.class);
+
+            if (!type.isEnum()) {
+                JBlock body = writerBuilder.getMethod().body();
+
+                // if context is null, initialize context
+                body.add(new JBlankLine());
+                JBlock contextNullBlock = body._if(writerBuilder.getContextVar().eq(JExpr._null()))._then();
+                contextNullBlock.assign(writerBuilder.getContextVar(), JExpr._new(builderContext.toJClass(RuntimeContext.class)));
+            }
+
         }
         return writerBuilder;
     }
@@ -224,7 +237,7 @@ public class MarshallerBuilder {
         String adapterId = adapterType.getName();
         JFieldVar var = adapters.get(adapterId);
         if (var == null) {
-            String fieldName = java.beans.Introspector.decapitalize(adapterType.getSimpleName()) + "Adapter";
+            String fieldName = decapitalize(adapterType.getSimpleName()) + "Adapter";
             fieldName = fieldManager.createId(fieldName);
             JClass jClass = builderContext.toJClass(adapterType);
             var = marshallerClass.field(JMod.PRIVATE | JMod.STATIC | JMod.FINAL, jClass, fieldName, JExpr._new(jClass));
@@ -242,9 +255,30 @@ public class MarshallerBuilder {
                     .arg(builderContext.getCodeModel().ref(field.getDeclaringClass()).staticRef("class"))
                     .arg(JExpr.lit(field.getName()));
 
-            String fieldName = fieldManager.createId(java.beans.Introspector.decapitalize(field.getDeclaringClass().getSimpleName()) + com.envoisolutions.sxc.jaxb.JavaUtils.capitalize(field.getName()));
+            String fieldName = fieldManager.createId(decapitalize(field.getDeclaringClass().getSimpleName()) + capitalize(field.getName()));
             fieldAccessorField = marshallerClass.field(JMod.PRIVATE | JMod.STATIC | JMod.FINAL, fieldAccessorType, fieldName, newFieldAccessor);
             privateFieldAccessors.put(fieldId, fieldAccessorField);
+        }
+        return fieldAccessorField;
+    }
+
+    public JFieldVar getPrivatePropertyAccessor(Method getter, Method setter, String propertyName) {
+        Class beanClass = getter != null ? getter.getDeclaringClass() : setter.getDeclaringClass();
+        Type propertyType = getter != null ? getter.getGenericReturnType() : setter.getGenericParameterTypes()[0];
+
+        String fieldId = beanClass.getSimpleName() + "." + propertyName;
+        JFieldVar fieldAccessorField = privatePropertyAccessors.get(fieldId);
+        if (fieldAccessorField == null) {
+            JClass fieldAccessorType = builderContext.toJClass(PropertyAccessor.class).narrow(builderContext.toJClass(beanClass), builderContext.getGenericType(propertyType));
+            JInvocation newFieldAccessor = JExpr._new(fieldAccessorType)
+                    .arg(builderContext.dotclass(beanClass))
+                    .arg(builderContext.dotclass(propertyType))
+                    .arg(getter == null ? JExpr._null() : JExpr.lit(getter.getName()))
+                    .arg(setter == null ? JExpr._null() : JExpr.lit(setter.getName()));
+
+            String fieldName = fieldManager.createId(decapitalize(beanClass.getSimpleName()) + capitalize(propertyName));
+            fieldAccessorField = marshallerClass.field(JMod.PRIVATE | JMod.STATIC | JMod.FINAL, fieldAccessorType, fieldName, newFieldAccessor);
+            privatePropertyAccessors.put(fieldId, fieldAccessorField);
         }
         return fieldAccessorField;
     }

@@ -26,6 +26,7 @@ import com.sun.codemodel.CodeWriter;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JType;
+import com.sun.codemodel.JExpression;
 import com.sun.codemodel.writer.FileCodeWriter;
 
 public class BuilderContext {
@@ -38,7 +39,8 @@ public class BuilderContext {
     public BuilderContext(Map<String, Object> properties, Class... classes) throws JAXBException {
         buildContext = new BuildContext();
         codeModel = buildContext.getCodeModel();
-        buildContext.setUnmarshalContextClass(codeModel.ref(ReadContext.class));
+        buildContext.setUnmarshalContextClass(codeModel.ref(RuntimeContext.class));
+        buildContext.setMarshalContextClass(codeModel.ref(RuntimeContext.class));
 
         RiModelBuilder modelBuilder = new RiModelBuilder(properties, classes);
         Model model = modelBuilder.getModel();
@@ -179,4 +181,11 @@ public class BuilderContext {
         return type;
     }
 
+    public JExpression dotclass(Type type) {
+        Class clazz = toClass(type);
+        if (clazz.isPrimitive()) {
+            return toJType(clazz).boxify().staticRef("TYPE");
+        }
+        return toJClass(clazz).dotclass();
+    }
 }

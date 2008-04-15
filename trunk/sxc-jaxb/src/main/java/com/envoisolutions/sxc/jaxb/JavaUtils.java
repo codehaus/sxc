@@ -26,8 +26,8 @@ import java.lang.reflect.Type;
 import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Array;
 import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Member;
 
 public final class JavaUtils {
 
@@ -119,7 +119,7 @@ public final class JavaUtils {
         return new String(chars);
     }
 
-    public static boolean isPrivate(Field field) {
-        return !Modifier.isPublic(field.getDeclaringClass().getModifiers()) || !Modifier.isPublic(field.getModifiers()) || Modifier.isFinal(field.getModifiers());
+    public static boolean isPrivate(Member member) {
+        return member != null && (!Modifier.isPublic(member.getDeclaringClass().getModifiers()) || !Modifier.isPublic(member.getModifiers()) || Modifier.isFinal(member.getModifiers()));
     }
 }

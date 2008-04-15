@@ -6,9 +6,12 @@ import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.UnmarshalException;
 import javax.xml.bind.UnmarshallerHandler;
+import javax.xml.bind.ValidationEvent;
+import javax.xml.bind.MarshalException;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.attachment.AttachmentUnmarshaller;
 import javax.xml.bind.helpers.AbstractUnmarshallerImpl;
+import javax.xml.bind.helpers.ValidationEventImpl;
 import javax.xml.datatype.DatatypeConfigurationException;
 import javax.xml.datatype.DatatypeFactory;
 import javax.xml.datatype.Duration;
@@ -109,14 +112,14 @@ public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
     }
 
     public Object unmarshal(XMLStreamReader reader) throws JAXBException {
-        return read(reader, null, null, new ReadContext(this));
+        return read(reader, null, null, new RuntimeContext(this));
     }
 
     public <T> JAXBElement<T> unmarshal(XMLStreamReader xsr, Class<T> cls) throws JAXBException {
-        return (JAXBElement<T>) read(xsr, cls, true, new ReadContext(this));
+        return (JAXBElement<T>) read(xsr, cls, true, new RuntimeContext(this));
     }
 
-    public Object read(XMLStreamReader xsr, Class<?> expectedType, Boolean jaxbElementWrap, ReadContext readContext) throws JAXBException {
+    public Object read(XMLStreamReader xsr, Class<?> expectedType, Boolean jaxbElementWrap, RuntimeContext runtimeContext) throws JAXBException {
         XoXMLStreamReader reader = new XoXMLStreamReaderImpl(xsr);
         try {
             int event = reader.getEventType();
@@ -132,27 +135,35 @@ public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
             // read and save element name before stream advances
             QName name = reader.getName();
 
-            Object o;
+            Object o = null;
             if (reader.isXsiNil()) {
                 // was xsi:nil
                 return null;
             } else if (reader.getXsiType() != null) {
                 // find the marshaller by xsi:type
                 JAXBMarshaller instance = introspector.getJaxbMarshallerBySchemaType(reader.getXsiType());
-                if (instance == null) {
-                    throw new UnmarshalException("No JAXB object for XML type " + reader.getXsiType());
-                }
-                if (expectedType == null) expectedType = instance.getType();
-                if (jaxbElementWrap == null)  jaxbElementWrap =  instance.getXmlRootElement() == null;
+                if (instance != null) {
+                    if (expectedType == null) expectedType = instance.getType();
+                    if (jaxbElementWrap == null)  jaxbElementWrap =  instance.getXmlRootElement() == null;
 
-                // check assignment is possible
-                if (!expectedType.isAssignableFrom(instance.getType())) {
-                    throw new UnmarshalException("Expected instance of " + expectedType.getName() + ", but found xsi:type " +
-                            reader.getXsiType() + " which is mapped to " + instance.getType().getName());
+                    // check assignment is possible
+                    if (expectedType.isAssignableFrom(instance.getType())) {
+                        // read the object
+                        o = instance.read(reader, runtimeContext);
+                    } else {
+                        String message = "Expected instance of " + expectedType.getName() + ", but found xsi:type " + reader.getXsiType() + " which is mapped to " + instance.getType().getName();
+                        if (getEventHandler() == null || !getEventHandler().handleEvent(new ValidationEventImpl(ValidationEvent.ERROR, message, new ValidationEventLocatorImpl(reader.getLocation())))) {
+                            throw new MarshalException(message);
+                        }
+                        jaxbElementWrap = false;
+                    }
+                } else {
+                    String message = "No JAXB object for XML type " + reader.getXsiType();
+                    if (getEventHandler() == null || !getEventHandler().handleEvent(new ValidationEventImpl(ValidationEvent.ERROR, message, new ValidationEventLocatorImpl(reader.getLocation())))) {
+                        throw new MarshalException(message);
+                    }
+                    jaxbElementWrap = false;
                 }
-
-                // read the object
-                o = instance.read(reader, readContext);
             } else if (expectedType != null) {
                 // check built in types first
                 if (String.class.equals(expectedType)) {
@@ -180,27 +191,37 @@ public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
                 } else {
                     // find marshaller by expected type
                     JAXBMarshaller instance = introspector.getJaxbMarshaller(expectedType);
-                    if (instance == null) {
-                        throw new UnmarshalException(expectedType.getName() + " is not a JAXB object");
-                    }
-                    if (expectedType == null) {
-                        expectedType = instance.getType();
-                    }
-                    if (jaxbElementWrap == null)  jaxbElementWrap =  instance.getXmlRootElement() == null;
+                    if (instance != null) {
+                        if (expectedType == null) {
+                            expectedType = instance.getType();
+                        }
+                        if (jaxbElementWrap == null)  jaxbElementWrap =  instance.getXmlRootElement() == null;
 
-                    // read the object
-                    o = instance.read(reader, readContext);
+                        // read the object
+                        o = instance.read(reader, runtimeContext);
+                    } else {
+                        String message = expectedType.getName() + " is not a JAXB object";
+                        if (getEventHandler() == null || !getEventHandler().handleEvent(new ValidationEventImpl(ValidationEvent.ERROR, message, new ValidationEventLocatorImpl(reader.getLocation())))) {
+                            throw new MarshalException(message);
+                        }
+                        jaxbElementWrap = false;
+                    }
                 }
             } else {
                 // find the marshaller by root element name
                 JAXBMarshaller instance = introspector.getJaxbMarshallerByElementName(name);
-                if (instance == null) {
-                    throw new UnmarshalException("No JAXB object mapped to root element " + name);
-                }
-                expectedType = instance.getType();
+                if (instance != null) {
+                    expectedType = instance.getType();
 
-                // read the object
-                o = instance.read(reader, readContext);
+                    // read the object
+                    o = instance.read(reader, runtimeContext);
+                } else {
+                    String message = "No JAXB object mapped to root element " + name;
+                    if (getEventHandler() == null || !getEventHandler().handleEvent(new ValidationEventImpl(ValidationEvent.ERROR, message, new ValidationEventLocatorImpl(reader.getLocation())))) {
+                        throw new MarshalException(message);
+                    }
+                    jaxbElementWrap = false;
+                }
             }
 
             // wrap if necessary
@@ -222,6 +243,11 @@ public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
             }
             if (e instanceof JAXBException) {
                 throw (JAXBException) e;
+            }
+
+            // report fatal error
+            if (getEventHandler() != null) {
+                getEventHandler().handleEvent(new ValidationEventImpl(ValidationEvent.FATAL_ERROR, "Fatal error", new ValidationEventLocatorImpl(reader.getLocation()), e));
             }
             throw new UnmarshalException(e);
         }

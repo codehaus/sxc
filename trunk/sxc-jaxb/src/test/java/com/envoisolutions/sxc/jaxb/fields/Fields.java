@@ -14,6 +14,7 @@ import junit.framework.Assert;
 @XmlRootElement
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlAccessorOrder(XmlAccessOrder.ALPHABETICAL)
+@SuppressWarnings({"UnusedDeclaration"})
 public class Fields {
     @XmlElement(name = "public-field")
     public String publicField;
