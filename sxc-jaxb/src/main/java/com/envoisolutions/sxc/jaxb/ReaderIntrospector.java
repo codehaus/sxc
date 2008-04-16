@@ -132,12 +132,13 @@ public class ReaderIntrospector {
         caller.addDependency(parser.getMarshallerClass());
 
         // Add a static import for the write method on the existing builder class
-        JStaticImports staticImports = JStaticImports.getStaticImports(caller.getMarshallerClass());
+        String methodName = "read" + parser.getReadMethod().type().name();
+        if (caller != parser) {
+            JStaticImports staticImports = JStaticImports.getStaticImports(caller.getMarshallerClass());
+            staticImports.addStaticImport(parser.getMarshallerClass().fullName() + "." + methodName);
+        }
 
         // Call the static method
-        String methodName = "read" + parser.getReadMethod().type().name();
-        staticImports.addStaticImport(parser.getMarshallerClass().fullName() + "." + methodName);
-
         JInvocation invocation = JExpr.invoke(methodName).arg(callerXsrVar).arg(caller.getReadContextVar());
         return invocation;
     }

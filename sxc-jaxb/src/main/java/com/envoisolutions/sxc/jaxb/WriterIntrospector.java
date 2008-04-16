@@ -1,5 +1,6 @@
 package com.envoisolutions.sxc.jaxb;
 
+import java.awt.Image;
 import static java.beans.Introspector.decapitalize;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -18,12 +19,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.logging.Logger;
-import java.awt.Image;
+import javax.activation.DataHandler;
 import javax.xml.bind.JAXBException;
 import javax.xml.datatype.Duration;
 import javax.xml.datatype.XMLGregorianCalendar;
 import javax.xml.namespace.QName;
-import javax.activation.DataHandler;
 
 import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.impl.JBlankLine;
@@ -123,6 +123,29 @@ public class WriterIntrospector {
             if (!bean.getType().isEnum()) {
                 MarshallerBuilder builder = builders.get(bean);
                 if (builder != null) {
+                    JBlock block = builder.getWriteMethod().body();
+
+                    // perform instance checks
+                    JIfElseBlock ifElseBlock = null;
+                    for (Bean altBean : getSubstitutionTypes(builder.getType())) {
+                        if (bean == altBean) continue;
+                        if (ifElseBlock == null) {
+                            ifElseBlock = new JIfElseBlock();
+                            block.add(ifElseBlock);
+                            block.add(new JBlankLine());
+                        }
+
+                        // add condition
+                        JBlock altBlock = ifElseBlock.addCondition(context.dotclass(altBean.getType()).eq(builder.getWriteObject().invoke("getClass")));
+
+                        // write xsi:type
+                        QName typeName = altBean.getSchemaTypeName();
+                        altBlock.invoke(builder.getXSW(), "writeXsiType").arg(typeName.getNamespaceURI()).arg(typeName.getLocalPart());
+
+                        // call alternate marshaller
+                        writeClassWriter(builder, altBean, altBlock, JExpr.cast(toJClass(altBean.getType()), builder.getWriteObject()));
+                    }
+
                     writeProperties(builder, bean);
                 }
             }
@@ -214,22 +237,8 @@ public class WriterIntrospector {
             switch (property.getXmlStyle()) {
                 case ELEMENT:
                     // if the element is required, add a null check that writes xsi nil
-                    Class type = toClass(property.getType());
                     JVar outerVar = propertyVar;
                     JBlock outerBlock = builder.getWriteMethod().body();
-
-                    // determine types that may be substuited for this value
-                    Map<Class, ElementMapping> expectedTypes = new TreeMap<Class, ElementMapping>(new ClassComparator());
-                    for (ElementMapping mapping : property.getElementMappings()) {
-                        if (mapping.getComponentType() != null) {
-                            expectedTypes.put(toClass(mapping.getComponentType()), mapping);
-                            for (Bean substitutionBean : getSubstitutionTypes(toClass(mapping.getComponentType()))) {
-                                expectedTypes.put(substitutionBean.getType(), mapping);
-                            }
-                        } else {
-                            expectedTypes.put(toClass(property.getType()), mapping);
-                        }
-                    }
 
                     if (property.isCollection()) {
                         // if collection is not null, process it; otherwise write xsi:nil
@@ -258,12 +267,7 @@ public class WriterIntrospector {
                             itemType = toJType(toClass(property.getComponentType()));
                         }
 
-                        String itemName;
-                        if (expectedTypes.size() == 1) {
-                            itemName = builder.getWriteVariableManager().createId( property.getName() + "Item");
-                        } else {
-                            itemName = "item";
-                        }
+                        String itemName = builder.getWriteVariableManager().createId(property.getName() + "Item");
                         JForEach each = nullCond._then().forEach(itemType, itemName, outerVar);
 
                         // write wraper element closing tag
@@ -278,13 +282,23 @@ public class WriterIntrospector {
                     // process value through adapter
                     outerVar = writeAdapterConversion(builder, outerBlock, property, outerVar);
 
+                    // determine types that may be substuited for this value
+                    Map<Class, ElementMapping> expectedTypes = new TreeMap<Class, ElementMapping>(new ClassComparator());
+                    for (ElementMapping mapping : property.getElementMappings()) {
+                        if (mapping.getComponentType() != null) {
+                            expectedTypes.put(toClass(mapping.getComponentType()), mapping);
+                        } else {
+                            expectedTypes.put(toClass(property.getType()), mapping);
+                        }
+                    }
+
                     if (expectedTypes.size() == 1) {
                         ElementMapping mapping = property.getElementMappings().iterator().next();
 
                         // null check for non-nillable elements
                         JBlock block = outerBlock;
                         JConditional nullCond = null;
-                        if (!mapping.isNillable() && !type.isPrimitive()) {
+                        if (!mapping.isNillable() && !toClass(property.getComponentType()).isPrimitive()) {
                             nullCond = outerBlock._if(outerVar.ne(JExpr._null()));
                             block = nullCond._then();
                         }
@@ -301,7 +315,6 @@ public class WriterIntrospector {
                         outerBlock.add(conditional);
 
                         ElementMapping nilMapping = null;
-                        String itemName = builder.getWriteVariableManager().createId( property.getName() + "Item");
                         for (Map.Entry<Class, ElementMapping> entry : expectedTypes.entrySet()) {
                             Class itemType = entry.getKey();
                             ElementMapping mapping = entry.getValue();
@@ -319,7 +332,13 @@ public class WriterIntrospector {
                             JBlock block = conditional.addCondition(isInstance);
 
                             // declare item variable
-                            JVar itemVar = block.decl(toJClass(itemType), itemName, JExpr.cast(toJClass(itemType), outerVar));
+                            JVar itemVar;
+                            if (toClass(property.getComponentType()) == itemType) {
+                                itemVar = outerVar;
+                            } else {
+                                String itemName = builder.getWriteVariableManager().createId(itemType.getSimpleName());
+                                itemVar = block.decl(toJClass(itemType), itemName, JExpr.cast(toJClass(itemType), outerVar));
+                            }
                             writeElement(builder, block, mapping, itemVar, itemType, false);
                         }
 
@@ -510,12 +529,13 @@ public class WriterIntrospector {
         builder.addDependency(existingBuilder.getMarshallerClass());
 
         // Add a static import for the write method on the existing builder class
-        JStaticImports staticImports = JStaticImports.getStaticImports(builder.getMarshallerClass());
+        String methodName = "write" + bean.getType().getSimpleName();
+        if (builder != existingBuilder) {
+            JStaticImports staticImports = JStaticImports.getStaticImports(builder.getMarshallerClass());
+            staticImports.addStaticImport(existingBuilder.getMarshallerClass().fullName() + "." + methodName);
+        }
 
         // Call the static method
-        String methodName = "write" + bean.getType().getSimpleName();
-        staticImports.addStaticImport(existingBuilder.getMarshallerClass().fullName() + "." + methodName);
-
         JInvocation invocation = JExpr.invoke(methodName).arg(builder.getXSW()).arg(propertyVar).arg(builder.getWriteContextVar());
         block.add(invocation);
     }
@@ -523,7 +543,7 @@ public class WriterIntrospector {
     private List<Bean> getSubstitutionTypes(Class<?> c) {
         List<Bean> beans = new ArrayList<Bean>();
         for (Bean bean : model.getBeans()) {
-            if (c.isAssignableFrom(bean.getType())) {
+            if (c.isAssignableFrom(bean.getType()) && bean.getSchemaTypeName() != null) {
                 beans.add(bean);
             }
         }
