@@ -223,10 +223,16 @@ public class MarshallerBuilder {
             if (!type.isEnum()) {
                 JBlock body = writerBuilder.getMethod().body();
 
-                // if context is null, initialize context
+                // check for null
+                JBlock nullBlock = body._if(getWriteObject().eq(JExpr._null()))._then();
+                nullBlock.invoke(getXSW(), "writeXsiNil");
+                nullBlock._return();
                 body.add(new JBlankLine());
+
+                // if context is null, initialize context
                 JBlock contextNullBlock = body._if(writerBuilder.getContextVar().eq(JExpr._null()))._then();
                 contextNullBlock.assign(writerBuilder.getContextVar(), JExpr._new(builderContext.toJClass(RuntimeContext.class)));
+                body.add(new JBlankLine());
             }
 
         }

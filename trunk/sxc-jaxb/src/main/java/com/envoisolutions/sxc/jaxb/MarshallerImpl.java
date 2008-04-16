@@ -5,7 +5,6 @@ import java.util.Map;
 import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.MarshalException;
-import javax.xml.bind.ValidationEventHandler;
 import javax.xml.bind.UnmarshalException;
 import javax.xml.bind.ValidationEvent;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
@@ -24,10 +23,10 @@ import javax.xml.transform.dom.DOMResult;
 import javax.xml.validation.Schema;
 
 import com.envoisolutions.sxc.util.PrettyPrintXMLStreamWriter;
+import com.envoisolutions.sxc.util.RuntimeXMLStreamException;
 import com.envoisolutions.sxc.util.W3CDOMStreamWriter;
 import com.envoisolutions.sxc.util.XoXMLStreamWriter;
 import com.envoisolutions.sxc.util.XoXMLStreamWriterImpl;
-import com.envoisolutions.sxc.util.RuntimeXMLStreamException;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -40,7 +39,6 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
 
     private final Map<Class<?>, ? super XmlAdapter> adapters = new HashMap<Class<?>, XmlAdapter>();
     private AttachmentMarshaller attachmentMarshaller;
-    private ValidationEventHandler eventHandler;
     private Listener listener;
     private Schema schema;
 
