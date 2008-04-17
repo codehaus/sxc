@@ -104,7 +104,7 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
                 w.writeStartDocument(getEncoding(), null);
             }
 
-            write(jaxbElement, w, new RuntimeContext(this), true);
+            write(jaxbElement, w, new RuntimeContext(this), true, false);
 
             if (!isFragment()) {
                 w.writeEndDocument();
@@ -114,75 +114,76 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
         }
     }
 
-    public void write(Object jaxbElement, XoXMLStreamWriter w, RuntimeContext context, boolean writeTag) throws JAXBException {
-        QName name;
-        QName xsiType = null;
-        boolean writeXsiNil = false;
-        if (jaxbElement instanceof JAXBElement) {
-            JAXBElement element = (JAXBElement) jaxbElement;
-            jaxbElement = element.getValue();
-
-            name = element.getName();
-            writeXsiNil = element.isNil();
-
-            JAXBMarshaller marshaller = introspector.getJaxbMarshaller(jaxbElement.getClass());
-            if (marshaller != null && marshaller.getXmlRootElement() == null) {
-                xsiType = marshaller.getXmlType();
-            }
-        } else {
-            JAXBMarshaller marshaller = introspector.getJaxbMarshaller(jaxbElement.getClass());
-            if (marshaller == null || marshaller.getXmlRootElement() == null) {
-                throw new MarshalException("Object must be annotated with @XmlRootElement or be a JAXBElement!");
-            }
-            name = marshaller.getXmlRootElement();
-        }
+    public void write(Object jaxbElement, XoXMLStreamWriter writer, RuntimeContext context, boolean writeTag, boolean writeXsiType) throws JAXBException {
+        if (jaxbElement == null) throw new IllegalArgumentException("jaxbElement is null");
+        if (writer == null) throw new IllegalArgumentException("writer is null");
 
         try {
             if (writeTag) {
+                QName name;
+                if (jaxbElement instanceof JAXBElement) {
+                    JAXBElement element = (JAXBElement) jaxbElement;
+                    jaxbElement = element.getValue();
+
+                    name = element.getName();
+        
+                    JAXBMarshaller marshaller = introspector.getJaxbMarshaller(jaxbElement.getClass());
+                    if (marshaller != null && marshaller.getXmlRootElement() == null) {
+                        writeXsiType = marshaller.getXmlType() != null;
+                    }
+                } else {
+                    JAXBMarshaller marshaller = introspector.getJaxbMarshaller(jaxbElement.getClass());
+                    if (marshaller == null || marshaller.getXmlRootElement() == null) {
+                        throw new MarshalException("Object must be annotated with @XmlRootElement or be a JAXBElement!");
+                    }
+                    name = marshaller.getXmlRootElement();
+                }
+
                 // open element
-                w.writeStartElement("",  name.getLocalPart(), name.getNamespaceURI());
+                writer.writeStartElement("",  name.getLocalPart(), name.getNamespaceURI());
 
                 // declare namespace (this can only be done when writing the tag)
                 if (name.getNamespaceURI().length() > 0) {
-                    w.writeDefaultNamespace(name.getNamespaceURI());
+                    writer.writeDefaultNamespace(name.getNamespaceURI());
                 }
             }
 
-            if (xsiType != null) {
-                w.writeXsiType(xsiType.getNamespaceURI(), xsiType.getLocalPart());
-            }
-
-            if (writeXsiNil) {
-                w.writeXsiNil();
+            if (jaxbElement instanceof JAXBElement && ((JAXBElement) jaxbElement).isNil()) {
+                // nil JAXBElement
+                writer.writeXsiNil();
             } else if (jaxbElement != null) {
                 Class<?> c = jaxbElement.getClass();
                 if (c == String.class) {
-                    w.writeCharacters((String) jaxbElement);
+                    writer.writeCharacters((String) jaxbElement);
                 } else if (c == Boolean.class) {
-                    w.writeBoolean((Boolean) jaxbElement);
+                    writer.writeBoolean((Boolean) jaxbElement);
                 } else if (c == Byte.class) {
-                    w.writeByte((Byte) jaxbElement);
+                    writer.writeByte((Byte) jaxbElement);
                 } else if (c == Double.class) {
-                    w.writeDouble((Double) jaxbElement);
+                    writer.writeDouble((Double) jaxbElement);
                 } else if (c == Float.class) {
-                    w.writeFloat((Float) jaxbElement);
+                    writer.writeFloat((Float) jaxbElement);
                 } else if (c == Long.class) {
-                    w.writeLong((Long) jaxbElement);
+                    writer.writeLong((Long) jaxbElement);
                 } else if (c == Integer.class) {
-                    w.writeInt((Integer) jaxbElement);
+                    writer.writeInt((Integer) jaxbElement);
                 } else if (c == Short.class) {
-                    w.writeShort((Short) jaxbElement);
+                    writer.writeShort((Short) jaxbElement);
                 } else if (c == Duration.class) {
-                    w.writeCharacters(jaxbElement.toString());
+                    writer.writeCharacters(jaxbElement.toString());
                 } else if (c == XMLGregorianCalendar.class) {
-                    w.writeCharacters(((XMLGregorianCalendar) jaxbElement).toXMLFormat());
+                    writer.writeCharacters(((XMLGregorianCalendar) jaxbElement).toXMLFormat());
                 } else if (c == byte[].class) {
-                    BinaryUtils.encodeBytes(w, (byte[]) jaxbElement);
+                    BinaryUtils.encodeBytes(writer, (byte[]) jaxbElement);
                 } else {
                     JAXBMarshaller jaxbMarshaller = introspector.getJaxbMarshaller(c);
                     if (jaxbMarshaller != null) {
+                        if (writeXsiType) {
+                            writer.writeXsiType(jaxbMarshaller.getXmlType().getNamespaceURI(), jaxbMarshaller.getXmlType().getLocalPart());
+                        }
+
                         //noinspection unchecked
-                        jaxbMarshaller.write(w, jaxbElement, context);
+                        jaxbMarshaller.write(writer, jaxbElement, context);
                     } else {
                         String message = "No marshaller for " + c.getName();
                         if (getEventHandler() == null || !getEventHandler().handleEvent(new ValidationEventImpl(ValidationEvent.ERROR, message, new ValidationEventLocatorImpl(jaxbElement, null)))) {
@@ -194,7 +195,7 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
 
             if (writeTag) {
                 // close element
-                w.writeEndElement();
+                writer.writeEndElement();
             }
         } catch (Exception e) {
             if (e instanceof JAXBException) {
