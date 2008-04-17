@@ -123,33 +123,45 @@ public class WriterIntrospector {
             if (!bean.getType().isEnum()) {
                 MarshallerBuilder builder = builders.get(bean);
                 if (builder != null) {
-                    JBlock block = builder.getWriteMethod().body();
-
-                    // perform instance checks
-                    JIfElseBlock ifElseBlock = null;
-                    for (Bean altBean : getSubstitutionTypes(builder.getType())) {
-                        if (bean == altBean) continue;
-                        if (ifElseBlock == null) {
-                            ifElseBlock = new JIfElseBlock();
-                            block.add(ifElseBlock);
-                            block.add(new JBlankLine());
-                        }
-
-                        // add condition
-                        JBlock altBlock = ifElseBlock.addCondition(context.dotclass(altBean.getType()).eq(builder.getWriteObject().invoke("getClass")));
-
-                        // write xsi:type
-                        QName typeName = altBean.getSchemaTypeName();
-                        altBlock.invoke(builder.getXSW(), "writeXsiType").arg(typeName.getNamespaceURI()).arg(typeName.getLocalPart());
-
-                        // call alternate marshaller
-                        writeClassWriter(builder, altBean, altBlock, JExpr.cast(toJClass(altBean.getType()), builder.getWriteObject()));
-                    }
-
-                    writeProperties(builder, bean);
+                    add(builder, bean);
                 }
             }
         }
+    }
+
+    private void add(MarshallerBuilder builder, Bean bean) {
+        JBlock block = builder.getWriteMethod().body();
+
+        // perform instance checks
+        JIfElseBlock ifElseBlock = new JIfElseBlock();
+        block.add(ifElseBlock);
+        JInvocation unexpectedSubclass = builder.getWriteContextVar().invoke("unexpectedSubclass").arg(builder.getXSW()).arg(builder.getWriteObject()).arg(builderContext.dotclass(bean.getType()));
+        for (Bean altBean : getSubstitutionTypes(builder.getType())) {
+            if (bean == altBean) continue;
+
+            // add condition
+            JBlock altBlock = ifElseBlock.addCondition(builderContext.dotclass(altBean.getType()).eq(builder.getWriteObject().invoke("getClass")));
+
+            // write xsi:type
+            QName typeName = altBean.getSchemaTypeName();
+            altBlock.invoke(builder.getXSW(), "writeXsiType").arg(typeName.getNamespaceURI()).arg(typeName.getLocalPart());
+
+            // call alternate marshaller
+            writeClassWriter(builder, altBean, altBlock, JExpr.cast(toJClass(altBean.getType()), builder.getWriteObject()));
+            altBlock._return();
+
+            // add as expected subclass arg
+            unexpectedSubclass.arg(builderContext.dotclass(altBean.getType()));
+        }
+
+        // if the class isn't exactally this bean's type, then we have an unexpceted subclass
+        JBlock unknownSubclassBlock = ifElseBlock.addCondition(builderContext.dotclass(builder.getType()).ne(builder.getWriteObject().invoke("getClass")));
+        unknownSubclassBlock.add(unexpectedSubclass);
+        unknownSubclassBlock._return();
+
+        block.add(new JBlankLine());
+
+        writeProperties(builder, bean);
     }
 
     private void addEnum(Bean bean) {
@@ -362,7 +374,7 @@ public class WriterIntrospector {
                         }
 
                         // if not a recogonized type or null, reprot unknown type error
-                        JInvocation unexpected = conditional._else().invoke(builder.getWriteContextVar(), "unexpectedElement").arg(builder.getXSW()).arg(builder.getWriteObject()).arg(property.getName()).arg(outerVar);
+                        JInvocation unexpected = conditional._else().invoke(builder.getWriteContextVar(), "unexpectedElementType").arg(builder.getXSW()).arg(builder.getWriteObject()).arg(property.getName()).arg(outerVar);
                         for (Class expectedType : expectedTypes.keySet()) {
                             unexpected.arg(builderContext.dotclass(expectedType));
                         }

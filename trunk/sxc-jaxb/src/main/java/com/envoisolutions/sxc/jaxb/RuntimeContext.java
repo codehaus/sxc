@@ -65,6 +65,22 @@ public class RuntimeContext {
         return null;
     }
 
+    public void unexpectedSubclass(XoXMLStreamWriter writer, Object bean, Class baseClass, Class... expectedSubclasses) throws JAXBException {
+        if (marshaller != null) {
+            marshaller.write(bean, writer, this, false, true);
+            return;
+        }
+
+        String message = "Unknown subclass " + bean.getClass().getName() + " of base class " + baseClass.getName()+ ", expected [";
+        for (int i = 0; i < expectedSubclasses.length; i++) {
+            if (i != 0) message += ", ";
+            Class expectedSubclass = expectedSubclasses[i];
+            message += expectedSubclass.getName();
+        }
+        message += "]";
+        validationError(message, new ValidationEventLocatorImpl(bean, null), null);
+    }
+
     public void unexpectedNullValue(Object bean, String propertyName) throws JAXBException {
         // For compatability with the JaxB RI unexpected null values are not reported as an error when writing.
         //
@@ -76,10 +92,7 @@ public class RuntimeContext {
         // validationError(message, new ValidationEventLocatorImpl(bean, propertyName), null);
     }
 
-    public void unexpectedElement(XoXMLStreamWriter writer, Object bean, String propertyName, Object propertyValue, Class... expectedTypes) throws JAXBException {
-//        if (marshaller != null) {
-//            marshaller.write(bean, writer, this, true);
-//        }
+    public void unexpectedElementType(XoXMLStreamWriter writer, Object bean, String propertyName, Object propertyValue, Class... expectedTypes) throws JAXBException {
         String message = "Property " + bean.getClass().getName() + "." + propertyName + " value is the unexpected type " + propertyName.getClass().getName() + ", expected [";
         for (int i = 0; i < expectedTypes.length; i++) {
             if (i != 0) message += ", ";
@@ -92,7 +105,8 @@ public class RuntimeContext {
 
     public void unexpectedElementRef(XoXMLStreamWriter writer, Object bean, String propertyName, Object propertyValue, Class... expectedTypes) throws JAXBException {
         if (marshaller != null) {
-            marshaller.write(bean, writer, this, true);
+            marshaller.write(bean, writer, this, true, false);
+            return;
         }
 
         String message = "Property " + bean.getClass().getName() + "." + propertyName + " value is the unexpected type " + propertyName.getClass().getName() + ", expected [";
