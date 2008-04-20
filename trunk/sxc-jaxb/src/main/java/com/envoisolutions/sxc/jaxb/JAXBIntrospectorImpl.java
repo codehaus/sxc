@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Set;
 import java.lang.reflect.Field;
 import javax.xml.bind.JAXBIntrospector;
 import javax.xml.bind.JAXBElement;
@@ -86,6 +87,10 @@ public class JAXBIntrospectorImpl extends JAXBIntrospector {
         JAXBMarshaller marshaller = getJaxbMarshaller(jaxbElement.getClass());
         if (marshaller == null) return null;
         return marshaller.getXmlRootElement();
+    }
+
+    public Set<QName> getElementNames() {
+        return marshallerByElementName.keySet(); 
     }
 
     public boolean isFullyResolved() {

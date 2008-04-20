@@ -104,7 +104,14 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
                 w.writeStartDocument(getEncoding(), null);
             }
 
-            write(jaxbElement, w, new RuntimeContext(this), true, false);
+            // write xsi:type if there is no default root element for this type
+            boolean writeXsiType = true;
+            JAXBMarshaller marshaller = introspector.getJaxbMarshaller(jaxbElement.getClass());
+            if (marshaller != null) {
+                writeXsiType = marshaller.getXmlRootElement() == null && marshaller.getXmlType() != null;
+            }
+
+            write(jaxbElement, w, new RuntimeContext(this), true, writeXsiType);
 
             if (!isFragment()) {
                 w.writeEndDocument();
@@ -123,14 +130,10 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
                 QName name;
                 if (jaxbElement instanceof JAXBElement) {
                     JAXBElement element = (JAXBElement) jaxbElement;
-                    jaxbElement = element.getValue();
-
+                    writeXsiType = writeXsiType || element.isTypeSubstituted();
                     name = element.getName();
-        
-                    JAXBMarshaller marshaller = introspector.getJaxbMarshaller(jaxbElement.getClass());
-                    if (marshaller != null && marshaller.getXmlRootElement() == null) {
-                        writeXsiType = marshaller.getXmlType() != null;
-                    }
+
+                    jaxbElement = element.getValue();
                 } else {
                     JAXBMarshaller marshaller = introspector.getJaxbMarshaller(jaxbElement.getClass());
                     if (marshaller == null || marshaller.getXmlRootElement() == null) {
@@ -140,12 +143,7 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
                 }
 
                 // open element
-                writer.writeStartElement("",  name.getLocalPart(), name.getNamespaceURI());
-
-                // declare namespace (this can only be done when writing the tag)
-                if (name.getNamespaceURI().length() > 0) {
-                    writer.writeDefaultNamespace(name.getNamespaceURI());
-                }
+                writer.writeStartElementWithAutoPrefix(name.getNamespaceURI(), name.getLocalPart());
             }
 
             if (jaxbElement instanceof JAXBElement && ((JAXBElement) jaxbElement).isNil()) {

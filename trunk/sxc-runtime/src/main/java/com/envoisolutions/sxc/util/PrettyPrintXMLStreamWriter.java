@@ -168,11 +168,11 @@ public class PrettyPrintXMLStreamWriter implements XMLStreamWriter {
     }
 
     public void writeCharacters(String text) throws XMLStreamException {
-        writer.writeCharacters(text);
+        writer.writeCharacters(text.trim());
     }
 
     public void writeCharacters(char[] text, int start, int len) throws XMLStreamException {
-        writer.writeCharacters(text, start, len);
+        writeCharacters(new String(text, start, len));
     }
 
     public String getPrefix(String uri) throws XMLStreamException {

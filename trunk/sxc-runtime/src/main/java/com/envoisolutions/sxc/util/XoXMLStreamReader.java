@@ -4,6 +4,8 @@ import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 
+import org.w3c.dom.Element;
+
 public interface XoXMLStreamReader extends XMLStreamReader {
     QName getXsiType();
     boolean isXsiNil();
@@ -18,7 +20,9 @@ public interface XoXMLStreamReader extends XMLStreamReader {
     boolean getElementAsBoolean() throws XMLStreamException;
     byte getElementAsByte() throws XMLStreamException;
     String getElementAsString() throws XMLStreamException;
-    
+
+    Element getElementAsDomElement() throws XMLStreamException;
+
     QName getElementAsQName() throws XMLStreamException;
     QName getAsQName(String val) throws XMLStreamException;
     

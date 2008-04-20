@@ -31,6 +31,7 @@ import com.envoisolutions.sxc.util.XoXMLStreamReader;
 import com.envoisolutions.sxc.util.XoXMLStreamReaderImpl;
 import com.envoisolutions.sxc.util.RuntimeXMLStreamException;
 import org.w3c.dom.Node;
+import org.w3c.dom.Element;
 import org.xml.sax.InputSource;
 import org.xml.sax.XMLReader;
 
@@ -79,22 +80,54 @@ public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
 
     public <T> JAXBElement<T> unmarshal(Source source, Class<T> cls) throws JAXBException {
         try {
-            XMLStreamReader reader = xif.createXMLStreamReader(source);
-            JAXBElement<T> o = unmarshal(reader, cls);
-            reader.close();
-            return o;
-        } catch (XMLStreamException e) {
+            if (source instanceof SAXSource) {
+                SAXSource saxSource = (SAXSource) source;
+                XMLReader xmlReader = saxSource.getXMLReader();
+                InputSource inputSource = saxSource.getInputSource();
+                if (inputSource == null) {
+                    throw new UnmarshalException("source.getInputSource() is null");
+                }
+
+                UnmarshallerHandlerImpl unmarshallerHandler = getUnmarshallerHandler();
+                unmarshallerHandler.setType(cls);
+                xmlReader.setContentHandler(unmarshallerHandler);
+                xmlReader.parse(inputSource);
+                return (JAXBElement<T>) unmarshallerHandler.getResult();
+            } else {
+                XMLStreamReader reader = xif.createXMLStreamReader(source);
+                Object o = unmarshal(reader, cls);
+                reader.close();
+                return (JAXBElement<T>) o;
+            }
+        } catch (Exception e) {
             throw new JAXBException("Error reading XML stream.", e);
         }
     }
 
     public Object unmarshal(Source source) throws JAXBException {
         try {
-            XMLStreamReader reader = xif.createXMLStreamReader(source);
-            Object o = unmarshal(reader);
-            reader.close();
-            return o;
-        } catch (XMLStreamException e) {
+            if (source instanceof SAXSource) {
+                SAXSource saxSource = (SAXSource) source;
+                XMLReader xmlReader = saxSource.getXMLReader();
+                InputSource inputSource = saxSource.getInputSource();
+                if (inputSource == null) {
+                    throw new UnmarshalException("source.getInputSource() is null");
+                }
+
+                UnmarshallerHandler unmarshallerHandler = getUnmarshallerHandler();
+                xmlReader.setContentHandler(unmarshallerHandler);
+                xmlReader.parse(inputSource);
+                return unmarshallerHandler.getResult();
+            } else {
+                XMLStreamReader reader = xif.createXMLStreamReader(source);
+                Object o = unmarshal(reader);
+                reader.close();
+                return o;
+            }
+        } catch (Exception e) {
+            if (e instanceof JAXBException) {
+                throw (JAXBException) e;
+            }
             throw new JAXBException("Error reading XML stream.", e);
         }
     }
@@ -104,11 +137,11 @@ public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
     }
 
     public Object unmarshal(XMLEventReader reader) throws JAXBException {
-        throw new UnsupportedOperationException();
+        return unmarshal(new XMLEventStreamReader(reader));
     }
 
     public <T> JAXBElement<T> unmarshal(XMLEventReader reader, Class<T> expectedType) throws JAXBException {
-        throw new UnsupportedOperationException();
+        return unmarshal(new XMLEventStreamReader(reader), expectedType);
     }
 
     public Object unmarshal(XMLStreamReader reader) throws JAXBException {
@@ -164,7 +197,7 @@ public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
                     }
                     jaxbElementWrap = false;
                 }
-            } else if (expectedType != null) {
+            } else if (expectedType != null && !Object.class.equals(expectedType)) {
                 // check built in types first
                 if (String.class.equals(expectedType)) {
                     o = reader.getElementAsString();
@@ -188,6 +221,9 @@ public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
                 } else if (Duration.class.equals(expectedType)) {
                     String s = reader.getElementAsString();
                     o = dtFactory.newDuration(s);
+                } else if (Node.class.equals(expectedType)) {
+                    Element element = reader.getElementAsDomElement();
+                    o = element;
                 } else {
                     // find marshaller by expected type
                     JAXBMarshaller instance = introspector.getJaxbMarshaller(expectedType);
@@ -216,7 +252,7 @@ public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
                     // read the object
                     o = instance.read(reader, runtimeContext);
                 } else {
-                    String message = "No JAXB object mapped to root element " + name;
+                    String message = "No JAXB object mapped to root element " + name + "; known root elemnts are " + introspector.getElementNames();
                     if (getEventHandler() == null || !getEventHandler().handleEvent(new ValidationEventImpl(ValidationEvent.ERROR, message, new ValidationEventLocatorImpl(reader.getLocation())))) {
                         throw new MarshalException(message);
                     }
@@ -286,7 +322,8 @@ public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
         this.schema = schema;
     }
 
-    public UnmarshallerHandler getUnmarshallerHandler() {
-        return null;
+    public UnmarshallerHandlerImpl getUnmarshallerHandler() {
+        return new UnmarshallerHandlerImpl(this);
     }
+
 }

@@ -105,7 +105,7 @@ public class RuntimeContext {
 
     public void unexpectedElementRef(XoXMLStreamWriter writer, Object bean, String propertyName, Object propertyValue, Class... expectedTypes) throws JAXBException {
         if (marshaller != null) {
-            marshaller.write(bean, writer, this, true, false);
+            marshaller.write(propertyValue, writer, this, true, false);
             return;
         }
 

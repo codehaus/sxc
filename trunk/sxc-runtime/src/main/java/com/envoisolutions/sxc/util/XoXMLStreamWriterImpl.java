@@ -6,10 +6,26 @@ import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
 
+import org.w3c.dom.Element;
+import org.w3c.dom.NamedNodeMap;
+import org.w3c.dom.Attr;
+import org.w3c.dom.NodeList;
+import org.w3c.dom.Node;
+import org.w3c.dom.CDATASection;
+import org.w3c.dom.Entity;
+import org.w3c.dom.Text;
+import org.w3c.dom.Document;
+import org.w3c.dom.EntityReference;
+import org.w3c.dom.ProcessingInstruction;
+import org.w3c.dom.DocumentFragment;
+import org.w3c.dom.Notation;
+import org.w3c.dom.Comment;
+import org.w3c.dom.DocumentType;
+
 public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
     private final static String XSI_NS = "http://www.w3.org/2001/XMLSchema-instance";
     private XMLStreamWriter delegate;
-    private String defaultNamespace;
+    private DefaultNamespace defaultNamespace = new DefaultNamespace();
 
     public XoXMLStreamWriterImpl(XMLStreamWriter writer) {
         super();
@@ -28,7 +44,7 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
     }
     
     public void writeAndDeclareIfUndeclared(String prefix, String namespace) throws XMLStreamException {
-        if (!namespace.equals(defaultNamespace) && getPrefix(namespace) == null) {
+        if (!namespace.equals(defaultNamespace.getNamespaceURI()) && getPrefix(namespace) == null) {
             writeNamespace(prefix, namespace);
             setPrefix(prefix, namespace);
         }
@@ -43,7 +59,7 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
                     break;
                 }
             }
-        } else if (!namespace.equals(defaultNamespace) && getPrefix(namespace) == null) {
+        } else if (!namespace.equals(defaultNamespace.getNamespaceURI()) && getPrefix(namespace) == null) {
             // any prefix will do
             return;
         }
@@ -56,7 +72,7 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
         if (prefix.length() > 0) {
             writeAndDeclareIfUndeclared(prefix, q.getNamespaceURI(), true);
         } else {
-            if (!defaultNamespace.equals(q.getNamespaceURI())) {
+            if (!q.getNamespaceURI().equals(defaultNamespace.getNamespaceURI())) {
                 prefix = getUniquePrefix(q.getNamespaceURI(), true);
             }
         }
@@ -83,7 +99,51 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
         }
     }
 
-    
+    public void writeDomElement(Element element) throws XMLStreamException {
+        NamedNodeMap attributes = element.getAttributes();
+        for (int i = 0; i < attributes.getLength(); i++) {
+            Attr attribute = (Attr) attributes.item(i);
+            String prefix = "";
+            String attributeNamespace = attribute.getNamespaceURI();
+            if (attributeNamespace != null) {
+                if ("http://www.w3.org/XML/1998/namespace".equals(attributeNamespace)) {
+                    prefix = "xml";
+                } else {
+                    prefix = getUniquePrefix(attributeNamespace);
+                }
+            }
+            writeAttribute(prefix, attribute.getNamespaceURI(), attribute.getLocalName(), attribute.getValue());
+        }
+
+        NodeList childNodes = element.getChildNodes();
+        for (int i = 0; i < childNodes.getLength(); i++) {
+            Node child = childNodes.item(i);
+            if (child instanceof Element) {
+                Element childElement = (Element) child;
+                writeStartElementWithAutoPrefix(childElement.getNamespaceURI(), childElement.getLocalName());
+                writeDomElement(childElement);
+                writeEndElement();
+            } else if (child instanceof Text) {
+                Text text = (Text) child;
+                writeString(text.getData());
+            } else if (child instanceof CDATASection) {
+                CDATASection cdataSection = (CDATASection) child;
+                writeCData(cdataSection.getData());
+            } else if (child instanceof Comment) {
+                Comment comment = (Comment) child;
+                writeComment(comment.getData());
+            } else if (child instanceof Attr) {
+            } else if (child instanceof Document) {
+            } else if (child instanceof DocumentFragment) {
+            } else if (child instanceof DocumentType) {
+            } else if (child instanceof Entity) {
+            } else if (child instanceof EntityReference) {
+            } else if (child instanceof Notation) {
+            } else if (child instanceof ProcessingInstruction) {
+            }
+        }
+    }
+
     public void writeXsiType(String namespace, String local) throws XMLStreamException {
         String prefix = getUniquePrefix(namespace, true);
         String value;
@@ -106,7 +166,7 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
     }
     
     public String getUniquePrefix(String namespaceURI, boolean declare) throws XMLStreamException {
-        if (namespaceURI.equals(defaultNamespace)) {
+        if (namespaceURI.equals(defaultNamespace.getNamespaceURI())) {
             return "";
         }
 
@@ -175,7 +235,32 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
     public void writeInt(int i) throws XMLStreamException {
         writeCharacters(Integer.toString(i));
     }
-    
+
+    public void writeStartElementWithAutoPrefix(String namespaceURI, String localName) throws XMLStreamException {
+        // check if there is an existing prefix for this namespace
+        String prefix;
+        if (namespaceURI.equals(defaultNamespace.getNamespaceURI())) {
+            prefix = "";
+        } else {
+            prefix = getNamespaceContext().getPrefix(namespaceURI);
+        }
+
+        // if there isn't an existing prefix, generate a new one which we'll declare below
+        boolean declareNs = false;
+        if (prefix == null) {
+            prefix = "";
+            declareNs = true;
+        }
+
+        // start the element
+        writeStartElement(prefix, localName, namespaceURI);
+
+        // declare the namespace in the new element
+        if (declareNs) {
+            writeDefaultNamespace(namespaceURI);
+        }
+    }
+
     public void close() throws XMLStreamException {
         delegate.close();
     }
@@ -237,7 +322,7 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
     }
 
     public void writeDefaultNamespace(String uri) throws XMLStreamException {
-        defaultNamespace = uri;
+        defaultNamespace.setNamespaceURI(uri);
         delegate.writeDefaultNamespace(uri);
     }
 
@@ -263,6 +348,7 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
 
     public void writeEndElement() throws XMLStreamException {
         delegate.writeEndElement();
+        defaultNamespace = defaultNamespace.getParent();
     }
 
     public void writeEntityRef(String name) throws XMLStreamException {
@@ -294,15 +380,55 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
     }
 
     public void writeStartElement(String prefix, String namespaceURI, String localName) throws XMLStreamException {
+        defaultNamespace = new DefaultNamespace(defaultNamespace);
         delegate.writeStartElement(prefix, namespaceURI, localName);
     }
 
     public void writeStartElement(String namespaceURI, String localName) throws XMLStreamException {
+        defaultNamespace = new DefaultNamespace(defaultNamespace);
         delegate.writeStartElement(namespaceURI, localName);
     }
 
     public void writeStartElement(String localName) throws XMLStreamException {
+        defaultNamespace = new DefaultNamespace(defaultNamespace);
         delegate.writeStartElement(localName);
     }
-    
+
+    private static class DefaultNamespace {
+        private final DefaultNamespace parent;
+        private String namespaceURI;
+
+        private DefaultNamespace() {
+            parent = null;
+        }
+
+        private DefaultNamespace(DefaultNamespace parent) {
+            if (parent == null) throw new NullPointerException("parent is null");
+            this.parent = parent;
+        }
+
+        public DefaultNamespace getParent() {
+            if (parent == null) {
+                throw new IllegalAccessError("parent is null");
+            }
+            return parent;
+        }
+
+        public String getNamespaceURI() {
+            if (namespaceURI != null) {
+                return namespaceURI;
+            }
+            if (parent == null) {
+                return null;
+            }
+            return parent.getNamespaceURI();
+        }
+
+        public void setNamespaceURI(String namespaceURI) {
+            if (this.namespaceURI != null) {
+                throw new IllegalStateException("Default namespace is alreayd set to " + this.namespaceURI);
+            }
+            this.namespaceURI = namespaceURI;
+        }
+    }
 }

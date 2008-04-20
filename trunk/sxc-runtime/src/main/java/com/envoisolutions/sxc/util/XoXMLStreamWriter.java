@@ -4,6 +4,8 @@ import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
 
+import org.w3c.dom.Element;
+
 public interface XoXMLStreamWriter extends XMLStreamWriter {
     void writeString(String s) throws XMLStreamException;
     void writeInt(int i) throws XMLStreamException;
@@ -15,7 +17,10 @@ public interface XoXMLStreamWriter extends XMLStreamWriter {
     void writeByte(byte b) throws XMLStreamException;
     void writeQName(QName q) throws XMLStreamException;
     String getQNameAsString(QName q) throws XMLStreamException;
-    
+    void writeDomElement(Element element) throws XMLStreamException;
+
+    void writeStartElementWithAutoPrefix(String namespaceURI, String localName) throws XMLStreamException;
+
     void writeXsiNil() throws XMLStreamException; 
     void writeXsiType(String namespace, String local) throws XMLStreamException;
     
