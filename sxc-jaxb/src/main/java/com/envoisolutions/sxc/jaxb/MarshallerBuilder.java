@@ -4,6 +4,7 @@ import static java.beans.Introspector.decapitalize;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
+import java.lang.reflect.Modifier;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -12,6 +13,7 @@ import java.util.TreeSet;
 import javax.xml.datatype.DatatypeConfigurationException;
 import javax.xml.datatype.DatatypeFactory;
 import javax.xml.namespace.QName;
+import javax.xml.bind.JAXBException;
 
 import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.builder.BuildException;
@@ -48,10 +50,10 @@ public class MarshallerBuilder {
     private final boolean wrapperElement;
     private ElementParserBuilderImpl parserBuilder;
     private ElementWriterBuilderImpl writerBuilder;
-    private final IdentityManager fieldManager = new IdentityManager();
-    private final Map<String, JFieldVar> adapters = new TreeMap<String, JFieldVar>();
-    private final Map<String, JFieldVar> privateFieldAccessors = new TreeMap<String, JFieldVar>();
-    private final Map<String, JFieldVar> privatePropertyAccessors = new TreeMap<String, JFieldVar>();
+    private final IdentityManager fieldManager;
+    private final Map<String, JFieldVar> adapters;
+    private final Map<String, JFieldVar> privateFieldAccessors;
+    private final Map<String, JFieldVar> privatePropertyAccessors;
     private JFieldVar datatypeFactory;
     private JMethod constructor;
     private JVar readObject;
@@ -71,6 +73,10 @@ public class MarshallerBuilder {
         this.marshallerClass = parent.marshallerClass;
         this.parserBuilder = parserBuilder;
         wrapperElement = true;
+        fieldManager = parent.fieldManager;
+        adapters = parent.adapters;
+        privateFieldAccessors = parent.privateFieldAccessors;
+        privatePropertyAccessors = parent.privatePropertyAccessors;
     }
 
     public MarshallerBuilder(BuilderContext builderContext, Class type, QName xmlRootElement, QName xmlType) {
@@ -80,6 +86,10 @@ public class MarshallerBuilder {
         this.xmlRootElement = xmlRootElement;
         this.xmlType = xmlType;
         wrapperElement = false;
+        fieldManager = new IdentityManager();
+        adapters = new TreeMap<String, JFieldVar>();
+        privateFieldAccessors = new TreeMap<String, JFieldVar>();
+        privatePropertyAccessors = new TreeMap<String, JFieldVar>();
 
         try {
             marshallerClass = builderContext.getCodeModel()._class("generated.sxc." + type.getName() + "JaxB");
@@ -142,7 +152,7 @@ public class MarshallerBuilder {
         if (marshallerClass.fullName().equals(dependency.fullName())) return;
         
         if (parent == null) {
-            if (!dependencies.add(dependency.fullName())) {
+            if (dependencies.add(dependency.fullName())) {
                 superInvocation.arg(dependency.dotclass());
             }
         } else {
@@ -153,17 +163,19 @@ public class MarshallerBuilder {
     public void write() {
         getParserBuilder();
         JBlock block = new JBlock();
-        parserBuilder.setAnyAttributeBlock(null, block);
-        JInvocation invocation = block.invoke(parserBuilder.getContextVar(), "unexpectedAttribute").arg(getAttributeVar());
-        for (QName expectedAttribute : expectedAttributes) {
-            invocation.arg(JExpr._new(builderContext.toJClass(QName.class)).arg(expectedAttribute.getNamespaceURI()).arg(expectedAttribute.getLocalPart()));
-        }
+        if (!Modifier.isAbstract(type.getModifiers())) {
+            parserBuilder.setAnyAttributeBlock(null, block);
+            JInvocation invocation = block.invoke(parserBuilder.getContextVar(), "unexpectedAttribute").arg(getAttributeVar());
+            for (QName expectedAttribute : expectedAttributes) {
+                invocation.arg(JExpr._new(builderContext.toJClass(QName.class)).arg(expectedAttribute.getNamespaceURI()).arg(expectedAttribute.getLocalPart()));
+            }
 
-        block = new JBlock();
-        parserBuilder.setAnyElementBlock(null, block);
-        invocation = block.invoke(parserBuilder.getContextVar(), "unexpectedElement").arg(getChildElementVar());
-        for (QName expectedElement : expectedElements) {
-            invocation.arg(JExpr._new(builderContext.toJClass(QName.class)).arg(expectedElement.getNamespaceURI()).arg(expectedElement.getLocalPart()));
+            block = new JBlock();
+            parserBuilder.setAnyElementBlock(null, block);
+            invocation = block.invoke(parserBuilder.getContextVar(), "unexpectedElement").arg(getChildElementVar());
+            for (QName expectedElement : expectedElements) {
+                invocation.arg(JExpr._new(builderContext.toJClass(QName.class)).arg(expectedElement.getNamespaceURI()).arg(expectedElement.getLocalPart()));
+            }
         }
 
         block = new JBlock();
@@ -199,16 +211,18 @@ public class MarshallerBuilder {
                 JBlock contextNullBlock = body._if(parserBuilder.getContextVar().eq(JExpr._null()))._then();
                 contextNullBlock.assign(parserBuilder.getContextVar(), JExpr._new(builderContext.toJClass(RuntimeContext.class)));
 
-                // create bean instance
-                String varName = decapitalize(type.getSimpleName());
-                varName = parserBuilder.getVariableManager().createId(varName);
-                JType beanType = builderContext.getCodeModel()._ref(type);
-                readObject = body.decl(beanType, decapitalize(varName), JExpr._new(beanType));
+                if (!Modifier.isAbstract(type.getModifiers())) {
+                    // create bean instance
+                    String varName = decapitalize(type.getSimpleName());
+                    varName = parserBuilder.getVariableManager().createId(varName);
+                    JType beanType = builderContext.getCodeModel()._ref(type);
+                    readObject = body.decl(beanType, decapitalize(varName), JExpr._new(beanType));
 
-                // return the bean
-                parserBuilder.getBody()._return(readObject);
-
-
+                    // return the bean
+                    parserBuilder.getBody()._return(readObject);
+                } else {
+                    parserBuilder.getTailBlock()._throw(JExpr._new(builderContext.toJClass(JAXBException.class)).arg(""));
+                }
             }
         }
         return parserBuilder;
@@ -431,6 +445,18 @@ public class MarshallerBuilder {
             return writerDefaultPrefix;
         } else {
             return getXSW().invoke("getUniquePrefix").arg(namespaceURI);
+        }
+    }
+
+    public JInvocation getWriteStartElement(QName name) {
+        getWriterBuilder();
+
+        if ("http://www.w3.org/XML/1998/namespace".equals(name.getNamespaceURI())) {
+            return getXSW().invoke("writeStartElement").arg("xml").arg(name.getLocalPart()).arg(name.getNamespaceURI());
+        } else if (writerDefaultNS != null && writerDefaultNS.equals(name.getNamespaceURI())) {
+            return getXSW().invoke("writeStartElement").arg(writerDefaultPrefix).arg(name.getLocalPart()).arg(name.getNamespaceURI());
+        } else {
+            return getXSW().invoke("writeStartElementWithAutoPrefix").arg(name.getNamespaceURI()).arg(name.getLocalPart());
         }
     }
 }

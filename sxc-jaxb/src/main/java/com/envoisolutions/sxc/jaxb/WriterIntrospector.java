@@ -4,8 +4,6 @@ import java.awt.Image;
 import static java.beans.Introspector.decapitalize;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -30,7 +28,8 @@ import com.envoisolutions.sxc.builder.impl.JBlankLine;
 import com.envoisolutions.sxc.builder.impl.JIfElseBlock;
 import com.envoisolutions.sxc.builder.impl.JLineComment;
 import com.envoisolutions.sxc.builder.impl.JStaticImports;
-import static com.envoisolutions.sxc.jaxb.JavaUtils.*;
+import static com.envoisolutions.sxc.jaxb.JavaUtils.isPrivate;
+import static com.envoisolutions.sxc.jaxb.JavaUtils.toClass;
 import com.envoisolutions.sxc.jaxb.model.Bean;
 import com.envoisolutions.sxc.jaxb.model.ElementMapping;
 import com.envoisolutions.sxc.jaxb.model.Model;
@@ -53,6 +52,7 @@ import com.sun.codemodel.JMod;
 import com.sun.codemodel.JTryBlock;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
+import org.w3c.dom.Element;
 
 public class WriterIntrospector {
 	private static final Logger logger = Logger.getLogger(WriterIntrospector.class.getName());
@@ -73,7 +73,6 @@ public class WriterIntrospector {
 
         // declare all writer methods first, so everything exists when we build the
         for (Bean bean : mybeans) {
-            if (Modifier.isAbstract(bean.getType().getModifiers())) continue;
             if (bean.getType().isEnum()) continue;
 
             MarshallerBuilder builder = context.getMarshallerBuilder(bean.getType(), bean.getRootElementName(), bean.getSchemaTypeName());
@@ -215,6 +214,16 @@ public class WriterIntrospector {
     }
 
     private void writeProperties(MarshallerBuilder builder, Bean bean) {
+        writeAttributes(builder, bean);
+        writeElementsAndValue(builder, bean);
+
+    }
+
+    private void writeAttributes(MarshallerBuilder builder, Bean bean) {
+        if (bean.getBaseClass() != null) {
+            writeAttributes(builder, bean.getBaseClass());
+        }
+
         for (Property property : bean.getProperties()) {
             if (property.getXmlStyle() == Property.XmlStyle.ATTRIBUTE) {
 
@@ -236,6 +245,12 @@ public class WriterIntrospector {
                     logger.info("(JAXB Writer) Attribute lists are not supported yet!");
                 }
             }
+        }
+    }
+
+    private void writeElementsAndValue(MarshallerBuilder builder, Bean bean) {
+        if (bean.getBaseClass() != null) {
+            writeElementsAndValue(builder, bean.getBaseClass());
         }
 
         for (Property property : bean.getProperties()) {
@@ -266,10 +281,7 @@ public class WriterIntrospector {
                             if (property.isRequired() || property.isNillable()) {
                                 wrapperElementBlock = nullCond._then();
                             }
-                            wrapperElementBlock.add(builder.getXSW().invoke("writeStartElement")
-                                    .arg(builder.getWriterPrefix(wrapperElement.getNamespaceURI()))
-                                    .arg(wrapperElement.getLocalPart())
-                                    .arg(wrapperElement.getNamespaceURI()));
+                            wrapperElementBlock.add(builder.getWriteStartElement(wrapperElement));
                         }
 
                         JType itemType;
@@ -359,10 +371,7 @@ public class WriterIntrospector {
                         if (nilMapping != null) {
                             // write start element
                             QName name = nilMapping.getXmlName();
-                            nullBlock.add(builder.getXSW().invoke("writeStartElement")
-                                    .arg(builder.getWriterPrefix(name.getNamespaceURI()))
-                                    .arg(name.getLocalPart())
-                                    .arg(name.getNamespaceURI()));
+                            nullBlock.add(builder.getWriteStartElement(name));
 
                             // write xsi:nil
                             nullBlock.add(builder.getXSW().invoke("writeXsiNil"));
@@ -419,19 +428,12 @@ public class WriterIntrospector {
                     throw new BuildException("Unknown XmlMapping type " + property.getXmlStyle());
             }
         }
-        
-        if (bean.getBaseClass() != null) {
-            writeProperties(builder, bean.getBaseClass());
-        }
     }
 
     private void writeElement(MarshallerBuilder builder, JBlock block, ElementMapping mapping, JVar itemVar, Class type, boolean nillable) {
         // write start element
         QName name = mapping.getXmlName();
-        block.add(builder.getXSW().invoke("writeStartElement")
-                .arg(builder.getWriterPrefix(name.getNamespaceURI()))
-                .arg(name.getLocalPart())
-                .arg(name.getNamespaceURI()));
+        block.add(builder.getWriteStartElement(name));
 
         JBlock elementWriteBlock = block;
         if (nillable && !type.isPrimitive()) {
@@ -596,6 +598,8 @@ public class WriterIntrospector {
             block.add(builder.getXSW().invoke("writeQName").arg(object));
         } else if (type.equals(DataHandler.class) || type.equals(Image.class)) {
             // todo support AttachmentMarshaller
+        } else if (type.equals(Object.class)) {
+            block.add(builder.getXSW().invoke("writeDomElement").arg(JExpr.cast(builderContext.toJClass(Element.class), object)));
         } else {
         	logger.info("(JAXB Writer) Cannot map simple type yet: " + type);
         }
@@ -674,25 +678,9 @@ public class WriterIntrospector {
     }
 
     private JClass getGenericType(Type type) {
-        if (type instanceof Class) {
-            Class clazz = toPrimitiveWrapper((Class) type);
-            return codeModel.ref(clazz);
-        } else if (type instanceof ParameterizedType) {
-            ParameterizedType pt = (ParameterizedType) type;
-            JClass raw = (JClass) toJType(toClass(pt.getRawType()));
-
-            Type[] actualTypes = pt.getActualTypeArguments();
-            List<JClass> types = new ArrayList<JClass>(actualTypes.length);
-            for (Type actual : actualTypes) {
-                types.add(getGenericType(actual));
-            }
-            raw = raw.narrow(types);
-
-            return raw;
-        }
-        throw new IllegalStateException();
+        return builderContext.getGenericType(type);
     }
-
+    
     private boolean isBuiltinType(Class type) {
         return type.equals(boolean.class) ||
                 type.equals(byte.class) ||

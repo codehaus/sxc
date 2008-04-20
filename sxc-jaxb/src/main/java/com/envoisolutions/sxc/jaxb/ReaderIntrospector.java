@@ -4,9 +4,7 @@ import java.awt.Image;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.lang.reflect.WildcardType;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -28,10 +26,10 @@ import javax.xml.datatype.XMLGregorianCalendar;
 import javax.xml.namespace.QName;
 
 import com.envoisolutions.sxc.builder.BuildException;
-import com.envoisolutions.sxc.builder.impl.JIfElseBlock;
-import com.envoisolutions.sxc.builder.impl.JStaticImports;
-import com.envoisolutions.sxc.builder.impl.JLineComment;
 import com.envoisolutions.sxc.builder.impl.JBlankLine;
+import com.envoisolutions.sxc.builder.impl.JIfElseBlock;
+import com.envoisolutions.sxc.builder.impl.JLineComment;
+import com.envoisolutions.sxc.builder.impl.JStaticImports;
 import static com.envoisolutions.sxc.jaxb.JavaUtils.isPrivate;
 import static com.envoisolutions.sxc.jaxb.JavaUtils.toClass;
 import com.envoisolutions.sxc.jaxb.model.Bean;
@@ -75,7 +73,6 @@ public class ReaderIntrospector {
 
         // declare all parser methods first, so everything exists when we build the
         for (Bean bean : this.model.getBeans()) {
-            if (Modifier.isAbstract(bean.getType().getModifiers())) continue;
             if (bean.getType().isEnum()) continue;
 
             MarshallerBuilder builder = builderContext.getMarshallerBuilder(bean.getType(), bean.getRootElementName(), bean.getSchemaTypeName());
@@ -145,7 +142,9 @@ public class ReaderIntrospector {
 
     private MarshallerBuilder add(MarshallerBuilder builder, Bean bean) {
         // read properties
-        handleProperties(builder, bean, builder.getReadObject());
+        if (!Modifier.isAbstract(bean.getType().getModifiers())) {
+            handleProperties(builder, bean, builder.getReadObject());
+        }
 
         // This element may be replaced with another type using the xsi:type override
         // Add xsi type support for an other Bean that can be assigned to this property according to Java type assignment rules
@@ -366,22 +365,24 @@ public class ReaderIntrospector {
         } else if (targetType.equals(DataHandler.class) || targetType.equals(Image.class)) {
             // todo support AttachmentMarshaller
             toSet = JExpr._null();
+        } else if (targetType.equals(Object.class)) {
+            toSet = xsrVar.invoke("getElementAsDomElement");
         } else {
             // Complex type which will already have an element builder defined
             Bean targetBean = model.getBean(toClass(componentType));
             MarshallerBuilder elementBuilder = builders.get(targetBean);
             if (elementBuilder == null) {
-                throw new BuildException("Unknown bean " + toClass(componentType));
+                toSet = builder.getReadContextVar().invoke("unexpectedXsiType").arg(builder.getXSR()).arg(JExpr.dotclass(builderContext.toJClass(toClass(componentType))));
+            } else {
+                // invoke the reader method
+                JInvocation invocation = invokeParser(builder, builder.getChildElementVar(), elementBuilder);
+                toSet = invocation;
             }
-
-            // invoke the reader method
-            JInvocation invocation = invokeParser(builder, builder.getChildElementVar(), elementBuilder);
-            toSet = invocation;
         }
 
         // JaxB refs need to be wrapped with a JAXBElement
-        if (Property.XmlStyle.ELEMENT_REF.equals(property.getXmlStyle())) {
-            toSet = newJaxBElement(xsrVar, targetType, toSet);
+        if (toClass(property.getComponentType()).equals(JAXBElement.class)) {
+            toSet = newJaxBElement(xsrVar, toClass(componentType), toSet);
         }
 
         return toSet;
@@ -720,51 +721,7 @@ public class ReaderIntrospector {
     }
 
     private JClass getGenericType(Type type) {
-        if (type instanceof Class) {
-            Class clazz = toPrimitiveWrapper((Class) type);
-            return codeModel.ref(clazz);
-        } else if (type instanceof ParameterizedType) {
-            ParameterizedType pt = (ParameterizedType) type;
-            JClass raw = (JClass) toJType(toClass(pt.getRawType()));
-
-            Type[] actualTypes = pt.getActualTypeArguments();
-            List<JClass> types = new ArrayList<JClass>(actualTypes.length);
-            for (Type actual : actualTypes) {
-                types.add(getGenericType(actual));
-            }
-            raw = raw.narrow(types);
-
-            return raw;
-        } else if (type instanceof WildcardType) {
-            WildcardType wildcardType = (WildcardType) type;
-            Type[] upperBounds = wildcardType.getUpperBounds();
-            if (upperBounds.length > 0) {
-                return getGenericType(upperBounds[0]);
-            }
-            return toJClass(Object.class);
-        }
-        throw new IllegalStateException();
-    }
-
-    private Class toPrimitiveWrapper(Class type) {
-        if (type.equals(boolean.class)) {
-            return Boolean.class;
-        } else if (type.equals(byte.class)) {
-            return Byte.class;
-        } else if (type.equals(char.class)) {
-            return Character.class;
-        } else if (type.equals(short.class)) {
-            return Short.class;
-        } else if (type.equals(int.class)) {
-            return Integer.class;
-        } else if (type.equals(long.class)) {
-            return Long.class;
-        } else if (type.equals(float.class)) {
-            return Float.class;
-        } else if (type.equals(double.class)) {
-            return Double.class;
-        }
-        return type;
+        return builderContext.getGenericType(type);
     }
 
     private JVar as(MarshallerBuilder builder, JExpression attributeVar, JBlock block, Class<?> cls, String name) {

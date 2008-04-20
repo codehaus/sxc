@@ -541,7 +541,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         }
 
         // Add return statement to the end of the block
-        if (returnType != null) {
+        if (returnType != null && _return != null) {
             preElementBlock.add(new JBlankLine());
             setReturnType(returnType);
             preElementBlock._return(_return);

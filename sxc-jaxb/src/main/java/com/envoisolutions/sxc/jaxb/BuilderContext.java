@@ -143,19 +143,21 @@ public class BuilderContext {
             Type[] actualTypes = pt.getActualTypeArguments();
             List<JClass> types = new ArrayList<JClass>(actualTypes.length);
             for (Type actual : actualTypes) {
-                types.add(getGenericType(actual));
+                if (actual instanceof WildcardType) {
+                    WildcardType actualWildcard = (WildcardType) actual;
+                    Type[] upperBounds = actualWildcard.getUpperBounds();
+                    if (upperBounds.length > 0) {
+                        types.add(getGenericType(upperBounds[0]).wildcard());
+                    } else {
+                        types.add(toJClass(Object.class));
+                    }
+                } else {
+                    types.add(getGenericType(actual));
+                }
             }
             raw = raw.narrow(types);
 
             return raw;
-        } else if (type instanceof WildcardType) {
-            WildcardType wildcardType = (WildcardType) type;
-            Type[] upperBounds = wildcardType.getUpperBounds();
-            if (upperBounds.length > 0) {
-                return getGenericType(upperBounds[0]);
-            }
-            return toJClass(Object.class);
-
         }
         throw new IllegalStateException();
     }

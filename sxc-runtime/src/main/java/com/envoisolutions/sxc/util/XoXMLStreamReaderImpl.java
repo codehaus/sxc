@@ -1,12 +1,21 @@
 package com.envoisolutions.sxc.util;
 
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.NoSuchElementException;
 import javax.xml.namespace.NamespaceContext;
 import javax.xml.namespace.QName;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.stream.Location;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
+
+import org.w3c.dom.CDATASection;
+import org.w3c.dom.Comment;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Text;
 
 public class XoXMLStreamReaderImpl implements XoXMLStreamReader {
     XMLStreamReader reader;
@@ -94,6 +103,72 @@ public class XoXMLStreamReaderImpl implements XoXMLStreamReader {
     public boolean getElementAsBoolean() throws XMLStreamException {
         String s = getElementAsString();
         return s.equals("true") || s.equals("1");
+    }
+
+    public Element getElementAsDomElement() throws XMLStreamException {
+        if (getEventType() != START_ELEMENT) {
+            throw new IllegalStateException("Current event must be START_ELEMENT");
+        }
+
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        factory.setValidating(false);
+
+        Document document;
+        try {
+            document = factory.newDocumentBuilder().newDocument();
+        } catch (ParserConfigurationException e) {
+            throw new XMLStreamException(e);
+        }
+
+        LinkedList<Element> stack = new LinkedList<Element>();
+        Element rootElement = null;
+
+        int targetDepth = depth + 1;
+        int event = getEventType();
+        while(depth >= targetDepth - 1) {
+            if (event == START_ELEMENT) {
+                Element element = document.createElementNS(getNamespaceURI(), getLocalName());
+                for (int i = 0; i < getAttributeCount(); i++) {
+                    element.setAttributeNS(getAttributeNamespace(i), getAttributeLocalName(i), getAttributeValue(i));
+                }
+
+                if (!stack.isEmpty()) {
+                    stack.getFirst().appendChild(element);
+                } else if (rootElement == null) {
+                    rootElement = element;
+                } else {
+                    throw new IllegalStateException();
+                }
+                stack.addFirst(element);
+            } else if (event == END_ELEMENT) {
+                stack.removeFirst();
+            } else if (event == CHARACTERS) {
+                Text textNode = document.createTextNode(getText());
+                stack.getFirst().appendChild(textNode);
+            } else if (event == CDATA) {
+                CDATASection cdataSection = document.createCDATASection(getText());
+                stack.getFirst().appendChild(cdataSection);
+            } else if (event == COMMENT) {
+                Comment comment = document.createComment(getText());
+                stack.getFirst().appendChild(comment);
+            } else if (event == SPACE) {
+            } else if (event == START_DOCUMENT) {
+            } else if (event == END_DOCUMENT) {
+            } else if (event == PROCESSING_INSTRUCTION) {
+            } else if (event == PROCESSING_INSTRUCTION) {
+            } else if (event == ENTITY_REFERENCE) {
+            } else if (event == DTD) {
+            }
+            
+            if (hasNext()) {
+                event = next();
+            } else {
+                break;
+            }
+        }
+
+        return rootElement;
     }
 
     public void close() throws XMLStreamException {
