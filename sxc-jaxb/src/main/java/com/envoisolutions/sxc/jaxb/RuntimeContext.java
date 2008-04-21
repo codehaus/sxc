@@ -3,17 +3,19 @@ package com.envoisolutions.sxc.jaxb;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.UnmarshalException;
 import javax.xml.bind.ValidationEvent;
 import javax.xml.bind.ValidationEventHandler;
-import javax.xml.bind.UnmarshalException;
-import javax.xml.bind.JAXBException;
 import javax.xml.bind.helpers.ValidationEventImpl;
 import javax.xml.namespace.QName;
 import javax.xml.stream.Location;
+import javax.xml.stream.XMLStreamException;
 
-import com.envoisolutions.sxc.util.XoXMLStreamReader;
 import com.envoisolutions.sxc.util.Attribute;
+import com.envoisolutions.sxc.util.XoXMLStreamReader;
 import com.envoisolutions.sxc.util.XoXMLStreamWriter;
+import org.w3c.dom.Element;
 
 @SuppressWarnings({"StringEquality"})
 public class RuntimeContext {
@@ -81,6 +83,17 @@ public class RuntimeContext {
         validationError(message, new ValidationEventLocatorImpl(bean, null), null);
     }
 
+    @SuppressWarnings({"unchecked"})
+    public <T> T readXmlAny(XoXMLStreamReader reader, Class<T> expectedJavaType, boolean lax) throws JAXBException, XMLStreamException {
+        if (unmarshaller != null && lax) {
+            //noinspection unchecked
+            T value = (T) unmarshaller.read(reader, Object.class, null, this);
+            return value;
+        } else {
+            return (T) reader.getElementAsDomElement();
+        }
+    }
+
     public void unexpectedNullValue(Object bean, String propertyName) throws JAXBException {
         // For compatability with the JaxB RI unexpected null values are not reported as an error when writing.
         //
@@ -104,6 +117,7 @@ public class RuntimeContext {
     }
 
     public void unexpectedElementRef(XoXMLStreamWriter writer, Object bean, String propertyName, Object propertyValue, Class... expectedTypes) throws JAXBException {
+        if (propertyValue == null) return;
         if (marshaller != null) {
             marshaller.write(propertyValue, writer, this, true, false);
             return;
@@ -116,6 +130,24 @@ public class RuntimeContext {
             message += expectedType.getName();
         }
         message += "]";
+        validationError(message, new ValidationEventLocatorImpl(bean, propertyName), null);
+    }
+
+    public void writeXmlAny(XoXMLStreamWriter writer, Object bean, String propertyName, Object propertyValue) throws JAXBException, XMLStreamException {
+        if (propertyValue == null) return;
+
+        if (propertyValue instanceof Element) {
+            Element element = (Element) propertyValue;
+            writer.writeDomElement(element, true);
+            return;
+        }
+
+        if (marshaller != null) {
+            marshaller.write(propertyValue, writer, this, true, false);
+            return;
+        }
+
+        String message = "A marshaler ie required to write value of type " + propertyValue.getClass().getName() + " for property " + bean.getClass().getName() + "." + propertyName;
         validationError(message, new ValidationEventLocatorImpl(bean, propertyName), null);
     }
 

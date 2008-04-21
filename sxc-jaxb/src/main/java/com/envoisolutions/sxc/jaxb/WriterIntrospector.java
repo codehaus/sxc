@@ -382,7 +382,7 @@ public class WriterIntrospector {
                             nullBlock.invoke(builder.getWriteContextVar(), "unexpectedNullValue").arg(builder.getWriteObject()).arg(property.getName());
                         }
 
-                        // if not a recogonized type or null, reprot unknown type error
+                        // if not a recogonized type or null, report unknown type error
                         JInvocation unexpected = conditional._else().invoke(builder.getWriteContextVar(), "unexpectedElementType").arg(builder.getXSW()).arg(builder.getWriteObject()).arg(property.getName()).arg(outerVar);
                         for (Class expectedType : expectedTypes.keySet()) {
                             unexpected.arg(builderContext.dotclass(expectedType));
@@ -414,7 +414,11 @@ public class WriterIntrospector {
                     // process value through adapter
                     itemVar = writeAdapterConversion(builder, block, property, itemVar);
 
-                    block.invoke(builder.getWriteContextVar(), "unexpectedElementRef").arg(builder.getXSW()).arg(builder.getWriteObject()).arg(property.getName()).arg(itemVar);
+                    if (!property.isXmlAny()) {
+                        block.invoke(builder.getWriteContextVar(), "unexpectedElementRef").arg(builder.getXSW()).arg(builder.getWriteObject()).arg(property.getName()).arg(itemVar);
+                    } else {
+                        block.invoke(builder.getWriteContextVar(), "writeXmlAny").arg(builder.getXSW()).arg(builder.getWriteObject()).arg(property.getName()).arg(itemVar);
+                    }
                     break;
                 case VALUE:
                     block = builder.getWriteMethod().body();
@@ -599,7 +603,7 @@ public class WriterIntrospector {
         } else if (type.equals(DataHandler.class) || type.equals(Image.class)) {
             // todo support AttachmentMarshaller
         } else if (type.equals(Object.class)) {
-            block.add(builder.getXSW().invoke("writeDomElement").arg(JExpr.cast(builderContext.toJClass(Element.class), object)));
+            block.add(builder.getXSW().invoke("writeDomElement").arg(JExpr.cast(builderContext.toJClass(Element.class), object)).arg(JExpr.FALSE));
         } else {
         	logger.info("(JAXB Writer) Cannot map simple type yet: " + type);
         }

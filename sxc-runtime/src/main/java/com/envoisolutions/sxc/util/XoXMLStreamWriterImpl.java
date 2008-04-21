@@ -99,7 +99,13 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
         }
     }
 
-    public void writeDomElement(Element element) throws XMLStreamException {
+    public void writeDomElement(Element element, boolean writeTag) throws XMLStreamException {
+        if (writeTag) {
+            String namespaceURI = element.getNamespaceURI();
+            if (namespaceURI == null) namespaceURI = "";
+            writeStartElementWithAutoPrefix(namespaceURI, element.getLocalName());
+        }
+
         NamedNodeMap attributes = element.getAttributes();
         for (int i = 0; i < attributes.getLength(); i++) {
             Attr attribute = (Attr) attributes.item(i);
@@ -120,9 +126,7 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
             Node child = childNodes.item(i);
             if (child instanceof Element) {
                 Element childElement = (Element) child;
-                writeStartElementWithAutoPrefix(childElement.getNamespaceURI(), childElement.getLocalName());
-                writeDomElement(childElement);
-                writeEndElement();
+                writeDomElement(childElement, true);
             } else if (child instanceof Text) {
                 Text text = (Text) child;
                 writeString(text.getData());
@@ -141,6 +145,10 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
             } else if (child instanceof Notation) {
             } else if (child instanceof ProcessingInstruction) {
             }
+        }
+
+        if (writeTag) {
+            writeEndElement();
         }
     }
 

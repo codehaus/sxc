@@ -26,12 +26,19 @@ public class UnmarshallerHandlerImpl extends StaxContentHandler implements Unmar
     }
 
     public Object getResult() throws JAXBException, IllegalStateException {
+        // cleanup worker thread
+        destroy();
+
+        // if we got a JAXBException, throw it
         if (jaxbException != null) {
             throw new JAXBException(jaxbException);
         }
+
+        // if there is no result, we were never called in the first place (or an error occured)
         if (result == null) {
             throw new IllegalStateException("No result");
         }
+        
         return result;
     }
 

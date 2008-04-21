@@ -57,8 +57,11 @@ public class MarshallerBuilder {
     private JFieldVar datatypeFactory;
     private JMethod constructor;
     private JVar readObject;
-    private final Set<QName> expectedElements = new LinkedHashSet<QName>();
     private final Set<QName> expectedAttributes = new LinkedHashSet<QName>();
+    private boolean expectAnyAttribute;
+    private final Set<QName> expectedElements = new LinkedHashSet<QName>();
+    private boolean expectAnyElement;
+    private boolean expectValue;
     private JVar writerDefaultPrefix;
     private String writerDefaultNS;
     private JInvocation superInvocation;
@@ -162,23 +165,27 @@ public class MarshallerBuilder {
 
     public void write() {
         getParserBuilder();
-        JBlock block = new JBlock();
         if (!Modifier.isAbstract(type.getModifiers())) {
-            parserBuilder.setAnyAttributeBlock(null, block);
-            JInvocation invocation = block.invoke(parserBuilder.getContextVar(), "unexpectedAttribute").arg(getAttributeVar());
-            for (QName expectedAttribute : expectedAttributes) {
-                invocation.arg(JExpr._new(builderContext.toJClass(QName.class)).arg(expectedAttribute.getNamespaceURI()).arg(expectedAttribute.getLocalPart()));
+            if (!expectAnyAttribute) {
+                JBlock block = new JBlock();
+                parserBuilder.setAnyAttributeBlock(null, block);
+                JInvocation invocation = block.invoke(parserBuilder.getContextVar(), "unexpectedAttribute").arg(getAttributeVar());
+                for (QName expectedAttribute : expectedAttributes) {
+                    invocation.arg(JExpr._new(builderContext.toJClass(QName.class)).arg(expectedAttribute.getNamespaceURI()).arg(expectedAttribute.getLocalPart()));
+                }
             }
 
-            block = new JBlock();
-            parserBuilder.setAnyElementBlock(null, block);
-            invocation = block.invoke(parserBuilder.getContextVar(), "unexpectedElement").arg(getChildElementVar());
-            for (QName expectedElement : expectedElements) {
-                invocation.arg(JExpr._new(builderContext.toJClass(QName.class)).arg(expectedElement.getNamespaceURI()).arg(expectedElement.getLocalPart()));
+            if (!expectAnyElement && !expectValue) {
+                JBlock block = new JBlock();
+                parserBuilder.setAnyElementBlock(null, block);
+                JInvocation invocation = block.invoke(parserBuilder.getContextVar(), "unexpectedElement").arg(getChildElementVar());
+                for (QName expectedElement : expectedElements) {
+                    invocation.arg(JExpr._new(builderContext.toJClass(QName.class)).arg(expectedElement.getNamespaceURI()).arg(expectedElement.getLocalPart()));
+                }
             }
         }
 
-        block = new JBlock();
+        JBlock block = new JBlock();
         parserBuilder.setUnexpectedXsiTypeBlock(null, block);
         block._return(parserBuilder.getContextVar().invoke("unexpectedXsiType").arg(getXSR()).arg(JExpr.dotclass(builderContext.toJClass(type))));
 
@@ -335,7 +342,17 @@ public class MarshallerBuilder {
         return block;
     }
 
+    public JBlock expectAnyAttribute() {
+        if (expectAnyAttribute) throw new IllegalArgumentException("Any attribute is alredy expected");
+        expectAnyAttribute = true;
+
+        JBlock block = new JBlock();
+        getParserBuilder().setAnyAttributeBlock(null, block);
+        return block;
+    }
+
     public JBlock expectElement(QName elementName) {
+        if (expectValue) throw new IllegalArgumentException("A value is alredy expected");
         if (expectedElements.contains(elementName)) throw new IllegalArgumentException("Element is alredy expected " + elementName);
         expectedElements.add(elementName);
 
@@ -344,7 +361,21 @@ public class MarshallerBuilder {
         return block;
     }
 
+    public JBlock expectAnyElement() {
+        if (expectValue) throw new IllegalArgumentException("A value is alredy expected");
+        if (expectAnyElement) throw new IllegalArgumentException("Any element is alredy expected");
+        expectAnyElement = true;
+
+        JBlock block = new JBlock();
+        getParserBuilder().setAnyElementBlock(null, block);
+        return block;
+    }
+
     public JBlock expectValue() {
+        if (!expectedElements.isEmpty()) throw new IllegalArgumentException("Elements are alredy expected " + expectedElements);
+        if (expectAnyElement) throw new IllegalArgumentException("Any element is alredy expected");
+
+        expectValue = true;
         return getParserBuilder().getBody().getBlock();
     }
 

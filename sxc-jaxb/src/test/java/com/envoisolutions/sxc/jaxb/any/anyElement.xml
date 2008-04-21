@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<anyElement>
+    <one>
+        <uno>un</uno>
+    </one>
+    <two>
+        <dos>deux</dos>
+    </two>
+    <three>
+        <tres>trios</tres>
+    </three>
+</anyElement>
