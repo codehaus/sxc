@@ -1,30 +1,29 @@
 package com.envoisolutions.sxc.jaxb;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.HashSet;
-import java.util.List;
-import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.logging.Logger;
-import java.lang.reflect.Method;
-import java.lang.reflect.Type;
-import java.lang.reflect.ParameterizedType;
 import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.JAXBIntrospector;
 import javax.xml.bind.Marshaller;
 import javax.xml.bind.SchemaOutputResolver;
 import javax.xml.bind.Unmarshaller;
-import javax.xml.bind.JAXBElement;
 import javax.xml.bind.annotation.XmlElementDecl;
 
-import com.envoisolutions.sxc.builder.BuildException;
 import com.sun.xml.bind.v2.ContextFactory;
 
 public class JAXBContextImpl extends JAXBContext {
@@ -44,7 +43,7 @@ public class JAXBContextImpl extends JAXBContext {
     private final JAXBIntrospectorImpl introspector = new JAXBIntrospectorImpl();
     private final Callable<JAXBContext> schemaGenerator;
 
-    public JAXBContextImpl(Class... classes) throws JAXBException, BuildException, IOException {
+    public JAXBContextImpl(Class... classes) throws JAXBException {
         this(null, classes);
     }
     

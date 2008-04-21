@@ -17,7 +17,7 @@ public interface XoXMLStreamWriter extends XMLStreamWriter {
     void writeByte(byte b) throws XMLStreamException;
     void writeQName(QName q) throws XMLStreamException;
     String getQNameAsString(QName q) throws XMLStreamException;
-    void writeDomElement(Element element) throws XMLStreamException;
+    void writeDomElement(Element element, boolean writeTag) throws XMLStreamException;
 
     void writeStartElementWithAutoPrefix(String namespaceURI, String localName) throws XMLStreamException;
 

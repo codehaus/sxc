@@ -38,7 +38,8 @@ public class StaxContentHandler implements ContentHandler {
     private StaxParser staxParser;
     private long timeout;
     private final SynchronousQueue<XMLEvent> queue = new SynchronousQueue<XMLEvent>();
-    private AtomicBoolean closed = new AtomicBoolean(false);
+    private boolean destroyed;
+    private final AtomicBoolean shouldClose = new AtomicBoolean(false);
 
     private final XMLEventFactory eventFactory = XMLEventFactory.newInstance();
 
@@ -84,27 +85,16 @@ public class StaxContentHandler implements ContentHandler {
     }
 
     public void startDocument() throws SAXException {
-        if (closed.get()) {
-            throw new SAXException("Stream is closed");
+        if (destroyed) {
+            throw new SAXException("StaxContentHandler has been destroyed");
         }
 
         if (worker != null) {
             throw new SAXException("Worker already started");
         }
 
-        worker = new Thread(new Runnable() {
-            public void run() {
-                try {
-                    staxParser.parse(new QueueXMLEventReader());
-                } finally {
-                    // mark the queue as closed so no more events are offered
-                    closed.set(true);
-
-                    // wake the pusher (if it is waiting, it will be waiting in an offer)
-                    queue.poll();
-                }
-            }
-        }, "StaxParser-");
+        worker = new Thread(new StaxParserWorker(staxParser, timeout, queue, shouldClose), "StaxParser-");
+        worker.setDaemon(true);
         worker.start();
 
         XMLEvent event = eventFactory.createStartDocument();
@@ -112,7 +102,7 @@ public class StaxContentHandler implements ContentHandler {
     }
 
     private void postEvent(XMLEvent event) throws SAXException {
-        if (closed.get()) {
+        if (destroyed) {
             return;
         } else if (worker == null) {
             throw new SAXException("No worker thread");
@@ -120,20 +110,42 @@ public class StaxContentHandler implements ContentHandler {
             throw new SAXException("Worker thread died");
         }
 
+        if (shouldClose.get()) {
+            destroy();
+            return;
+        }
+
         try {
             queue.offer(event, timeout, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
+        } catch (Throwable e) {
+            // worker thread is timed out... just kill it
             worker.interrupt();
-            throw new SAXException(e);
+            worker = null;
+            destroyed = true;
+            throw new SAXException((Exception) e);
         }
     }
 
-    public void endDocument() throws SAXException {
-        if (closed.get()) return;
+    public void destroy() {
+        if (destroyed) return;
+        destroyed = true;
 
-        XMLEvent event = eventFactory.createEndDocument();
-        postEvent(event);
-        postEvent(EOF);
+        // do we have a live worker?
+        if (worker == null) {
+            return;
+        }
+        if (!worker.isAlive()) {
+            worker = null;
+        }
+
+        // worker will not exit until it receives an EOF
+        try {
+            queue.offer(EOF, timeout, TimeUnit.MILLISECONDS);
+        } catch (Throwable e) {
+            worker.interrupt();
+            worker = null;
+            return;
+        }
 
         // wait 5 seconds for the worker to complete, then interrupt
         try {
@@ -146,8 +158,16 @@ public class StaxContentHandler implements ContentHandler {
         worker = null;
     }
 
+    public void endDocument() throws SAXException {
+        if (destroyed) return;
+
+        XMLEvent event = eventFactory.createEndDocument();
+        postEvent(event);
+        destroy();
+    }
+
     public void startPrefixMapping(String prefix, String uri) throws SAXException {
-        if (closed.get()) return;
+        if (destroyed) return;
 
         Namespace namespace;
         if (prefix.length() == 0) {
@@ -164,7 +184,7 @@ public class StaxContentHandler implements ContentHandler {
     }
 
     public void startElement(String uri, String localName, String qName, Attributes atts) throws SAXException {
-        if (closed.get()) return;
+        if (destroyed) return;
 
         List<Attribute> attributes = new ArrayList<Attribute>(atts.getLength());
         for (int i = 0; i < atts.getLength(); i++) {
@@ -198,7 +218,7 @@ public class StaxContentHandler implements ContentHandler {
     }
 
     public void endElement(String uri, String localName, String qName) throws SAXException {
-        if (closed.get()) return;
+        if (destroyed) return;
 
         if (namespaceStack.isEmpty()) {
             throw new SAXException(new IllegalStateException("namespace stack is empty"));
@@ -215,21 +235,21 @@ public class StaxContentHandler implements ContentHandler {
     }
 
     public void characters(char[] ch, int start, int length) throws SAXException {
-        if (closed.get()) return;
+        if (destroyed) return;
 
         XMLEvent event = eventFactory.createCharacters(new String(ch, start, length));
         postEvent(event);
     }
 
     public void ignorableWhitespace(char[] ch, int start, int length) throws SAXException {
-        if (closed.get()) return;
+        if (destroyed) return;
 
         XMLEvent event = eventFactory.createIgnorableSpace(new String(ch, start, length));
         postEvent(event);
     }
 
     public void processingInstruction(String target, String data) throws SAXException {
-        if (closed.get()) return;
+        if (destroyed) return;
 
         XMLEvent event = eventFactory.createProcessingInstruction(target, data);
         postEvent(event);
@@ -271,127 +291,168 @@ public class StaxContentHandler implements ContentHandler {
         }
     }
 
-    public class QueueXMLEventReader implements XMLEventReader {
-        private XMLEvent current;
-        private XMLEvent next;
+    private static class StaxParserWorker implements Runnable {
+        private final StaxParser staxParser;
+        private final long timeout;
+        private final SynchronousQueue<XMLEvent> queue;
+        private AtomicBoolean shouldStopNotifier = new AtomicBoolean(false);
+        private boolean sawEOF;
+        private boolean closed;
 
-        private XMLEvent getNext() {
-            if (closed.get()) {
-                return null;
+        private StaxParserWorker(StaxParser staxParser, long timeout, SynchronousQueue<XMLEvent> queue, AtomicBoolean shouldStopNotifier) {
+            this.staxParser = staxParser;
+            this.timeout = timeout;
+            this.queue = queue;
+            this.shouldStopNotifier = shouldStopNotifier;
+        }
+
+        public void run() {
+            try {
+                staxParser.parse(new QueueXMLEventReader());
+            } finally {
+
+                // tell the sax pusher that we are done and it should stop sending events
+                shouldStopNotifier.set(true);
+
+                // wait for the pusher to send us the eof
+                while (!sawEOF) {
+                    try {
+                        XMLEvent event = queue.take();
+                        if (event == EOF) {
+                            sawEOF = true;
+                        }
+                    } catch (InterruptedException e) {
+                        break;
+                    }
+                }
             }
+        }
 
-            if (next != null) {
+        public class QueueXMLEventReader implements XMLEventReader {
+            private XMLEvent current;
+            private XMLEvent next;
+
+            private XMLEvent getNext() {
+                if (closed) {
+                    return null;
+                }
+
+                if (next != null) {
+                    return next;
+                }
+
+                try {
+                    next = queue.poll(timeout, TimeUnit.MILLISECONDS);
+                } catch (InterruptedException e) {
+                }
+
+                if (next == null) {
+                    return null;
+                }
+
+                if (next == EOF) {
+                    sawEOF = true;
+                    return null;
+                }
+
                 return next;
             }
 
-            try {
-                next = queue.poll(timeout, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
+            public Object next() {
+                return nextEvent();
             }
 
-            if (next == null || next == EOF) {
-                closed.set(true);
+            public XMLEvent nextEvent() throws NoSuchElementException {
+                if (closed) throw new NoSuchElementException("Stream is closed");
+
+                current = getNext();
+                next = null;
+                if (current == null) {
+                    throw new NoSuchElementException();
+                }
+                return current;
+            }
+
+            public boolean hasNext() {
+                return getNext() != null;
+            }
+
+            public XMLEvent peek() throws XMLStreamException {
+                if (closed) throw new XMLStreamException("Stream is closed");
+
+                return getNext();
+            }
+
+            public String getElementText() throws XMLStreamException {
+                if (closed) throw new XMLStreamException("Stream is closed");
+
+                if (!(current instanceof StartElement)) {
+                    throw new XMLStreamException("Current event must be StartElement, but is " + current.getClass().getSimpleName());
+                }
+                StringBuilder builder = new StringBuilder();
+                while (true){
+                    XMLEvent event = nextEvent();
+                    if (event instanceof EndElement) {
+                        return builder.toString();
+                    } else if (event instanceof Characters) {
+                        Characters characters = (Characters) event;
+                        builder.append(characters.getData());
+                    } else if (event instanceof Comment) {
+                        // ignored
+                    } else if (event instanceof DTD) {
+                        // ignored
+                    } else if (event instanceof ProcessingInstruction) {
+                        // ignored
+                    } else if (event instanceof Namespace) {
+                        // ignored
+                    } else if (event instanceof Attribute) {
+                        // ignored
+                    } else {
+                        throw new XMLStreamException("Encountered XMLEvent event " + event.getClass().getSimpleName());
+                    }
+                }
+            }
+
+            public XMLEvent nextTag() throws XMLStreamException {
+                if (closed) throw new XMLStreamException("Stream is closed");
+
+                while (true) {
+                    XMLEvent event = nextEvent();
+                    if (event instanceof StartElement || event instanceof EndElement) {
+                        return event;
+                    } else if (event instanceof Characters) {
+                        Characters characters = (Characters) event;
+                        if (!characters.isIgnorableWhiteSpace()) {
+                            throw new XMLStreamException("Encountered non-ignorable whitespace \"" + characters.getData() + "\"");
+                        }
+                    } else if (event instanceof Comment) {
+                        // ignored
+                    } else if (event instanceof DTD) {
+                        // ignored
+                    } else if (event instanceof ProcessingInstruction) {
+                        // ignored
+                    } else if (event instanceof Namespace) {
+                        // ignored
+                    } else if (event instanceof Attribute) {
+                        // ignored
+                    } else {
+                        throw new XMLStreamException("Encountered XMLEvent event " + event.getClass().getSimpleName());
+                    }
+                }
+            }
+
+            public Object getProperty(String name) throws IllegalArgumentException {
                 return null;
             }
-            
-            return next;
-        }
 
-        public Object next() {
-            return nextEvent();
-        }
-
-        public XMLEvent nextEvent() throws NoSuchElementException {
-            if (closed.get()) throw new NoSuchElementException("Stream is closed");
-
-            current = getNext();
-            next = null;
-            if (current == null) {
-                throw new NoSuchElementException();
+            public void close() {
+                closed = true;
             }
-            return current;
-        }
 
-        public boolean hasNext() {
-            return getNext() != null;
-        }
-
-        public XMLEvent peek() throws XMLStreamException {
-            if (closed.get()) throw new XMLStreamException("Stream is closed");
-
-            return getNext();
-        }
-
-        public String getElementText() throws XMLStreamException {
-            if (closed.get()) throw new XMLStreamException("Stream is closed");
-
-            if (!(current instanceof StartElement)) {
-                throw new XMLStreamException("Current event must be StartElement, but is " + current.getClass().getSimpleName());
-            }
-            StringBuilder builder = new StringBuilder();
-            while (true){
-                XMLEvent event = nextEvent();
-                if (event instanceof EndElement) {
-                    return builder.toString();
-                } else if (event instanceof Characters) {
-                    Characters characters = (Characters) event;
-                    builder.append(characters.getData());
-                } else if (event instanceof Comment) {
-                    // ignored
-                } else if (event instanceof DTD) {
-                    // ignored
-                } else if (event instanceof ProcessingInstruction) {
-                    // ignored
-                } else if (event instanceof Namespace) {
-                    // ignored
-                } else if (event instanceof Attribute) {
-                    // ignored
-                } else {
-                    throw new XMLStreamException("Encountered XMLEvent event " + event.getClass().getSimpleName());
-                }
+            public void remove() {
+                throw new UnsupportedOperationException();
             }
         }
-
-        public XMLEvent nextTag() throws XMLStreamException {
-            if (closed.get()) throw new XMLStreamException("Stream is closed");
-
-            while (true) {
-                XMLEvent event = nextEvent();
-                if (event instanceof StartElement || event instanceof EndElement) {
-                    return event;
-                } else if (event instanceof Characters) {
-                    Characters characters = (Characters) event;
-                    if (!characters.isIgnorableWhiteSpace()) {
-                        throw new XMLStreamException("Encountered non-ignorable whitespace \"" + characters.getData() + "\"");
-                    }
-                } else if (event instanceof Comment) {
-                    // ignored
-                } else if (event instanceof DTD) {
-                    // ignored
-                } else if (event instanceof ProcessingInstruction) {
-                    // ignored
-                } else if (event instanceof Namespace) {
-                    // ignored
-                } else if (event instanceof Attribute) {
-                    // ignored
-                } else {
-                    throw new XMLStreamException("Encountered XMLEvent event " + event.getClass().getSimpleName());
-                }
-            }
-        }
-
-        public Object getProperty(String name) throws IllegalArgumentException {
-            return null;
-        }
-
-        public void close() {
-            closed.set(true);
-        }
-
-        public void remove() {
-            throw new UnsupportedOperationException();
-        }
-
     }
 
     private static class EOF implements XMLEvent {

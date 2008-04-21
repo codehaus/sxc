@@ -24,6 +24,7 @@ import com.sun.xml.bind.v2.model.runtime.RuntimeReferencePropertyInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeTypeInfoSet;
 import com.sun.xml.bind.v2.model.runtime.RuntimeTypeRef;
 import com.sun.xml.bind.v2.model.runtime.RuntimeValuePropertyInfo;
+import com.sun.xml.bind.v2.model.core.WildcardMode;
 import com.sun.xml.bind.v2.runtime.JAXBContextImpl;
 import com.sun.xml.bind.v2.runtime.Transducer;
 import com.sun.xml.bind.v2.runtime.reflect.Accessor;
@@ -219,6 +220,8 @@ public class RiModelBuilder {
                 property.getElementMappings().add(elementMapping);
             }
             property.setNillable(referenceProperty.isCollectionNillable());
+            property.setXmlAny(referenceProperty.getWildcard() != null);
+            property.setLax(referenceProperty.getWildcard() == WildcardMode.LAX);
         } else if (runtimePropertyInfo instanceof RuntimeValuePropertyInfo) {
             property.setXmlStyle(Property.XmlStyle.VALUE);
         } else {

@@ -56,6 +56,7 @@ import com.sun.codemodel.JMod;
 import com.sun.codemodel.JTryBlock;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
+import org.w3c.dom.Element;
 
 public class ReaderIntrospector {
     private static final Logger logger = Logger.getLogger(ReaderIntrospector.class.getName());
@@ -257,6 +258,20 @@ public class ReaderIntrospector {
                         doSet(builder, block, property, parentVar, toSet, collectionVar);
                     }
 
+                    if (property.isXmlAny()) {
+                        // create element block
+                        JBlock block = elementBuilder.expectAnyElement();
+
+                        // add comment for readability
+                        block.add(new JLineComment(property.getXmlStyle() + ": " + property.getName()));
+
+                        // read and set
+                        JInvocation toSet = builder.getReadContextVar().invoke("readXmlAny")
+                                .arg(builder.getXSR())
+                                .arg(builderContext.dotclass(property.getComponentType()))
+                                .arg(property.isLax() ? JExpr.TRUE : JExpr.FALSE);
+                        doSet(builder, block, property, parentVar, toSet, collectionVar);
+                    }
                 }
                 break;
 
@@ -365,7 +380,7 @@ public class ReaderIntrospector {
         } else if (targetType.equals(DataHandler.class) || targetType.equals(Image.class)) {
             // todo support AttachmentMarshaller
             toSet = JExpr._null();
-        } else if (targetType.equals(Object.class)) {
+        } else if (targetType.equals(Object.class) || targetType.equals(Element.class)) {
             toSet = xsrVar.invoke("getElementAsDomElement");
         } else {
             // Complex type which will already have an element builder defined

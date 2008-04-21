@@ -134,6 +134,12 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
                     name = element.getName();
 
                     jaxbElement = element.getValue();
+                } else if (jaxbElement instanceof Element) {
+                    Element element = (Element) jaxbElement;
+
+                    String namespaceURI = element.getNamespaceURI();
+                    if (namespaceURI == null) namespaceURI = "";
+                    name = new QName(namespaceURI, element.getLocalName());
                 } else {
                     JAXBMarshaller marshaller = introspector.getJaxbMarshaller(jaxbElement.getClass());
                     if (marshaller == null || marshaller.getXmlRootElement() == null) {
@@ -173,6 +179,8 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
                     writer.writeCharacters(((XMLGregorianCalendar) jaxbElement).toXMLFormat());
                 } else if (c == byte[].class) {
                     BinaryUtils.encodeBytes(writer, (byte[]) jaxbElement);
+                } else if (Element.class.isAssignableFrom(c)) {
+                    writer.writeDomElement((Element) jaxbElement, false);
                 } else {
                     JAXBMarshaller jaxbMarshaller = introspector.getJaxbMarshaller(c);
                     if (jaxbMarshaller != null) {

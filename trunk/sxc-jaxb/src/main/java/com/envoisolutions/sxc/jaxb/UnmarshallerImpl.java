@@ -251,6 +251,10 @@ public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
 
                     // read the object
                     o = instance.read(reader, runtimeContext);
+                } else if (Object.class.equals(expectedType)) {
+                    // @XmlAnyType(lax = true)
+                    Element element = reader.getElementAsDomElement();
+                    o = element;
                 } else {
                     String message = "No JAXB object mapped to root element " + name + "; known root elemnts are " + introspector.getElementNames();
                     if (getEventHandler() == null || !getEventHandler().handleEvent(new ValidationEventImpl(ValidationEvent.ERROR, message, new ValidationEventLocatorImpl(reader.getLocation())))) {

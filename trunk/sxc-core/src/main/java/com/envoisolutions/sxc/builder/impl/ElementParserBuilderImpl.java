@@ -597,7 +597,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         b.add(preElementBlock);
         b = preElementBlock;
 
-        if (!elements.isEmpty() || !xsiTypes.isEmpty() || allowUnknown ) {
+        if (!elements.isEmpty() || !xsiTypes.isEmpty() || anyElement != null || allowUnknown ) {
             b.add(new JBlankLine());
             b.add(new JLineComment("Read elements"));
 

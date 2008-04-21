@@ -32,6 +32,9 @@ public class Property {
     private boolean nillable;
     private boolean collection;
 
+    private boolean xmlAny;
+    private boolean lax;
+
     private Field field;
     private Method getter;
     private Method setter;
@@ -111,6 +114,22 @@ public class Property {
 
     public void setCollection(boolean collection) {
         this.collection = collection;
+    }
+
+    public boolean isXmlAny() {
+        return xmlAny;
+    }
+
+    public void setXmlAny(boolean xmlAny) {
+        this.xmlAny = xmlAny;
+    }
+
+    public boolean isLax() {
+        return lax;
+    }
+
+    public void setLax(boolean lax) {
+        this.lax = lax;
     }
 
     public Field getField() {
