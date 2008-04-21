@@ -58,7 +58,7 @@ public class IdentityManager {
                 "return", "short", "static", "strictfp", "super", "switch", "synchronized", "this", "throw",
                 "throws", "transient", "true", "try", "void", "volatile", "while"));
 
-    static String capitalize(String name) {
+    public static String capitalize(String name) {
         if (name == null || name.length() == 0) {
             return name;
         }

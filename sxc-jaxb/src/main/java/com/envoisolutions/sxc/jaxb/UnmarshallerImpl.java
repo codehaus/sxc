@@ -176,7 +176,7 @@ public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
                 // find the marshaller by xsi:type
                 JAXBMarshaller instance = introspector.getJaxbMarshallerBySchemaType(reader.getXsiType());
                 if (instance != null) {
-                    if (expectedType == null) expectedType = instance.getType();
+                    if (expectedType == null) expectedType = Object.class;
                     if (jaxbElementWrap == null)  jaxbElementWrap =  instance.getXmlRootElement() == null;
 
                     // check assignment is possible
@@ -229,7 +229,7 @@ public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
                     JAXBMarshaller instance = introspector.getJaxbMarshaller(expectedType);
                     if (instance != null) {
                         if (expectedType == null) {
-                            expectedType = instance.getType();
+                            expectedType = Object.class;
                         }
                         if (jaxbElementWrap == null)  jaxbElementWrap =  instance.getXmlRootElement() == null;
 
@@ -247,7 +247,7 @@ public class UnmarshallerImpl extends AbstractUnmarshallerImpl {
                 // find the marshaller by root element name
                 JAXBMarshaller instance = introspector.getJaxbMarshallerByElementName(name);
                 if (instance != null) {
-                    expectedType = instance.getType();
+                    expectedType = Object.class;
 
                     // read the object
                     o = instance.read(reader, runtimeContext);

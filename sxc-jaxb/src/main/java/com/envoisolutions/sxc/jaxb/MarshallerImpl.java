@@ -106,9 +106,13 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
 
             // write xsi:type if there is no default root element for this type
             boolean writeXsiType = true;
-            JAXBMarshaller marshaller = introspector.getJaxbMarshaller(jaxbElement.getClass());
-            if (marshaller != null) {
-                writeXsiType = marshaller.getXmlRootElement() == null && marshaller.getXmlType() != null;
+            if (jaxbElement instanceof JAXBElement) {
+                writeXsiType = ((JAXBElement)jaxbElement).isTypeSubstituted();
+            } else {
+                JAXBMarshaller marshaller = introspector.getJaxbMarshaller(jaxbElement.getClass());
+                if (marshaller != null) {
+                    writeXsiType = marshaller.getXmlRootElement() == null && marshaller.getXmlType() != null;
+                }
             }
 
             write(jaxbElement, w, new RuntimeContext(this), true, writeXsiType);

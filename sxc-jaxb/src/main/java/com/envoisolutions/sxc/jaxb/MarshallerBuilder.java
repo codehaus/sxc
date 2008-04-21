@@ -22,6 +22,7 @@ import com.envoisolutions.sxc.builder.impl.ElementWriterBuilderImpl;
 import com.envoisolutions.sxc.builder.impl.IdentityManager;
 import com.envoisolutions.sxc.builder.impl.JBlankLine;
 import com.envoisolutions.sxc.builder.impl.JLineComment;
+import static com.envoisolutions.sxc.builder.impl.IdentityManager.toValidId;
 import static com.envoisolutions.sxc.jaxb.JavaUtils.capitalize;
 import com.envoisolutions.sxc.util.XoXMLStreamReader;
 import com.envoisolutions.sxc.util.XoXMLStreamWriter;
@@ -121,7 +122,7 @@ public class MarshallerBuilder {
         // add static write method
         method = marshallerClass.method(JMod.PUBLIC | JMod.STATIC, void.class, "write" + type.getSimpleName())._throws(Exception.class);
         xsrVar = method.param(XoXMLStreamWriter.class, "writer");
-        JVar item = method.param(type, decapitalize(type.getSimpleName()));
+        JVar item = method.param(type, toValidId(decapitalize(type.getSimpleName())));
         contextVar = method.param(builderContext.getBuildContext().getMarshalContextClass(), "context");
         method.body().add(instance.invoke("write").arg(xsrVar).arg(item).arg(contextVar));
     }
