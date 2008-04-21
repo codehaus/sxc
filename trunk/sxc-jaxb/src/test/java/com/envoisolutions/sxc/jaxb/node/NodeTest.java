@@ -6,12 +6,14 @@ import java.util.Iterator;
 
 import javax.xml.bind.JAXBElement;
 import javax.xml.bind.Marshaller;
+import javax.xml.bind.JAXBContext;
 import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathFactory;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.XMLConstants;
+import javax.xml.transform.stream.StreamSource;
 import javax.xml.namespace.NamespaceContext;
 
 import org.w3c.dom.Document;
@@ -63,26 +65,28 @@ public class NodeTest extends XoTestCase {
     @SuppressWarnings("unchecked")
     public void testNestedNodes() throws Exception {
         System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
-        JAXBContextImpl ctx = new JAXBContextImpl(Node.class);
-        
-        JAXBElement<Node> jn = (JAXBElement<Node>) 
-            ctx.createUnmarshaller().unmarshal(getClass().getResourceAsStream("node2.xml"));
-        
+        JAXBContext ctx = JAXBContext.newInstance(Node.class, NamedNode.class);
+
+        StreamSource source = new StreamSource(getClass().getResourceAsStream("node2.xml"));
+        JAXBElement<?> jn = (JAXBElement<?>) ctx.createUnmarshaller().unmarshal(source);
+
         assertNotNull(jn);
-        
-        Node object = jn.getValue();
+        assertTrue(jn.isTypeSubstituted());
+        assertEquals(Object.class, jn.getDeclaredType());
+
+        Node object = (Node) jn.getValue(); 
         assertTrue(object instanceof NamedNode);
-        
+
         NamedNode n = (NamedNode) object;
         assertEquals("root", n.getName());
         assertEquals(2, n.getNode().size());
         
         Node child = n.getNode().get(0);
         assertEquals(1, child.getNode().size());
-        
+
         child = child.getNode().get(0);
         assertEquals(1, child.getNode().size());
-        
+
         child = child.getNode().get(0);
         assertEquals(1, child.getNode().size());
 
@@ -97,19 +101,19 @@ public class NodeTest extends XoTestCase {
 
         child = child.getNode().get(0);
         assertNotNull(child);
-        
+
         // Check to see if a nested xsi:type read worked
         Node nnChild = n.getNode().get(1);
         assertNotNull(nnChild);
         assertTrue(nnChild instanceof NamedNode);
         assertEquals("child", ((NamedNode)nnChild).getName());
-        
+
         Marshaller marshaller = ctx.createMarshaller();
         assertNotNull(marshaller);
-        
+
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         marshaller.marshal(jn, bos);
-        
+
         Document d = readDocument(bos.toByteArray());
         addNamespace("n", "http://envoisolutions.com/node");
         addNamespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
