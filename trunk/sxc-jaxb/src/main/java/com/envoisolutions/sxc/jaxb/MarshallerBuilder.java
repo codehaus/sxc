@@ -67,6 +67,7 @@ public class MarshallerBuilder {
     private String writerDefaultNS;
     private JInvocation superInvocation;
     private Set<String> dependencies = new TreeSet<String>();
+    private JFieldVar lifecycleCallbackVar;
 
     public MarshallerBuilder(MarshallerBuilder parent, ElementParserBuilderImpl parserBuilder) {
         this.parent = parent;
@@ -125,6 +126,10 @@ public class MarshallerBuilder {
         JVar item = method.param(type, toValidId(decapitalize(type.getSimpleName())));
         contextVar = method.param(builderContext.getBuildContext().getMarshalContextClass(), "context");
         method.body().add(instance.invoke("write").arg(xsrVar).arg(item).arg(contextVar));
+
+        // add lifecycle callabck field
+        JClass callbackClass = builderContext.toJClass(LifecycleCallback.class);
+        lifecycleCallbackVar = marshallerClass.field(JMod.PRIVATE | JMod.STATIC | JMod.FINAL, callbackClass, fieldManager.createId("lifecycleCallback"), JExpr._new(callbackClass).arg(JExpr.dotclass(builderContext.toJClass(type))));
     }
 
     private JExpression newQName(QName xmlRootElement) {
@@ -184,6 +189,14 @@ public class MarshallerBuilder {
                     invocation.arg(JExpr._new(builderContext.toJClass(QName.class)).arg(expectedElement.getNamespaceURI()).arg(expectedElement.getLocalPart()));
                 }
             }
+
+            // add afterUnmarshal
+            getReadTailBlock().add(new JBlankLine());
+            JExpression lifecycleCallbackRef = lifecycleCallbackVar;
+            if (parserBuilder.getVariableManager().containsId(lifecycleCallbackVar.name())) {
+                lifecycleCallbackRef = marshallerClass.staticRef(lifecycleCallbackVar.name());
+            }
+            getReadTailBlock().invoke(getReadContextVar(), "afterUnmarshal").arg(readObject).arg(lifecycleCallbackRef);
         }
 
         JBlock block = new JBlock();
@@ -193,6 +206,15 @@ public class MarshallerBuilder {
         parserBuilder.write();
 
         getWriterBuilder();
+        if (!Modifier.isAbstract(type.getModifiers())) {
+            // add afterMarshal
+            getWriteMethod().body().add(new JBlankLine());
+            JExpression lifecycleCallbackRef = lifecycleCallbackVar;
+            if (writerBuilder.getVariableManager().containsId(lifecycleCallbackVar.name())) {
+                lifecycleCallbackRef = marshallerClass.staticRef(lifecycleCallbackVar.name());
+            }
+            getWriteMethod().body().invoke(getReadContextVar(), "afterMarshal").arg(getWriteObject()).arg(lifecycleCallbackRef);
+        }
         writerBuilder.write();
     }
 
@@ -218,6 +240,7 @@ public class MarshallerBuilder {
                 body.add(new JBlankLine());
                 JBlock contextNullBlock = body._if(parserBuilder.getContextVar().eq(JExpr._null()))._then();
                 contextNullBlock.assign(parserBuilder.getContextVar(), JExpr._new(builderContext.toJClass(RuntimeContext.class)));
+                body.add(new JBlankLine());
 
                 if (!Modifier.isAbstract(type.getModifiers())) {
                     // create bean instance
@@ -226,6 +249,14 @@ public class MarshallerBuilder {
                     JType beanType = builderContext.getCodeModel()._ref(type);
                     readObject = body.decl(beanType, decapitalize(varName), JExpr._new(beanType));
 
+                    // add beforeUnmarshal
+                    JExpression lifecycleCallbackRef = lifecycleCallbackVar;
+                    if (parserBuilder.getVariableManager().containsId(lifecycleCallbackVar.name())) {
+                        lifecycleCallbackRef = marshallerClass.staticRef(lifecycleCallbackVar.name());
+                    }
+                    body.invoke(getReadContextVar(), "beforeUnmarshal").arg(readObject).arg(lifecycleCallbackRef);
+                    body.add(new JBlankLine());
+                    
                     // return the bean
                     parserBuilder.getBody()._return(readObject);
                 } else {
@@ -254,6 +285,14 @@ public class MarshallerBuilder {
                 // if context is null, initialize context
                 JBlock contextNullBlock = body._if(writerBuilder.getContextVar().eq(JExpr._null()))._then();
                 contextNullBlock.assign(writerBuilder.getContextVar(), JExpr._new(builderContext.toJClass(RuntimeContext.class)));
+                body.add(new JBlankLine());
+
+                // add beforeMarshal
+                JExpression lifecycleCallbackRef = lifecycleCallbackVar;
+                if (writerBuilder.getVariableManager().containsId(lifecycleCallbackVar.name())) {
+                    lifecycleCallbackRef = marshallerClass.staticRef(lifecycleCallbackVar.name());
+                }
+                body.invoke(getReadContextVar(), "beforeMarshal").arg(getWriteObject()).arg(lifecycleCallbackRef);
                 body.add(new JBlankLine());
             }
 
@@ -406,6 +445,10 @@ public class MarshallerBuilder {
         JBlock block = new JBlock();
         getParserBuilder().setXsiTypeBlock(typeName, null, block);
         return block;
+    }
+
+    public JFieldVar getLifecycleCallbackVar() {
+        return lifecycleCallbackVar;
     }
 
     public JBlock getReadTailBlock() {

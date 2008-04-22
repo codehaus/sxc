@@ -3,10 +3,13 @@ package com.envoisolutions.sxc.jaxb;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.LinkedList;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.UnmarshalException;
 import javax.xml.bind.ValidationEvent;
 import javax.xml.bind.ValidationEventHandler;
+import javax.xml.bind.Unmarshaller;
+import javax.xml.bind.Marshaller;
 import javax.xml.bind.helpers.ValidationEventImpl;
 import javax.xml.namespace.QName;
 import javax.xml.stream.Location;
@@ -22,6 +25,8 @@ public class RuntimeContext {
     private final Map<String, Object> properties = new HashMap<String, Object>();
     private final MarshallerImpl marshaller;
     private final UnmarshallerImpl unmarshaller;
+
+    private final LinkedList<Object> unmarshalStack = new LinkedList<Object>();
 
     public RuntimeContext() {
         marshaller = null;
@@ -44,6 +49,72 @@ public class RuntimeContext {
 
     public Object setProperty(String name, Object value) {
         return properties.put(name, value);
+    }
+
+    public void beforeUnmarshal(Object bean, LifecycleCallback lifecycleCallback) throws Exception {
+        Object parent = null;
+        if (!unmarshalStack.isEmpty()) {
+            parent = unmarshalStack.getFirst();
+        }
+        unmarshalStack.addFirst(bean);
+        if (unmarshaller != null) {
+            if (lifecycleCallback != null) {
+                lifecycleCallback.beforeUnmarshal(bean, unmarshaller, parent);
+            }
+
+            Unmarshaller.Listener listener = unmarshaller.getListener();
+            if (listener != null) {
+                listener.beforeUnmarshal(bean, parent);
+            }
+        }
+    }
+
+    public void afterUnmarshal(Object bean, LifecycleCallback lifecycleCallback) throws Exception {
+        if (unmarshalStack.isEmpty()) throw new IllegalStateException("afterUnmarshal without beforeUnmarshal being called");
+
+        // pop this bean off the stack
+        unmarshalStack.removeFirst();
+
+        Object parent = null;
+        if (!unmarshalStack.isEmpty()) {
+            parent = unmarshalStack.getFirst();
+        }
+        if (unmarshaller != null) {
+            if (lifecycleCallback != null) {
+                lifecycleCallback.afterUnmarshal(bean, unmarshaller, parent);
+            }
+
+            Unmarshaller.Listener listener = unmarshaller.getListener();
+            if (listener != null) {
+                listener.afterUnmarshal(bean, parent);
+            }
+        }
+    }
+
+    public void beforeMarshal(Object bean, LifecycleCallback lifecycleCallback) throws Exception {
+        if (marshaller != null) {
+            if (lifecycleCallback != null) {
+                lifecycleCallback.beforeMarshal(bean, marshaller);
+            }
+
+            Marshaller.Listener listener = marshaller.getListener();
+            if (listener != null) {
+                listener.beforeMarshal(bean);
+            }
+        }
+    }
+
+    public void afterMarshal(Object bean, LifecycleCallback lifecycleCallback) throws Exception {
+        if (marshaller != null) {
+            if (lifecycleCallback != null) {
+                lifecycleCallback.afterMarshal(bean, marshaller);
+            }
+
+            Marshaller.Listener listener = marshaller.getListener();
+            if (listener != null) {
+                listener.afterMarshal(bean);
+            }
+        }
     }
 
     public void unexpectedAttribute(Attribute attribute, QName... expectedAttributes) throws JAXBException {
