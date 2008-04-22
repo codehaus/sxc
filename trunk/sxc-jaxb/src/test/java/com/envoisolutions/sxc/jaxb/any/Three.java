@@ -1,9 +1,3 @@
-/* =====================================================================
- *
- * Copyright (c) 2006 Dain Sundstrom.  All rights reserved.
- *
- * =====================================================================
- */
 package com.envoisolutions.sxc.jaxb.any;
 
 import javax.xml.bind.annotation.XmlType;
