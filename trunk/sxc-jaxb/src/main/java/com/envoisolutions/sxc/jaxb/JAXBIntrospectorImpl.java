@@ -55,9 +55,6 @@ public class JAXBIntrospectorImpl extends JAXBIntrospector {
 
                 // add root element declaration
                 jaxbObjectByElementName.put(rootElements.getKey(), jaxbObject);
-
-                // add the jaxbObject
-                addJAXBClass(jaxbObject);
             }
         }
 
@@ -71,6 +68,9 @@ public class JAXBIntrospectorImpl extends JAXBIntrospector {
         if (type == null) return null;
 
         JAXBObject jaxbObject = jaxbObjectByClass.get(type);
+        if (jaxbObject == null) {
+            jaxbObject = StandardJAXBObjects.jaxbObjectByClass.get(type);
+        }
         if (jaxbObject == null) {
             setFullyResolved(true);
             jaxbObject = jaxbObjectByClass.get(type);
@@ -93,6 +93,9 @@ public class JAXBIntrospectorImpl extends JAXBIntrospector {
         if (schemaType == null) return null;
 
         JAXBObject jaxbObject = jaxbObjectBySchemaType.get(schemaType);
+        if (jaxbObject == null) {
+            jaxbObject = StandardJAXBObjects.jaxbObjectBySchemaType.get(schemaType);
+        }
         if (jaxbObject == null) {
             setFullyResolved(true);
             jaxbObject = jaxbObjectBySchemaType.get(schemaType);

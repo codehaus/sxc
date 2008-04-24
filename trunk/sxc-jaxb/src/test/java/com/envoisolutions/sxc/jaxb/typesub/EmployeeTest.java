@@ -51,7 +51,6 @@ public class EmployeeTest extends XoTestCase {
         marshaller.marshal(jaxbE, writer);
         
         writer.close();
-        System.out.println(bos.toString());
         Document d = readDocument(bos.toByteArray());
         addNamespace("i", "urn:xfire:inheritance");
         assertValid("/i:in0/i:name[text()='bar']", d);

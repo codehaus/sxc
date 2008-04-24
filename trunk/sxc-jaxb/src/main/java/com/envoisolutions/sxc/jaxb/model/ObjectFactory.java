@@ -20,7 +20,7 @@ public class ObjectFactory {
     /**
      * Root element declarations by element name.
      */
-    private final Map<QName, Bean> rootElements = new LinkedHashMap<QName, Bean>();
+    private final Map<QName, Class> rootElements = new LinkedHashMap<QName, Class>();
 
     /**
      * Dependencies
@@ -40,7 +40,7 @@ public class ObjectFactory {
         return type;
     }
 
-    public Map<QName, Bean> getRootElements() {
+    public Map<QName, Class> getRootElements() {
         return rootElements;
     }
 

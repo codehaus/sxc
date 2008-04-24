@@ -10,6 +10,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Collections;
 import java.util.concurrent.Callable;
 import java.util.logging.Logger;
 import javax.xml.bind.JAXBContext;
@@ -24,8 +25,33 @@ import com.sun.xml.bind.v2.ContextFactory;
 public class JAXBContextImpl extends JAXBContext {
     private static final Logger logger = Logger.getLogger(JAXBContextImpl.class.getName());
 
+    public static synchronized JAXBContextImpl newInstance(Class... classes) throws JAXBException {
+        JAXBContextImpl jaxbContext = createContext(classes, Collections.<String, Object>emptyMap());
+        return jaxbContext;
+    }
+
+    public static synchronized JAXBContextImpl newInstance(Class[] classes, Map<String, Object> properties) throws JAXBException {
+        JAXBContextImpl jaxbContext = createContext(classes, properties);
+        return jaxbContext;
+    }
+
     public static synchronized JAXBContextImpl createContext(Class[] classes, Map<String, Object> properties) throws JAXBException {
         JAXBContextImpl jaxbContext = new JAXBContextImpl(properties, classes);
+        return jaxbContext;
+    }
+
+    public static JAXBContext newInstance(String contextPath) throws JAXBException {
+        JAXBContextImpl jaxbContext = createContext(contextPath, Thread.currentThread().getContextClassLoader(), Collections.<String, Object>emptyMap());
+        return jaxbContext;
+    }
+
+    public static JAXBContext newInstance(String contextPath, ClassLoader classLoader) throws JAXBException {
+        JAXBContextImpl jaxbContext = createContext(contextPath, classLoader, Collections.<String, Object>emptyMap());
+        return jaxbContext;
+    }
+
+    public static synchronized JAXBContextImpl newInstance(String contextPath, ClassLoader classLoader, Map<String, Object> properties) throws JAXBException {
+        JAXBContextImpl jaxbContext = createContext(contextPath, classLoader, properties);
         return jaxbContext;
     }
 

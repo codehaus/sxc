@@ -76,8 +76,17 @@ public class JAXBObjectFactoryBuilder {
     }
 
     public void addDependency(Class type) {
-        JAXBObjectBuilder marshallerBuilder = builderContext.getJAXBObjectBuilder(type);
-        addDependency(marshallerBuilder.getJAXBObjectClass());
+        if (!type.isEnum()) {
+            JAXBObjectBuilder objectBuilder = builderContext.getJAXBObjectBuilder(type);
+            if (objectBuilder != null) {
+                addDependency(objectBuilder.getJAXBObjectClass());
+            }
+        } else {
+            JAXBEnumBuilder enumBuilder = builderContext.getJAXBEnumBuilder(type);
+            if (enumBuilder != null) {
+                addDependency(enumBuilder.getJAXBEnumClass());
+            }
+        }
     }
 
     public void addDependency(JClass dependency) {
@@ -89,9 +98,28 @@ public class JAXBObjectFactoryBuilder {
     }
 
     public void addRootElement(QName name, Class type) {
-        JAXBObjectBuilder marshallerBuilder = builderContext.getJAXBObjectBuilder(type);
-        constructor.body().invoke(rootElements, "put")
-                .arg(newQName(name))
-                .arg(marshallerBuilder.getJAXBObjectClass().dotclass());
+        if (!type.isEnum()) {
+            JAXBObjectBuilder objectBuilder = builderContext.getJAXBObjectBuilder(type);
+            if (objectBuilder != null) {
+                constructor.body().invoke(rootElements, "put")
+                        .arg(newQName(name))
+                        .arg(objectBuilder.getJAXBObjectClass().dotclass());
+            } else {
+                JAXBObject jaxbObject = StandardJAXBObjects.jaxbObjectByClass.get(type);
+                if (jaxbObject != null) {
+                    constructor.body().invoke(rootElements, "put")
+                            .arg(newQName(name))
+                            .arg(builderContext.dotclass(jaxbObject.getClass()));
+                }
+
+            }
+        } else {
+            JAXBEnumBuilder enumBuilder = builderContext.getJAXBEnumBuilder(type);
+            if (enumBuilder != null) {
+                constructor.body().invoke(rootElements, "put")
+                        .arg(newQName(name))
+                        .arg(enumBuilder.getJAXBEnumClass().dotclass());
+            }
+        }
     }
 }
