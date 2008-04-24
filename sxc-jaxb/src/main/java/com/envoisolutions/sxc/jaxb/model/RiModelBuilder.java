@@ -272,11 +272,11 @@ public class RiModelBuilder {
         String pkgNamespace = null;
         for (Method method : clazz.getMethods()) {
             if (method.isAnnotationPresent(XmlElementDecl.class)) {
-                Bean bean = null;
+                Class<?> type = null;
                 if (method.getParameterTypes().length > 0) {
                     // according to the JAXB team it is more reliable to determine referenced class type
                     // from the method parameter type instead of the return type
-                    bean = model.getBean(method.getParameterTypes()[0]);
+                    type = method.getParameterTypes()[0];
                 } else if (method.getReturnType().equals(JAXBElement.class)) {
                     // return type should be a parameterized JAXBElement
                     Type returnType = method.getGenericReturnType();
@@ -284,12 +284,12 @@ public class RiModelBuilder {
                         ParameterizedType parameterizedType = (ParameterizedType) returnType;
                         if (parameterizedType.getActualTypeArguments().length > 0) {
                             Type typeArg = parameterizedType.getActualTypeArguments()[0];
-                            bean = model.getBean(JavaUtils.toClass(typeArg));
+                            type = JavaUtils.toClass(typeArg);
                         }
                     }
                 }
 
-                if (bean != null) {
+                if (type != null) {
                     XmlElementDecl xmlElementDecl = method.getAnnotation(XmlElementDecl.class);
                     String name = xmlElementDecl.name();
                     String namespace = xmlElementDecl.namespace();
@@ -309,8 +309,12 @@ public class RiModelBuilder {
                         namespace = pkgNamespace;
                     }
 
-                    objectFactory.getRootElements().put(new QName(namespace, name), bean);
-                    objectFactory.getDependencies().add(bean);
+                    objectFactory.getRootElements().put(new QName(namespace, name), type);
+
+                    Bean bean = model.getBean(type);
+                    if (bean != null) {
+                        objectFactory.getDependencies().add(bean);
+                    }
                 }
             } else if(method.getName().startsWith("create")) {
                 Bean bean = model.getBean(method.getReturnType());

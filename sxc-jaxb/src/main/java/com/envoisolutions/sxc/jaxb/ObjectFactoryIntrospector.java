@@ -18,10 +18,11 @@ public class ObjectFactoryIntrospector {
             }
 
             // add root elements
-            for (Map.Entry<QName, Bean> rootElement : objectFactory.getRootElements().entrySet()) {
+            for (Map.Entry<QName, Class> rootElement : objectFactory.getRootElements().entrySet()) {
                 QName qname = rootElement.getKey();
-                Class<?> type = rootElement.getValue().getType();
+                Class<?> type = rootElement.getValue();
                 objectFactoryBuilder.addRootElement(qname, type);
+                objectFactoryBuilder.addDependency(type);
             }
         }
     }

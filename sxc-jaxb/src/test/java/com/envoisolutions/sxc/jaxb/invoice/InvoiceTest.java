@@ -54,7 +54,6 @@ public class InvoiceTest extends XoTestCase {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         marshaller.marshal(i, bos);
         
-        System.out.println(bos.toString());
         Document d = readDocument(bos.toByteArray());
         addNamespace("i", "http://cxf.apache.org/courseware/Invoice");
         assertValid("/i:Invoice/i:header/i:customer/i:customerNumber[text()='123']", d);
@@ -80,7 +79,5 @@ public class InvoiceTest extends XoTestCase {
         Marshaller marshaller = ctx.createMarshaller();
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         marshaller.marshal(i, bos);
-        
-        System.out.println(bos.toString());
     }
 }

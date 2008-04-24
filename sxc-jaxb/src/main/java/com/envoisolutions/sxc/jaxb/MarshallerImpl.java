@@ -2,6 +2,7 @@ package com.envoisolutions.sxc.jaxb;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Calendar;
 import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.MarshalException;
@@ -12,6 +13,7 @@ import javax.xml.bind.helpers.AbstractMarshallerImpl;
 import javax.xml.bind.helpers.ValidationEventImpl;
 import javax.xml.datatype.Duration;
 import javax.xml.datatype.XMLGregorianCalendar;
+import javax.xml.datatype.DatatypeFactory;
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLEventWriter;
 import javax.xml.stream.XMLOutputFactory;
@@ -176,10 +178,12 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
                     writer.writeInt((Integer) jaxbElement);
                 } else if (c == Short.class) {
                     writer.writeShort((Short) jaxbElement);
-                } else if (c == Duration.class) {
+                } else if (Duration.class.isAssignableFrom(c)) {
                     writer.writeCharacters(jaxbElement.toString());
-                } else if (c == XMLGregorianCalendar.class) {
+                } else if (XMLGregorianCalendar.class.isAssignableFrom(c)) {
                     writer.writeCharacters(((XMLGregorianCalendar) jaxbElement).toXMLFormat());
+                } else if (Calendar.class.isAssignableFrom(c)) {
+                    StandardJAXBObjects.CalendarJAXB.INSTANCE.write(writer, (Calendar) jaxbElement, context);
                 } else if (c == byte[].class) {
                     BinaryUtils.encodeBytes(writer, (byte[]) jaxbElement);
                 } else if (Element.class.isAssignableFrom(c)) {
