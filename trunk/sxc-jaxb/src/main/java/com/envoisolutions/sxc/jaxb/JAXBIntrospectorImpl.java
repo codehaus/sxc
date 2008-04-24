@@ -11,68 +11,93 @@ import javax.xml.bind.JAXBElement;
 import javax.xml.namespace.QName;
 
 public class JAXBIntrospectorImpl extends JAXBIntrospector {
-    private final Map<Class, JAXBMarshaller> marshallerByClass = new LinkedHashMap<Class, JAXBMarshaller>();
-    private final Map<QName, JAXBMarshaller> marshallerByElementName = new LinkedHashMap<QName, JAXBMarshaller>();
-    private final Map<QName, JAXBMarshaller> marshallerBySchemaType = new LinkedHashMap<QName, JAXBMarshaller>();
+    private final Map<Class, JAXBObject> jaxbObjectByClass = new LinkedHashMap<Class, JAXBObject>();
+    private final Map<QName, JAXBObject> jaxbObjectByElementName = new LinkedHashMap<QName, JAXBObject>();
+    private final Map<QName, JAXBObject> jaxbObjectBySchemaType = new LinkedHashMap<QName, JAXBObject>();
     private boolean fullyResolved = false;
 
     public JAXBIntrospectorImpl() {
     }
 
-    public JAXBIntrospectorImpl(JAXBMarshaller... marshallers) {
-        for (JAXBMarshaller marshaller : marshallers) {
-            addMarshaller(marshaller);
-        }
-    }
-
-    public void addMarshaller(JAXBMarshaller marshaller) {
-        if (marshallerByClass.containsKey(marshaller.getType())) return;
-
-        marshallerByClass.put(marshaller.getType(), marshaller);
-        if (marshaller.getXmlRootElement() != null) {
-            marshallerByElementName.put(marshaller.getXmlRootElement(), marshaller);
-        }
-        if (marshaller.getXmlType() != null) {
-            marshallerBySchemaType.put(marshaller.getXmlType(), marshaller);
-        }
-
-        if (fullyResolved) {
-            resolveDependencies(marshaller);
+    public JAXBIntrospectorImpl(JAXBObject... jaxbObjects) {
+        for (JAXBObject jaxbObject : jaxbObjects) {
+            addJAXBClass(jaxbObject);
         }
     }
 
     @SuppressWarnings({"unchecked"})
-    public <T> JAXBMarshaller<T> getJaxbMarshaller(Class<T> type) {
+    public void addJAXBClass(JAXBClass jaxbClass) {
+        if (jaxbObjectByClass.containsKey(jaxbClass.getType())) return;
+
+        // index JAXBObject
+        if (jaxbClass instanceof JAXBObject) {
+            JAXBObject jaxbObject = (JAXBObject) jaxbClass;
+
+            jaxbObjectByClass.put(jaxbObject.getType(), jaxbObject);
+            if (jaxbObject.getXmlRootElement() != null) {
+                jaxbObjectByElementName.put(jaxbObject.getXmlRootElement(), jaxbObject);
+            }
+            if (jaxbObject.getXmlType() != null) {
+                jaxbObjectBySchemaType.put(jaxbObject.getXmlType(), jaxbObject);
+            }
+        }
+
+        // index root element declarations in JAXBObjectFactory
+        if (jaxbClass instanceof JAXBObjectFactory) {
+            JAXBObjectFactory jaxbObjectFactory = (JAXBObjectFactory) jaxbClass;
+
+            Map<QName, Class<? extends JAXBObject>> map = jaxbObjectFactory.getRootElements();
+            for (Map.Entry<QName, Class<? extends JAXBObject>> rootElements : map.entrySet()) {
+                // create an instance of the jaxb class
+                // todo get existing instance from the jaxbObjectByClass map
+                Class<? extends JAXBObject> jaxbObjectClass = rootElements.getValue();
+                JAXBObject jaxbObject = (JAXBObject) createJAXBClassInstance(jaxbObjectClass);
+
+                // add root element declaration
+                jaxbObjectByElementName.put(rootElements.getKey(), jaxbObject);
+
+                // add the jaxbObject
+                addJAXBClass(jaxbObject);
+            }
+        }
+
+        if (fullyResolved) {
+            resolveDependencies(jaxbClass);
+        }
+    }
+
+    @SuppressWarnings({"unchecked"})
+    public <T> JAXBObject<T> getJaxbMarshaller(Class<T> type) {
         if (type == null) return null;
 
-        JAXBMarshaller marshaller = marshallerByClass.get(type);
-        if (marshaller == null) {
+        JAXBObject jaxbObject = jaxbObjectByClass.get(type);
+        if (jaxbObject == null) {
             setFullyResolved(true);
-            marshaller = marshallerByClass.get(type);
+            jaxbObject = jaxbObjectByClass.get(type);
         }
-        return marshaller;
+        return jaxbObject;
     }
 
-    public JAXBMarshaller getJaxbMarshallerByElementName(QName elementName) {
+    public JAXBObject getJaxbMarshallerByElementName(QName elementName) {
         if (elementName == null) return null;
 
-        JAXBMarshaller marshaller = marshallerByElementName.get(elementName);
-        if (marshaller == null) {
+        JAXBObject jaxbObject = jaxbObjectByElementName.get(elementName);
+        if (jaxbObject == null) {
             setFullyResolved(true);
-            marshaller = marshallerByElementName.get(elementName);
+            jaxbObject = jaxbObjectByElementName.get(elementName);
         }
-        return marshaller;
+        return jaxbObject;
     }
 
-    public JAXBMarshaller getJaxbMarshallerBySchemaType(QName schemaType) {
+    public JAXBObject getJaxbMarshallerBySchemaType(QName schemaType) {
         if (schemaType == null) return null;
 
-        JAXBMarshaller marshaller = marshallerBySchemaType.get(schemaType);
-        if (marshaller == null) {
+        JAXBObject jaxbObject = jaxbObjectBySchemaType.get(schemaType);
+        if (jaxbObject == null) {
             setFullyResolved(true);
-            marshaller = marshallerBySchemaType.get(schemaType);
+            jaxbObject = jaxbObjectBySchemaType.get(schemaType);
         }
-        return marshaller;
+        return jaxbObject;
     }
 
     public boolean isElement(Object jaxbElement) {
@@ -84,13 +109,13 @@ public class JAXBIntrospectorImpl extends JAXBIntrospector {
             JAXBElement element = (JAXBElement) jaxbElement;
             return element.getName();
         }
-        JAXBMarshaller marshaller = getJaxbMarshaller(jaxbElement.getClass());
-        if (marshaller == null) return null;
-        return marshaller.getXmlRootElement();
+        JAXBObject jaxbObject = getJaxbMarshaller(jaxbElement.getClass());
+        if (jaxbObject == null) return null;
+        return jaxbObject.getXmlRootElement();
     }
 
     public Set<QName> getElementNames() {
-        return marshallerByElementName.keySet(); 
+        return jaxbObjectByElementName.keySet();
     }
 
     public boolean isFullyResolved() {
@@ -104,48 +129,48 @@ public class JAXBIntrospectorImpl extends JAXBIntrospector {
         this.fullyResolved = fullyResolved;
         if (fullyResolved) {
             // state changed to fully resolved, so resolve all existing marshallers
-            for (JAXBMarshaller marshaller : new ArrayList<JAXBMarshaller>(marshallerByClass.values())) {
-                resolveDependencies(marshaller);
+            for (JAXBObject jaxbObject : new ArrayList<JAXBObject>(jaxbObjectByClass.values())) {
+                resolveDependencies(jaxbObject);
             }
         }
     }
 
     @SuppressWarnings({"unchecked"})
-    private void resolveDependencies(JAXBMarshaller marshaller) {
-        Collection<Class<? extends JAXBMarshaller>> dependencies = marshaller.getDependencies();
-        for (Class<? extends JAXBMarshaller> marshallerClass : dependencies) {
-            JAXBMarshaller depencency = createMarshallerInstance(marshallerClass);
-            addMarshaller(depencency);
+    private void resolveDependencies(JAXBClass jaxbClass) {
+        Collection<Class<? extends JAXBObject>> dependencies = jaxbClass.getDependencies();
+        for (Class<? extends JAXBObject> marshallerClass : dependencies) {
+            JAXBClass depencency = createJAXBClassInstance(marshallerClass);
+            addJAXBClass(depencency);
         }
     }
 
-    public static JAXBMarshaller loadJAXBMarshaller(Class type, ClassLoader classLoader) {
+    public static JAXBClass loadJAXBClass(Class type, ClassLoader classLoader) {
         if (classLoader == null)  classLoader = type.getClassLoader();
         if (classLoader == null)  classLoader = ClassLoader.getSystemClassLoader();
 
         Class<?> readerClass;
         try {
-            readerClass = classLoader.loadClass("generated.sxc." + type.getName() + "JaxB");
+            readerClass = classLoader.loadClass("sxc." + type.getName() + "JAXB");
         } catch (ClassNotFoundException e) {
             return null;
         }
 
-        return createMarshallerInstance(readerClass.asSubclass(JAXBMarshaller.class));
+        return createJAXBClassInstance(readerClass.asSubclass(JAXBClass.class));
     }
 
-    public static JAXBMarshaller createMarshallerInstance(Class<? extends JAXBMarshaller> readerClass) {
-        JAXBMarshaller marshaller = null;
+    public static JAXBClass createJAXBClassInstance(Class<? extends JAXBClass> readerClass) {
+        JAXBClass jaxbClass = null;
         try {
             Field instanceField = readerClass.getField("INSTANCE");
-            marshaller = (JAXBMarshaller) instanceField.get(null);
+            jaxbClass = (JAXBObject) instanceField.get(null);
         } catch (Exception e) {
         }
-        if (marshaller == null) {
+        if (jaxbClass == null) {
             try {
-                marshaller = readerClass.newInstance();
+                jaxbClass = readerClass.newInstance();
             } catch (Exception e) {
             }
         }
-        return marshaller;
+        return jaxbClass;
     }
 }

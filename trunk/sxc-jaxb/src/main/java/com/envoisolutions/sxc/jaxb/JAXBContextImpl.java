@@ -4,9 +4,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.lang.reflect.Method;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -16,13 +13,11 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.logging.Logger;
 import javax.xml.bind.JAXBContext;
-import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.JAXBIntrospector;
 import javax.xml.bind.Marshaller;
 import javax.xml.bind.SchemaOutputResolver;
 import javax.xml.bind.Unmarshaller;
-import javax.xml.bind.annotation.XmlElementDecl;
 
 import com.sun.xml.bind.v2.ContextFactory;
 
@@ -55,9 +50,9 @@ public class JAXBContextImpl extends JAXBContext {
         // annotation is present is an expensive operation
         LinkedList<Class> unknownTypes = new LinkedList<Class>();
         for (Class xmlType : classes) {
-            JAXBMarshaller marshaller = JAXBIntrospectorImpl.loadJAXBMarshaller(xmlType, null);
-            if (marshaller != null) {
-                introspector.addMarshaller(marshaller);
+            JAXBClass jaxbClass = JAXBIntrospectorImpl.loadJAXBClass(xmlType, null);
+            if (jaxbClass != null) {
+                introspector.addJAXBClass(jaxbClass);
             } else {
                 unknownTypes.add(xmlType);
             }
@@ -67,8 +62,8 @@ public class JAXBContextImpl extends JAXBContext {
         if (!unknownTypes.isEmpty()) {
             BuilderContext builder = new BuilderContext(properties, classes);
             schemaGenerator = builder.getSchemaGenerator();
-            for (JAXBMarshaller marshaller : builder.compile()) {
-                introspector.addMarshaller(marshaller);
+            for (JAXBClass jaxbClass : builder.compile()) {
+                introspector.addJAXBClass(jaxbClass);
             }
         } else {
             schemaGenerator = new Callable<JAXBContext>() {
@@ -117,14 +112,14 @@ public class JAXBContextImpl extends JAXBContext {
         Set<Class> classes = new HashSet<Class>();
         for (String pkg : contextPath.split(":")) {
             // look for ObjectFactory and load it
-            List<Class> factoryClasses = loadObjectFactory(pkg, classLoader);
-            if (factoryClasses != null) classes.addAll(factoryClasses);
+            Class objectFactoryClass = loadObjectFactory(pkg, classLoader);
+            if (objectFactoryClass != null) classes.add(objectFactoryClass);
 
             // look for jaxb.index and load the list of classes
             List<Class> indexedClasses = loadIndexedClasses(pkg, classLoader);
             if (indexedClasses != null) classes.addAll(indexedClasses);
 
-            if (factoryClasses == null && indexedClasses == null) {
+            if (objectFactoryClass == null && indexedClasses == null) {
                 throw new JAXBException("Package must contain a jaxb.index file or ObjectFactory class: " + pkg);
             }
         }
@@ -181,35 +176,10 @@ public class JAXBContextImpl extends JAXBContext {
         }
     }
 
-    private static List<Class> loadObjectFactory(String pkg, ClassLoader classLoader) throws JAXBException {
+    private static Class loadObjectFactory(String pkg, ClassLoader classLoader) throws JAXBException {
         try {
             Class<?> objectFactory = classLoader.loadClass(pkg + ".ObjectFactory");
-
-            ArrayList<Class> classes = new ArrayList<Class>();
-            for (Method method : objectFactory.getDeclaredMethods()) {
-                XmlElementDecl xmlElementDecl = method.getAnnotation(XmlElementDecl.class);
-                if (xmlElementDecl != null) {
-                    if (method.getParameterTypes().length > 0) {
-                        // according to the JAXB team it is more reliable to determine referenced class type
-                        // from the method parameter type instead of the return type
-                        classes.add(method.getParameterTypes()[0]);
-                    } else if (method.getReturnType().equals(JAXBElement.class)) {
-                        // return type should be a parameterized JAXBElement
-                        Type returnType = method.getGenericReturnType();
-                        if (returnType instanceof ParameterizedType) {
-                            ParameterizedType parameterizedType = (ParameterizedType) returnType;
-                            if (parameterizedType.getActualTypeArguments().length > 0) {
-                                Type typeArg = parameterizedType.getActualTypeArguments()[0];
-                                classes.add(JavaUtils.toClass(typeArg));
-                            }
-                        }
-                    }
-                } else if (method.getName().startsWith("create")) {
-                    // normal create method
-                    classes.add(method.getReturnType());
-                }
-            }
-            return classes;
+            return objectFactory;
         } catch (ClassNotFoundException e) {
             // not necessarily an error
             return null;

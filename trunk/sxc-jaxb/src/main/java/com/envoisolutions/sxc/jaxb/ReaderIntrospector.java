@@ -36,23 +36,20 @@ import com.envoisolutions.sxc.jaxb.model.Bean;
 import com.envoisolutions.sxc.jaxb.model.ElementMapping;
 import com.envoisolutions.sxc.jaxb.model.Model;
 import com.envoisolutions.sxc.jaxb.model.Property;
+import com.envoisolutions.sxc.jaxb.model.EnumInfo;
 import com.envoisolutions.sxc.util.ArrayUtil;
 import com.envoisolutions.sxc.util.Base64;
-import com.envoisolutions.sxc.util.XoXMLStreamReader;
 import com.sun.codemodel.JArray;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCatchBlock;
 import com.sun.codemodel.JClass;
-import com.sun.codemodel.JClassAlreadyExistsException;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JConditional;
-import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldVar;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JMod;
 import com.sun.codemodel.JTryBlock;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
@@ -64,19 +61,22 @@ public class ReaderIntrospector {
     private final BuilderContext builderContext;
     private final Model model;
     private final JCodeModel codeModel;
-    private final Map<Bean, MarshallerBuilder> builders = new LinkedHashMap<Bean, MarshallerBuilder>();
-    private final Map<Class, JClass> enumParsers = new LinkedHashMap<Class, JClass>();
+    private final Map<Bean, JAXBObjectBuilder> builders = new LinkedHashMap<Bean, JAXBObjectBuilder>();
+    private final Map<Class, JAXBEnumBuilder> enumBuilders = new LinkedHashMap<Class, JAXBEnumBuilder>();
 
     public ReaderIntrospector(BuilderContext builderContext, Model model) {
         this.builderContext = builderContext;
         this.model = model;
         codeModel = builderContext.getCodeModel();
 
-        // declare all parser methods first, so everything exists when we build the
-        for (Bean bean : this.model.getBeans()) {
-            if (bean.getType().isEnum()) continue;
+        // build all enum parsers so they are available for use by bean readers
+        for (EnumInfo enumInfo : model.getEnums()) {
+            addEnum(enumInfo);
+        }
 
-            MarshallerBuilder builder = builderContext.getMarshallerBuilder(bean.getType(), bean.getRootElementName(), bean.getSchemaTypeName());
+        // declare all parser methods first, so everything exists when we build
+        for (Bean bean : this.model.getBeans()) {
+            JAXBObjectBuilder builder = builderContext.createJAXBObjectBuilder(bean.getType(), bean.getRootElementName(), bean.getSchemaTypeName());
 
             LinkedHashSet<Property> allProperties = new LinkedHashSet<Property>();
             for (Bean b = bean; b != null; b = b.getBaseClass()) {
@@ -107,17 +107,10 @@ public class ReaderIntrospector {
             builders.put(bean, builder);
         }
 
-        // declare all parse enum methods (after read methods so they are grouped together)
-        for (Bean bean : model.getBeans()) {
-            if (bean.getType().isEnum()) {
-                addEnum(bean);
-            }
-        }
-
         // build parsers
         for (Bean bean : model.getBeans()) {
             if (!bean.getType().isEnum()) {
-                MarshallerBuilder builder = builders.get(bean);
+                JAXBObjectBuilder builder = builders.get(bean);
                 if (builder != null) {
                     add(builder, bean);
                 }
@@ -125,15 +118,15 @@ public class ReaderIntrospector {
         }
     }
 
-    private JInvocation invokeParser(MarshallerBuilder caller, JVar callerXsrVar, MarshallerBuilder parser) {
+    private JInvocation invokeParser(JAXBObjectBuilder caller, JVar callerXsrVar, JAXBObjectBuilder parser) {
         // Declare dependency from caller to parser
-        caller.addDependency(parser.getMarshallerClass());
+        caller.addDependency(parser.getJAXBObjectClass());
 
-        // Add a static import for the write method on the existing builder class
+        // Add a static import for the read method on the existing builder class
         String methodName = "read" + parser.getReadMethod().type().name();
         if (caller != parser) {
-            JStaticImports staticImports = JStaticImports.getStaticImports(caller.getMarshallerClass());
-            staticImports.addStaticImport(parser.getMarshallerClass().fullName() + "." + methodName);
+            JStaticImports staticImports = JStaticImports.getStaticImports(caller.getJAXBObjectClass());
+            staticImports.addStaticImport(parser.getJAXBObjectClass().fullName() + "." + methodName);
         }
 
         // Call the static method
@@ -141,7 +134,21 @@ public class ReaderIntrospector {
         return invocation;
     }
 
-    private MarshallerBuilder add(MarshallerBuilder builder, Bean bean) {
+    private JInvocation invokeEnumParser(JAXBObjectBuilder caller, JVar callerXsrVar, JAXBEnumBuilder parser, JExpression value) {
+        // Declare dependency from caller to parser
+        caller.addDependency(parser.getJAXBEnumClass());
+
+        // Add a static import for the parse method on the existing builder class
+        String methodName = "parse" + parser.getType().getSimpleName();
+        JStaticImports staticImports = JStaticImports.getStaticImports(caller.getJAXBObjectClass());
+        staticImports.addStaticImport(parser.getJAXBEnumClass().fullName() + "." + methodName);
+
+        // Call the static method
+        JInvocation invocation = JExpr.invoke(methodName).arg(callerXsrVar).arg(caller.getReadContextVar()).arg(value);
+        return invocation;
+    }
+
+    private JAXBObjectBuilder add(JAXBObjectBuilder builder, Bean bean) {
         // read properties
         if (!Modifier.isAbstract(bean.getType().getModifiers())) {
             handleProperties(builder, bean, builder.getReadObject());
@@ -154,7 +161,7 @@ public class ReaderIntrospector {
             if (bean.getType().isAssignableFrom(xsiTypeClass) && bean.getType() != xsiTypeClass && !Modifier.isAbstract(xsiTypeClass.getModifiers())) {
                 JBlock block = builder.expectXsiType(xsiTypeBean.getSchemaTypeName());
 
-                MarshallerBuilder elementBuilder = builders.get(xsiTypeBean);
+                JAXBObjectBuilder elementBuilder = builders.get(xsiTypeBean);
                 if (elementBuilder == null) {
                     throw new BuildException("Unknown bean " + bean);
                 }
@@ -168,44 +175,36 @@ public class ReaderIntrospector {
         return builder;
     }
 
-    private void addEnum(Bean bean) {
-        String className = "generated.sxc." + bean.getType().getName() + "JaxB";
-        JDefinedClass jaxbClass = codeModel._getClass(className);
-        if (jaxbClass == null) {
-            try {
-                jaxbClass = codeModel._class(className);
-            } catch (JClassAlreadyExistsException e) {
-                throw new BuildException(e);
-            }
-        }
+    private void addEnum(EnumInfo enumInfo) {
+        JAXBEnumBuilder builder = builderContext.createJAXBEnumBuilder(enumInfo.getType(), enumInfo.getRootElementName(), enumInfo.getSchemaTypeName());
 
-        JClass type = toJClass(bean.getType());
-        JMethod method = jaxbClass.method(JMod.PUBLIC | JMod.STATIC, type, "parse")._throws(Exception.class);
-        JVar xsrVar = method.param(XoXMLStreamReader.class, "reader");
-        JVar contextVar = method.param(toJClass(RuntimeContext.class), "context");
-        JVar value = method.param(String.class, "value");
+        JMethod method = builder.getParseMethod();
 
         JIfElseBlock enumCond = new JIfElseBlock();
         method.body().add(enumCond);
-        for (Map.Entry<Enum, String> entry : bean.getEnumMap().entrySet()) {
+        for (Map.Entry<Enum, String> entry : enumInfo.getEnumMap().entrySet()) {
             Enum enumValue = entry.getKey();
             String enumText = entry.getValue();
 
-            JExpression textCompare = JExpr.lit(enumText).invoke("equals").arg(value);
+            JExpression textCompare = JExpr.lit(enumText).invoke("equals").arg(builder.getParseValue());
             JBlock block = enumCond.addCondition(textCompare);
-            block._return(type.staticRef(enumValue.name()));
+            block._return(toJClass(enumInfo.getType()).staticRef(enumValue.name()));
         }
 
-        JInvocation unexpectedInvoke = enumCond._else().invoke(contextVar, "unexpectedEnumValue").arg(xsrVar).arg(type.dotclass()).arg(value);
-        for (String expectedValue : bean.getEnumMap().values()) {
+        JInvocation unexpectedInvoke = enumCond._else().invoke(builder.getParseContext(), "unexpectedEnumValue")
+                .arg(builder.getParseXSR())
+                .arg(toJClass(enumInfo.getType()).dotclass())
+                .arg(builder.getParseValue());
+
+        for (String expectedValue : enumInfo.getEnumMap().values()) {
             unexpectedInvoke.arg(expectedValue);
         }
         enumCond._else()._return(JExpr._null());
 
-        enumParsers.put(bean.getType(), jaxbClass);
+        enumBuilders.put(enumInfo.getType(), builder);
     }
 
-    private void handleProperties(MarshallerBuilder builder, Bean bean, JVar beanVar) {
+    private void handleProperties(JAXBObjectBuilder builder, Bean bean, JVar beanVar) {
         for (Property property : bean.getProperties()) {
             // DS: the JaxB spec does not define the mapping for char or char[]
             // the RI reads the string as an int and then converts it to a char so 42 becomes '*'
@@ -237,12 +236,12 @@ public class ReaderIntrospector {
 
                 case ELEMENT:
                 case ELEMENT_REF: {
-                    MarshallerBuilder elementBuilder = builder;
+                    JAXBObjectBuilder elementBuilder = builder;
                     JVar parentVar = beanVar;
                     if (property.getXmlName() != null) {
                         elementBuilder = builder.expectWrapperElement(property.getXmlName(), beanVar, property.getName());
                     }
-                    
+
                     // create collection var if necessary
                     JVar collectionVar = handleCollection(elementBuilder, property, parentVar);
 
@@ -296,7 +295,7 @@ public class ReaderIntrospector {
         }
     }
 
-    private JExpression handleAttribute(MarshallerBuilder builder, JBlock block, Property property) {
+    private JExpression handleAttribute(JAXBObjectBuilder builder, JBlock block, Property property) {
         // Collections are not supported yet
         if (property.isCollection()) {
             logger.info("Reader: attribute lists are not supported yet!");
@@ -333,7 +332,7 @@ public class ReaderIntrospector {
         return toSet;
     }
 
-    private JExpression handleElement(MarshallerBuilder builder, JVar xsrVar, JBlock block, Property property, boolean nillable, Type componentType) {
+    private JExpression handleElement(JAXBObjectBuilder builder, JVar xsrVar, JBlock block, Property property, boolean nillable, Type componentType) {
 
         Class targetType = toClass(property.getType());
         if (property.isCollection()) {
@@ -385,7 +384,7 @@ public class ReaderIntrospector {
         } else {
             // Complex type which will already have an element builder defined
             Bean targetBean = model.getBean(toClass(componentType));
-            MarshallerBuilder elementBuilder = builders.get(targetBean);
+            JAXBObjectBuilder elementBuilder = builders.get(targetBean);
             if (elementBuilder == null) {
                 toSet = builder.getReadContextVar().invoke("unexpectedXsiType").arg(builder.getXSR()).arg(JExpr.dotclass(builderContext.toJClass(toClass(componentType))));
             } else {
@@ -403,7 +402,7 @@ public class ReaderIntrospector {
         return toSet;
     }
 
-    private void handleValue(MarshallerBuilder builder, JVar xsrVar, JBlock block, Property property, JVar beanVar) {
+    private void handleValue(JAXBObjectBuilder builder, JVar xsrVar, JBlock block, Property property, JVar beanVar) {
         // Collections are not supported yet
         if (property.isCollection()) {
             logger.info("Reader: value lists are not supported yet!");
@@ -438,7 +437,7 @@ public class ReaderIntrospector {
                     .arg(builderContext.dotclass(targetType))
                     .arg(catchException.param("e"));
             catchBody.assign(isConvertedVar, JExpr.FALSE);
-            
+
             block.add(new JBlankLine());
 
             toSet = valueVar;
@@ -463,7 +462,7 @@ public class ReaderIntrospector {
         doSet(builder, block, property, beanVar, toSet, null);
     }
 
-    private JVar handleCollection(MarshallerBuilder builder, Property property, JVar beanVar) {
+    private JVar handleCollection(JAXBObjectBuilder builder, Property property, JVar beanVar) {
         if (!property.isCollection()) {
             return null;
         }
@@ -549,7 +548,7 @@ public class ReaderIntrospector {
         return collectionVar;
     }
 
-    private void doSet(MarshallerBuilder builder, JBlock block, Property property, JVar beanVar, JExpression toSet, JVar collectionVar) {
+    private void doSet(JAXBObjectBuilder builder, JBlock block, Property property, JVar beanVar, JExpression toSet, JVar collectionVar) {
         if (toSet == null) {
             return;
         }
@@ -561,7 +560,7 @@ public class ReaderIntrospector {
         }
     }
 
-    private void setSingleValue(MarshallerBuilder builder, JBlock block, Property property, JVar bean, JExpression value) {
+    private void setSingleValue(JAXBObjectBuilder builder, JBlock block, Property property, JVar bean, JExpression value) {
         // If enum returned null, then the enum value was invalid, but ValidationEventHandler
         // chose to continue processing.  Since the enum is a bad value we don't wan't to set
         // null into the bean
@@ -621,7 +620,7 @@ public class ReaderIntrospector {
         }
     }
 
-    private void addCollectionItem(MarshallerBuilder builder, JBlock block, Property property, JVar beanVar, JExpression toSet, JVar collectionVar) {
+    private void addCollectionItem(JAXBObjectBuilder builder, JBlock block, Property property, JVar beanVar, JExpression toSet, JVar collectionVar) {
         // if (collection == null) {
         JBlock createCollectionBlock = block._if(collectionVar.eq(JExpr._null()))._then();
 
@@ -739,11 +738,11 @@ public class ReaderIntrospector {
         return builderContext.getGenericType(type);
     }
 
-    private JVar as(MarshallerBuilder builder, JExpression attributeVar, JBlock block, Class<?> cls, String name) {
+    private JVar as(JAXBObjectBuilder builder, JExpression attributeVar, JBlock block, Class<?> cls, String name) {
         return block.decl(toJType(cls), name, coerce(builder, builder.getXSR(), attributeVar, cls));
     }
 
-    private JVar as(MarshallerBuilder builder, JVar xsrVar, JBlock block, Class<?> cls, String name, boolean nillable) {
+    private JVar as(JAXBObjectBuilder builder, JVar xsrVar, JBlock block, Class<?> cls, String name, boolean nillable) {
         JExpression value = coerce(builder, xsrVar, xsrVar.invoke("getElementAsString"), cls);
 
         JVar var;
@@ -782,7 +781,7 @@ public class ReaderIntrospector {
                 type.isEnum();
     }
 
-    private JExpression coerce(MarshallerBuilder builder, JVar xsrVar, JExpression stringValue, Class<?> destType) {
+    private JExpression coerce(JAXBObjectBuilder builder, JVar xsrVar, JExpression stringValue, Class<?> destType) {
         if (destType.isPrimitive()) {
             if (destType.equals(boolean.class)) {
                 return JExpr.lit("1").invoke("equals").arg(stringValue).cor(JExpr.lit("true").invoke("equals").arg(stringValue));
@@ -825,11 +824,11 @@ public class ReaderIntrospector {
             } else if (destType.equals(BigInteger.class)) {
                 return JExpr._new(toJClass(BigInteger.class)).arg(stringValue);
             } else if (destType.isEnum()) {
-                JClass parserClass = enumParsers.get(destType);
-                if (parserClass == null) {
+                JAXBEnumBuilder enumBuilder = enumBuilders.get(destType);
+                if (enumBuilder == null) {
                     throw new BuildException("Unknown enum type " + destType);
                 }
-                return parserClass.staticInvoke("parse").arg(xsrVar).arg(builder.getReadContextVar()).arg(stringValue);
+                return invokeEnumParser(builder, xsrVar, enumBuilder, stringValue);
             }
         }
         throw new UnsupportedOperationException("Invalid type " + destType);

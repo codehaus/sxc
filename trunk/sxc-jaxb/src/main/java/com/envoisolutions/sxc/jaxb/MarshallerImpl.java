@@ -5,7 +5,6 @@ import java.util.Map;
 import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.MarshalException;
-import javax.xml.bind.UnmarshalException;
 import javax.xml.bind.ValidationEvent;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.attachment.AttachmentMarshaller;
@@ -109,9 +108,9 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
             if (jaxbElement instanceof JAXBElement) {
                 writeXsiType = ((JAXBElement)jaxbElement).isTypeSubstituted();
             } else {
-                JAXBMarshaller marshaller = introspector.getJaxbMarshaller(jaxbElement.getClass());
-                if (marshaller != null) {
-                    writeXsiType = marshaller.getXmlRootElement() == null && marshaller.getXmlType() != null;
+                JAXBObject jaxbObject = introspector.getJaxbMarshaller(jaxbElement.getClass());
+                if (jaxbObject != null) {
+                    writeXsiType = jaxbObject.getXmlRootElement() == null && jaxbObject.getXmlType() != null;
                 }
             }
 
@@ -121,7 +120,7 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
                 w.writeEndDocument();
             }
         } catch (XMLStreamException e) {
-            throw new UnmarshalException(e);
+            throw new MarshalException(e);
         }
     }
 
@@ -145,11 +144,11 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
                     if (namespaceURI == null) namespaceURI = "";
                     name = new QName(namespaceURI, element.getLocalName());
                 } else {
-                    JAXBMarshaller marshaller = introspector.getJaxbMarshaller(jaxbElement.getClass());
-                    if (marshaller == null || marshaller.getXmlRootElement() == null) {
+                    JAXBObject jaxbObject = introspector.getJaxbMarshaller(jaxbElement.getClass());
+                    if (jaxbObject == null || jaxbObject.getXmlRootElement() == null) {
                         throw new MarshalException("Object must be annotated with @XmlRootElement or be a JAXBElement!");
                     }
-                    name = marshaller.getXmlRootElement();
+                    name = jaxbObject.getXmlRootElement();
                 }
 
                 // open element
@@ -186,14 +185,14 @@ public class MarshallerImpl extends AbstractMarshallerImpl {
                 } else if (Element.class.isAssignableFrom(c)) {
                     writer.writeDomElement((Element) jaxbElement, false);
                 } else {
-                    JAXBMarshaller jaxbMarshaller = introspector.getJaxbMarshaller(c);
-                    if (jaxbMarshaller != null) {
+                    JAXBObject jaxbObject = introspector.getJaxbMarshaller(c);
+                    if (jaxbObject != null) {
                         if (writeXsiType) {
-                            writer.writeXsiType(jaxbMarshaller.getXmlType().getNamespaceURI(), jaxbMarshaller.getXmlType().getLocalPart());
+                            writer.writeXsiType(jaxbObject.getXmlType().getNamespaceURI(), jaxbObject.getXmlType().getLocalPart());
                         }
 
                         //noinspection unchecked
-                        jaxbMarshaller.write(writer, jaxbElement, context);
+                        jaxbObject.write(writer, jaxbElement, context);
                     } else {
                         String message = "No marshaller for " + c.getName();
                         if (getEventHandler() == null || !getEventHandler().handleEvent(new ValidationEventImpl(ValidationEvent.ERROR, message, new ValidationEventLocatorImpl(jaxbElement, null)))) {
