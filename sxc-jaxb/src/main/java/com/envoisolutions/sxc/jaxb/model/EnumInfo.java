@@ -1,17 +1,17 @@
 package com.envoisolutions.sxc.jaxb.model;
 
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import javax.xml.namespace.QName;
 
-public class Bean {
+public class EnumInfo {
     /**
-     * The model that owns this bean.
+     * The model that owns this enum.
      */
     private final Model model;
 
     /**
-     * The bean class.
+     * The enum class.
      */
     private final Class<?> type;
 
@@ -26,16 +26,11 @@ public class Bean {
     private QName rootElementName;
 
     /**
-     * Properties of this bean.
+     * Map from enum constant to xml representation
      */
-    private final Set<Property> properties = new LinkedHashSet<Property>();
+    private final Map<Enum, String> enumMap = new LinkedHashMap<Enum, String>();
 
-    /**
-     * Parent JAXB class info.
-     */
-    private Bean baseClass;
-
-    public Bean(Model model, Class<?> type) {
+    public EnumInfo(Model model, Class<?> type) {
         if (model == null) throw new NullPointerException("model is null");
         if (type == null) throw new NullPointerException("type is null");
         this.model = model;
@@ -66,29 +61,17 @@ public class Bean {
         this.rootElementName = rootElementName;
     }
 
-    public Set<Property> getProperties() {
-        return properties;
-    }
-
-    public void addProperty(Property property) {
-        properties.add(property);
-    }
-
-    public Bean getBaseClass() {
-        return baseClass;
-    }
-
-    public void setBaseClass(Bean baseClass) {
-        this.baseClass = baseClass;
+    public Map<Enum, String> getEnumMap() {
+        return enumMap;
     }
 
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        Bean bean = (Bean) o;
+        EnumInfo enumInfo = (EnumInfo) o;
 
-        return type.equals(bean.type);
+        return type.equals(enumInfo.type);
     }
 
     public int hashCode() {

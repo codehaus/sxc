@@ -1,7 +1,6 @@
 package com.envoisolutions.sxc.jaxb;
 
 import java.awt.Image;
-import static java.beans.Introspector.decapitalize;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
@@ -34,21 +33,19 @@ import com.envoisolutions.sxc.jaxb.model.Bean;
 import com.envoisolutions.sxc.jaxb.model.ElementMapping;
 import com.envoisolutions.sxc.jaxb.model.Model;
 import com.envoisolutions.sxc.jaxb.model.Property;
+import com.envoisolutions.sxc.jaxb.model.EnumInfo;
 import com.envoisolutions.sxc.util.Base64;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCatchBlock;
 import com.sun.codemodel.JClass;
-import com.sun.codemodel.JClassAlreadyExistsException;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JConditional;
-import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldVar;
 import com.sun.codemodel.JForEach;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JMod;
 import com.sun.codemodel.JTryBlock;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
@@ -60,8 +57,8 @@ public class WriterIntrospector {
     private final BuilderContext builderContext;
     private final Model model;
     private final JCodeModel codeModel;
-    private final Map<Bean, MarshallerBuilder> builders = new LinkedHashMap<Bean, MarshallerBuilder>();
-    private final Map<Class, JClass> enumWriters = new LinkedHashMap<Class, JClass>();
+    private final Map<Bean, JAXBObjectBuilder> builders = new LinkedHashMap<Bean, JAXBObjectBuilder>();
+    private final Map<Class, JAXBEnumBuilder> enumBuilders = new LinkedHashMap<Class, JAXBEnumBuilder>();
 
     public WriterIntrospector(BuilderContext context, Model model) throws JAXBException {
         builderContext = context;
@@ -71,11 +68,16 @@ public class WriterIntrospector {
         List<Bean> mybeans = new ArrayList<Bean>(model.getBeans());
         Collections.sort(mybeans, new BeanComparator());
 
-        // declare all writer methods first, so everything exists when we build the
+        // build all enum toString methods so they are available for use by bean readers
+        for (EnumInfo enumInfo : model.getEnums()) {
+            addEnum(enumInfo);
+        }
+
+        // declare all writer methods first, so everything exists when we build
         for (Bean bean : mybeans) {
             if (bean.getType().isEnum()) continue;
 
-            MarshallerBuilder builder = context.getMarshallerBuilder(bean.getType(), bean.getRootElementName(), bean.getSchemaTypeName());
+            JAXBObjectBuilder builder = context.createJAXBObjectBuilder(bean.getType(), bean.getRootElementName(), bean.getSchemaTypeName());
 
             LinkedHashSet<Property> allProperties = new LinkedHashSet<Property>();
             for (Bean b = bean; b != null; b = b.getBaseClass()) {
@@ -110,17 +112,10 @@ public class WriterIntrospector {
             builders.put(bean, builder);
         }
 
-        // declare all parse enum methods (after read methods so they are grouped together)
-        for (Bean bean : model.getBeans()) {
-            if (bean.getType().isEnum()) {
-                addEnum(bean);
-            }
-        }
-        
         // build the writer methods
         for (Bean bean : model.getBeans()) {
             if (!bean.getType().isEnum()) {
-                MarshallerBuilder builder = builders.get(bean);
+                JAXBObjectBuilder builder = builders.get(bean);
                 if (builder != null) {
                     add(builder, bean);
                 }
@@ -128,7 +123,7 @@ public class WriterIntrospector {
         }
     }
 
-    private void add(MarshallerBuilder builder, Bean bean) {
+    private void add(JAXBObjectBuilder builder, Bean bean) {
         JBlock block = builder.getWriteMethod().body();
 
         // perform instance checks
@@ -163,37 +158,28 @@ public class WriterIntrospector {
         writeProperties(builder, bean);
     }
 
-    private void addEnum(Bean bean) {
-        String className = "generated.sxc." + bean.getType().getName() + "JaxB";
-        JDefinedClass jaxbClass = codeModel._getClass(className);
-        if (jaxbClass == null) {
-            try {
-                jaxbClass = codeModel._class(className);
-            } catch (JClassAlreadyExistsException e) {
-                throw new BuildException(e);
-            }
-        }
+    private void addEnum(EnumInfo enumInfo) {
+        JAXBEnumBuilder builder = builderContext.createJAXBEnumBuilder(enumInfo.getType(), enumInfo.getRootElementName(), enumInfo.getSchemaTypeName());
 
-        JClass type = toJClass(bean.getType());
-        JMethod method = jaxbClass.method(JMod.PUBLIC | JMod.STATIC, String.class, "toString")._throws(Exception.class);
-        JVar xsrVar = method.param(Object.class, "bean");
-        JVar parameterNameVar = method.param(String.class, "parameterName");
-        JVar contextVar = method.param(toJClass(RuntimeContext.class), "context");
-        JVar value = method.param(type, decapitalize(bean.getType().getSimpleName()));
+        JMethod method = builder.getToStringMethod();
 
         JIfElseBlock enumSwitch = new JIfElseBlock();
         method.body().add(enumSwitch);
-        for (Map.Entry<Enum, String> entry : bean.getEnumMap().entrySet()) {
+        for (Map.Entry<Enum, String> entry : enumInfo.getEnumMap().entrySet()) {
             Enum enumValue = entry.getKey();
             String enumText = entry.getValue();
 
-            JBlock enumCase = enumSwitch.addCondition(type.staticRef(enumValue.name()).eq(value));
+            JBlock enumCase = enumSwitch.addCondition(toJClass(enumInfo.getType()).staticRef(enumValue.name()).eq(builder.getToStringValue()));
             enumCase._return(JExpr.lit(enumText));
         }
 
-        JInvocation unexpectedInvoke = enumSwitch._else().invoke(contextVar, "unexpectedEnumConst").arg(xsrVar).arg(parameterNameVar).arg(value);
-        for (Enum expectedValue : bean.getEnumMap().keySet()) {
-            unexpectedInvoke.arg(type.staticRef(expectedValue.name()));
+        JInvocation unexpectedInvoke = enumSwitch._else().invoke(builder.getToStringContext(), "unexpectedEnumConst")
+                .arg(builder.getToStringBean())
+                .arg(builder.getToStringParameterName())
+                .arg(builder.getToStringValue());
+
+        for (Enum expectedValue : enumInfo.getEnumMap().keySet()) {
+            unexpectedInvoke.arg(toJClass(enumInfo.getType()).staticRef(expectedValue.name()));
         }
         enumSwitch._else()._return(JExpr._null());
 
@@ -210,16 +196,16 @@ public class WriterIntrospector {
         // enumSwitch._default().body()._throw(JExpr._new(toJClass(IllegalArgumentException.class))
         //         .arg(JExpr.lit("No value mapped to ").plus(value).plus(JExpr.lit(" for enum " + bean.getType().getName()))));
 
-        enumWriters.put(bean.getType(), jaxbClass);
+        enumBuilders.put(enumInfo.getType(), builder);
     }
 
-    private void writeProperties(MarshallerBuilder builder, Bean bean) {
+    private void writeProperties(JAXBObjectBuilder builder, Bean bean) {
         writeAttributes(builder, bean);
         writeElementsAndValue(builder, bean);
 
     }
 
-    private void writeAttributes(MarshallerBuilder builder, Bean bean) {
+    private void writeAttributes(JAXBObjectBuilder builder, Bean bean) {
         if (bean.getBaseClass() != null) {
             writeAttributes(builder, bean.getBaseClass());
         }
@@ -248,7 +234,7 @@ public class WriterIntrospector {
         }
     }
 
-    private void writeElementsAndValue(MarshallerBuilder builder, Bean bean) {
+    private void writeElementsAndValue(JAXBObjectBuilder builder, Bean bean) {
         if (bean.getBaseClass() != null) {
             writeElementsAndValue(builder, bean.getBaseClass());
         }
@@ -434,7 +420,7 @@ public class WriterIntrospector {
         }
     }
 
-    private void writeElement(MarshallerBuilder builder, JBlock block, ElementMapping mapping, JVar itemVar, Class type, boolean nillable) {
+    private void writeElement(JAXBObjectBuilder builder, JBlock block, ElementMapping mapping, JVar itemVar, Class type, boolean nillable) {
         // write start element
         QName name = mapping.getXmlName();
         block.add(builder.getWriteStartElement(name));
@@ -466,7 +452,7 @@ public class WriterIntrospector {
         block.add(builder.getXSW().invoke("writeEndElement"));
     }
 
-    private JVar getValue(MarshallerBuilder builder, Property property, JBlock block) {
+    private JVar getValue(JAXBObjectBuilder builder, Property property, JBlock block) {
         Class propertyType = toClass(property.getType());
 
         String propertyName = property.getName();
@@ -536,21 +522,21 @@ public class WriterIntrospector {
         return propertyVar;
     }
 
-    private void writeClassWriter(MarshallerBuilder builder, Bean bean, JBlock block, JExpression propertyVar) {
+    private void writeClassWriter(JAXBObjectBuilder builder, Bean bean, JBlock block, JExpression propertyVar) {
         // Complex type which will already have an element builder defined
-        MarshallerBuilder existingBuilder = builders.get(bean);
+        JAXBObjectBuilder existingBuilder = builders.get(bean);
         if (existingBuilder == null) {
             throw new BuildException("Unknown bean " + bean);
         }
 
         // Declare dependency from builder to existingBuilder
-        builder.addDependency(existingBuilder.getMarshallerClass());
+        builder.addDependency(existingBuilder.getJAXBObjectClass());
 
         // Add a static import for the write method on the existing builder class
         String methodName = "write" + bean.getType().getSimpleName();
         if (builder != existingBuilder) {
-            JStaticImports staticImports = JStaticImports.getStaticImports(builder.getMarshallerClass());
-            staticImports.addStaticImport(existingBuilder.getMarshallerClass().fullName() + "." + methodName);
+            JStaticImports staticImports = JStaticImports.getStaticImports(builder.getJAXBObjectClass());
+            staticImports.addStaticImport(existingBuilder.getJAXBObjectClass().fullName() + "." + methodName);
         }
 
         // Call the static method
@@ -570,7 +556,7 @@ public class WriterIntrospector {
         return beans;
     }
 
-    private JVar writeAdapterConversion(MarshallerBuilder builder, JBlock block, Property property, JVar propertyVar) {
+    private JVar writeAdapterConversion(JAXBObjectBuilder builder, JBlock block, Property property, JVar propertyVar) {
         if (property.getAdapterType() != null) {
             JVar adapterVar = builder.getAdapter(property.getAdapterType());
             JVar valueVar = block.decl(toJClass(String.class), builder.getWriteVariableManager().createId(property.getName()), JExpr._null());
@@ -593,7 +579,7 @@ public class WriterIntrospector {
         return propertyVar;
     }
 
-    private void writeSimpleTypeElement(MarshallerBuilder builder, JExpression object, Class type, JBlock block) {
+    private void writeSimpleTypeElement(JAXBObjectBuilder builder, JExpression object, Class type, JBlock block) {
         if(isBuiltinType(type)) {
             block.add(builder.getXSW().invoke("writeCharacters").arg(toString(builder, object, type)));
         } else if (type.equals(byte[].class)) {
@@ -609,7 +595,7 @@ public class WriterIntrospector {
         }
     }
 
-    private void writeSimpleTypeAttribute(MarshallerBuilder builder, JBlock block, QName name, Class type, JExpression value) {
+    private void writeSimpleTypeAttribute(JAXBObjectBuilder builder, JBlock block, QName name, Class type, JExpression value) {
         if(isBuiltinType(type)) {
             value = toString(builder, value, type);
         } else if (type.equals(byte[].class)) {
@@ -708,7 +694,7 @@ public class WriterIntrospector {
                 type.isEnum();
     }
 
-    private JExpression toString(MarshallerBuilder builder, JExpression value, Class<?> type) {
+    private JExpression toString(JAXBObjectBuilder builder, JExpression value, Class<?> type) {
         if (type.isPrimitive()) {
             if (type.equals(boolean.class)) {
                 return toJClass(Boolean.class).staticInvoke("toString").arg(value);
@@ -751,15 +737,34 @@ public class WriterIntrospector {
             } else if (type.equals(BigInteger.class)) {
                 return value.invoke("toString");
             } else if (type.isEnum()) {
-                JClass writerClass = enumWriters.get(type);
-                if (writerClass == null) {
+                JAXBEnumBuilder enumBuilder = enumBuilders.get(type);
+                if (enumBuilder == null) {
                     throw new BuildException("Unknown enum type " + type);
                 }
-                return writerClass.staticInvoke("toString").arg(builder.getWriteObject()).arg(JExpr._null()).arg(builder.getWriteContextVar()).arg(value);
-            }
 
+                return invokeEnumToString(builder, builder.getWriteObject(), JExpr._null(), enumBuilder, value);
+            }
         }
         throw new UnsupportedOperationException("Invalid type " + type);
+    }
+
+    private JInvocation invokeEnumToString(JAXBObjectBuilder caller, JVar beanVar, JExpression parameterName, JAXBEnumBuilder enumBuilder, JExpression value) {
+        // Declare dependency from caller to parser
+        caller.addDependency(enumBuilder.getJAXBEnumClass());
+
+        // Add a static import for the toString method on the existing builder class
+        String methodName = "toString" + enumBuilder.getType().getSimpleName();
+        JStaticImports staticImports = JStaticImports.getStaticImports(caller.getJAXBObjectClass());
+        staticImports.addStaticImport(enumBuilder.getJAXBEnumClass().fullName() + "." + methodName);
+
+        // Call the static method
+        JInvocation invocation = JExpr.invoke(methodName)
+                .arg(beanVar)
+                .arg(parameterName)
+                .arg(caller.getWriteContextVar())
+                .arg(value);
+
+        return invocation;
     }
 
     private static class BeanComparator implements Comparator<Bean> {

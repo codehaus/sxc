@@ -15,7 +15,6 @@ import javax.xml.datatype.DatatypeFactory;
 import javax.xml.namespace.QName;
 import javax.xml.bind.JAXBException;
 
-import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.impl.ElementParserBuilderImpl;
 import com.envoisolutions.sxc.builder.impl.ElementWriterBuilderImpl;
@@ -41,13 +40,13 @@ import com.sun.codemodel.JTryBlock;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 
-public class MarshallerBuilder {
-    private final MarshallerBuilder parent;
+public class JAXBObjectBuilder {
+    private final JAXBObjectBuilder parent;
     private final BuilderContext builderContext;
     private final Class type;
     private final QName xmlRootElement;
     private final QName xmlType;
-    private final JDefinedClass marshallerClass;
+    private final JDefinedClass jaxbObjectClass;
     private final boolean wrapperElement;
     private ElementParserBuilderImpl parserBuilder;
     private ElementWriterBuilderImpl writerBuilder;
@@ -69,13 +68,13 @@ public class MarshallerBuilder {
     private Set<String> dependencies = new TreeSet<String>();
     private JFieldVar lifecycleCallbackVar;
 
-    public MarshallerBuilder(MarshallerBuilder parent, ElementParserBuilderImpl parserBuilder) {
+    public JAXBObjectBuilder(JAXBObjectBuilder parent, ElementParserBuilderImpl parserBuilder) {
         this.parent = parent;
         this.builderContext = parent.builderContext;
         this.type = parent.type;
         this.xmlRootElement = parent.xmlRootElement;
         this.xmlType = parent.xmlType;
-        this.marshallerClass = parent.marshallerClass;
+        this.jaxbObjectClass = parent.jaxbObjectClass;
         this.parserBuilder = parserBuilder;
         wrapperElement = true;
         fieldManager = parent.fieldManager;
@@ -84,7 +83,7 @@ public class MarshallerBuilder {
         privatePropertyAccessors = parent.privatePropertyAccessors;
     }
 
-    public MarshallerBuilder(BuilderContext builderContext, Class type, QName xmlRootElement, QName xmlType) {
+    public JAXBObjectBuilder(BuilderContext builderContext, Class type, QName xmlRootElement, QName xmlType) {
         this.parent = null;
         this.builderContext = builderContext;
         this.type = type;
@@ -97,31 +96,30 @@ public class MarshallerBuilder {
         privatePropertyAccessors = new TreeMap<String, JFieldVar>();
 
         try {
-            marshallerClass = builderContext.getCodeModel()._class("generated.sxc." + type.getName() + "JaxB");
-            marshallerClass._extends(builderContext.getCodeModel().ref(JAXBMarshaller.class));
+            jaxbObjectClass = builderContext.getCodeModel()._class("sxc." + type.getName() + "JAXB");
+            jaxbObjectClass._extends(builderContext.getCodeModel().ref(JAXBObject.class));
         } catch (JClassAlreadyExistsException e) {
             throw new BuildException(e);
         }
 
-        constructor = marshallerClass.constructor(JMod.PUBLIC);
+        constructor = jaxbObjectClass.constructor(JMod.PUBLIC);
         superInvocation = constructor.body().invoke("super")
-                .arg(constructor.param(Context.class, "context"))
                 .arg(JExpr.dotclass(builderContext.toJClass(type)))
                 .arg(newQName(xmlRootElement))
                 .arg(newQName(xmlType));
-        
+
 
         // INSTANCE static field
-        JVar instance = marshallerClass.field(JMod.PUBLIC | JMod.STATIC | JMod.FINAL, marshallerClass, "INSTANCE", JExpr._new(marshallerClass).arg(JExpr._null()));
+        JVar instance = jaxbObjectClass.field(JMod.PUBLIC | JMod.STATIC | JMod.FINAL, jaxbObjectClass, "INSTANCE", JExpr._new(jaxbObjectClass));
 
         // add static read method
-        JMethod method = marshallerClass.method(JMod.PUBLIC | JMod.STATIC, type, "read" + type.getSimpleName())._throws(Exception.class);
+        JMethod method = jaxbObjectClass.method(JMod.PUBLIC | JMod.STATIC, type, "read" + type.getSimpleName())._throws(Exception.class);
         JVar xsrVar = method.param(XoXMLStreamReader.class, "reader");
         JVar contextVar = method.param(builderContext.getBuildContext().getUnmarshalContextClass(), "context");
         method.body()._return(instance.invoke("read").arg(xsrVar).arg(contextVar));
 
         // add static write method
-        method = marshallerClass.method(JMod.PUBLIC | JMod.STATIC, void.class, "write" + type.getSimpleName())._throws(Exception.class);
+        method = jaxbObjectClass.method(JMod.PUBLIC | JMod.STATIC, void.class, "write" + type.getSimpleName())._throws(Exception.class);
         xsrVar = method.param(XoXMLStreamWriter.class, "writer");
         JVar item = method.param(type, toValidId(decapitalize(type.getSimpleName())));
         contextVar = method.param(builderContext.getBuildContext().getMarshalContextClass(), "context");
@@ -129,7 +127,7 @@ public class MarshallerBuilder {
 
         // add lifecycle callabck field
         JClass callbackClass = builderContext.toJClass(LifecycleCallback.class);
-        lifecycleCallbackVar = marshallerClass.field(JMod.PRIVATE | JMod.STATIC | JMod.FINAL, callbackClass, fieldManager.createId("lifecycleCallback"), JExpr._new(callbackClass).arg(JExpr.dotclass(builderContext.toJClass(type))));
+        lifecycleCallbackVar = jaxbObjectClass.field(JMod.PRIVATE | JMod.STATIC | JMod.FINAL, callbackClass, fieldManager.createId("lifecycleCallback"), JExpr._new(callbackClass).arg(JExpr.dotclass(builderContext.toJClass(type))));
     }
 
     private JExpression newQName(QName xmlRootElement) {
@@ -153,12 +151,12 @@ public class MarshallerBuilder {
         return xmlType;
     }
 
-    public JDefinedClass getMarshallerClass() {
-        return marshallerClass;
+    public JDefinedClass getJAXBObjectClass() {
+        return jaxbObjectClass;
     }
 
     public void addDependency(JClass dependency) {
-        if (marshallerClass.fullName().equals(dependency.fullName())) return;
+        if (jaxbObjectClass.fullName().equals(dependency.fullName())) return;
         
         if (parent == null) {
             if (dependencies.add(dependency.fullName())) {
@@ -194,7 +192,7 @@ public class MarshallerBuilder {
             getReadTailBlock().add(new JBlankLine());
             JExpression lifecycleCallbackRef = lifecycleCallbackVar;
             if (parserBuilder.getVariableManager().containsId(lifecycleCallbackVar.name())) {
-                lifecycleCallbackRef = marshallerClass.staticRef(lifecycleCallbackVar.name());
+                lifecycleCallbackRef = jaxbObjectClass.staticRef(lifecycleCallbackVar.name());
             }
             getReadTailBlock().invoke(getReadContextVar(), "afterUnmarshal").arg(readObject).arg(lifecycleCallbackRef);
         }
@@ -211,7 +209,7 @@ public class MarshallerBuilder {
             getWriteMethod().body().add(new JBlankLine());
             JExpression lifecycleCallbackRef = lifecycleCallbackVar;
             if (writerBuilder.getVariableManager().containsId(lifecycleCallbackVar.name())) {
-                lifecycleCallbackRef = marshallerClass.staticRef(lifecycleCallbackVar.name());
+                lifecycleCallbackRef = jaxbObjectClass.staticRef(lifecycleCallbackVar.name());
             }
             getWriteMethod().body().invoke(getReadContextVar(), "afterMarshal").arg(getWriteObject()).arg(lifecycleCallbackRef);
         }
@@ -220,10 +218,10 @@ public class MarshallerBuilder {
 
     public ElementParserBuilderImpl getParserBuilder() {
         if (parserBuilder == null) {
-            parserBuilder = new ElementParserBuilderImpl(builderContext.getBuildContext(), marshallerClass, type);
+            parserBuilder = new ElementParserBuilderImpl(builderContext.getBuildContext(), jaxbObjectClass, type);
             parserBuilder.setXmlType(xmlType);
             parserBuilder.setAllowUnkown(false);
-            parserBuilder.setBaseClass(builderContext.getCodeModel().ref(JAXBMarshaller.class).narrow(type));
+            parserBuilder.setBaseClass(builderContext.getCodeModel().ref(JAXBObject.class).narrow(type));
             parserBuilder.getMethod()._throws(Exception.class);
 
             // @SuppressWarnings({"StringEquality"})
@@ -252,7 +250,7 @@ public class MarshallerBuilder {
                     // add beforeUnmarshal
                     JExpression lifecycleCallbackRef = lifecycleCallbackVar;
                     if (parserBuilder.getVariableManager().containsId(lifecycleCallbackVar.name())) {
-                        lifecycleCallbackRef = marshallerClass.staticRef(lifecycleCallbackVar.name());
+                        lifecycleCallbackRef = jaxbObjectClass.staticRef(lifecycleCallbackVar.name());
                     }
                     body.invoke(getReadContextVar(), "beforeUnmarshal").arg(readObject).arg(lifecycleCallbackRef);
                     body.add(new JBlankLine());
@@ -270,7 +268,7 @@ public class MarshallerBuilder {
     public ElementWriterBuilderImpl getWriterBuilder() {
         if (wrapperElement) throw new IllegalStateException("Wrapper elements do not have a write builder");
         if (writerBuilder == null) {
-            writerBuilder = new ElementWriterBuilderImpl(builderContext.getBuildContext(), marshallerClass, type);
+            writerBuilder = new ElementWriterBuilderImpl(builderContext.getBuildContext(), jaxbObjectClass, type);
             writerBuilder.getMethod()._throws(Exception.class);
 
             if (!type.isEnum()) {
@@ -290,7 +288,7 @@ public class MarshallerBuilder {
                 // add beforeMarshal
                 JExpression lifecycleCallbackRef = lifecycleCallbackVar;
                 if (writerBuilder.getVariableManager().containsId(lifecycleCallbackVar.name())) {
-                    lifecycleCallbackRef = marshallerClass.staticRef(lifecycleCallbackVar.name());
+                    lifecycleCallbackRef = jaxbObjectClass.staticRef(lifecycleCallbackVar.name());
                 }
                 body.invoke(getReadContextVar(), "beforeMarshal").arg(getWriteObject()).arg(lifecycleCallbackRef);
                 body.add(new JBlankLine());
@@ -307,7 +305,7 @@ public class MarshallerBuilder {
             String fieldName = decapitalize(adapterType.getSimpleName()) + "Adapter";
             fieldName = fieldManager.createId(fieldName);
             JClass jClass = builderContext.toJClass(adapterType);
-            var = marshallerClass.field(JMod.PRIVATE | JMod.STATIC | JMod.FINAL, jClass, fieldName, JExpr._new(jClass));
+            var = jaxbObjectClass.field(JMod.PRIVATE | JMod.STATIC | JMod.FINAL, jClass, fieldName, JExpr._new(jClass));
             adapters.put(adapterId, var);
         }
         return var;
@@ -323,7 +321,7 @@ public class MarshallerBuilder {
                     .arg(JExpr.lit(field.getName()));
 
             String fieldName = fieldManager.createId(decapitalize(field.getDeclaringClass().getSimpleName()) + capitalize(field.getName()));
-            fieldAccessorField = marshallerClass.field(JMod.PRIVATE | JMod.STATIC | JMod.FINAL, fieldAccessorType, fieldName, newFieldAccessor);
+            fieldAccessorField = jaxbObjectClass.field(JMod.PRIVATE | JMod.STATIC | JMod.FINAL, fieldAccessorType, fieldName, newFieldAccessor);
             privateFieldAccessors.put(fieldId, fieldAccessorField);
         }
         return fieldAccessorField;
@@ -344,7 +342,7 @@ public class MarshallerBuilder {
                     .arg(setter == null ? JExpr._null() : JExpr.lit(setter.getName()));
 
             String fieldName = fieldManager.createId(decapitalize(beanClass.getSimpleName()) + capitalize(propertyName));
-            fieldAccessorField = marshallerClass.field(JMod.PRIVATE | JMod.STATIC | JMod.FINAL, fieldAccessorType, fieldName, newFieldAccessor);
+            fieldAccessorField = jaxbObjectClass.field(JMod.PRIVATE | JMod.STATIC | JMod.FINAL, fieldAccessorType, fieldName, newFieldAccessor);
             privatePropertyAccessors.put(fieldId, fieldAccessorField);
         }
         return fieldAccessorField;
@@ -352,7 +350,7 @@ public class MarshallerBuilder {
 
     public JFieldVar getDatatypeFactory() {
         if (datatypeFactory == null) {
-            datatypeFactory = marshallerClass.field(JMod.PRIVATE | JMod.FINAL, builderContext.toJClass(DatatypeFactory.class), fieldManager.createId("datatypeFactory"));
+            datatypeFactory = jaxbObjectClass.field(JMod.PRIVATE | JMod.FINAL, builderContext.toJClass(DatatypeFactory.class), fieldManager.createId("datatypeFactory"));
 
             // add code to constructor which initializes the static dtFactory field
             JTryBlock tryBlock = constructor.body()._try();
@@ -419,11 +417,11 @@ public class MarshallerBuilder {
         return getParserBuilder().getBody().getBlock();
     }
 
-    public MarshallerBuilder expectWrapperElement(QName elementName, JVar beanVar, String propertyName) {
+    public JAXBObjectBuilder expectWrapperElement(QName elementName, JVar beanVar, String propertyName) {
         if (expectedElements.contains(elementName)) throw new IllegalArgumentException("Element is alredy expected " + elementName);
         expectedElements.add(elementName);
 
-        ElementParserBuilderImpl parserBuilder = new ElementParserBuilderImpl(builderContext.getBuildContext(), marshallerClass, null, 2, propertyName);
+        ElementParserBuilderImpl parserBuilder = new ElementParserBuilderImpl(builderContext.getBuildContext(), jaxbObjectClass, null, 2, propertyName);
         parserBuilder.setAllowUnkown(false);
 
         String name = parserBuilder.getVariableManager().createId(decapitalize(beanVar.type().name()));
@@ -437,7 +435,7 @@ public class MarshallerBuilder {
         block.add(new JLineComment("ELEMENT WRAPPER: " + propertyName));
         getParserBuilder().setElementBlock(elementName, null, block);
 
-        MarshallerBuilder builder = new MarshallerBuilder(this, parserBuilder);
+        JAXBObjectBuilder builder = new JAXBObjectBuilder(this, parserBuilder);
         return builder;
     }
 

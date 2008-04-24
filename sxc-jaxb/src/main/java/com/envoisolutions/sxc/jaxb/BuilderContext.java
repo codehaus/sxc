@@ -32,8 +32,10 @@ import com.sun.codemodel.writer.FileCodeWriter;
 public class BuilderContext {
     private BuildContext buildContext;
     private JCodeModel codeModel;
-    private final Map<Class, MarshallerBuilder> marshallerBuilders = new HashMap<Class, MarshallerBuilder>();
-    private final Map<Class, JAXBMarshaller> marshallers = new HashMap<Class, JAXBMarshaller>();
+    private final Map<Class, JAXBObjectBuilder> jaxbObjectBuilders = new HashMap<Class, JAXBObjectBuilder>();
+    private final Map<Class, JAXBEnumBuilder> jaxbEnumBuilders = new HashMap<Class, JAXBEnumBuilder>();
+    private final Map<Class, JAXBObjectFactoryBuilder> jaxbObjectFactoryBuilders = new HashMap<Class, JAXBObjectFactoryBuilder>();
+    private final Map<Class, JAXBClass> jaxbClasses = new HashMap<Class, JAXBClass>();
     private Callable<JAXBContext> schemaGenerator;
 
     public BuilderContext(Map<String, Object> properties, Class... classes) throws JAXBException {
@@ -48,6 +50,7 @@ public class BuilderContext {
 
         new ReaderIntrospector(this, model);
         new WriterIntrospector(this, model);
+        new ObjectFactoryIntrospector(this, model);
     }
 
     public BuildContext getBuildContext() {
@@ -62,25 +65,58 @@ public class BuilderContext {
         return schemaGenerator;
     }
 
-    public MarshallerBuilder getMarshallerBuilder(Class type, QName xmlRootElement, QName xmlType) {
-        MarshallerBuilder builder = marshallerBuilders.get(type);
+    public JAXBObjectBuilder getJAXBObjectBuilder(Class type) {
+        JAXBObjectBuilder builder = jaxbObjectBuilders.get(type);
+        return builder;
+    }
+
+    public JAXBObjectBuilder createJAXBObjectBuilder(Class type, QName xmlRootElement, QName xmlType) {
+        JAXBObjectBuilder builder = jaxbObjectBuilders.get(type);
         if (builder == null) {
-            builder = new MarshallerBuilder(this, type, xmlRootElement, xmlType);
-            marshallerBuilders.put(type, builder);
+            builder = new JAXBObjectBuilder(this, type, xmlRootElement, xmlType);
+            jaxbObjectBuilders.put(type, builder);
+        }
+        return builder;
+    }
+
+    public JAXBEnumBuilder getJAXBEnumBuilder(Class type) {
+        JAXBEnumBuilder builder = jaxbEnumBuilders.get(type);
+        return builder;
+    }
+
+    public JAXBEnumBuilder createJAXBEnumBuilder(Class type, QName xmlRootElement, QName xmlType) {
+        JAXBEnumBuilder builder = jaxbEnumBuilders.get(type);
+        if (builder == null) {
+            builder = new JAXBEnumBuilder(this, type, xmlRootElement, xmlType);
+            jaxbEnumBuilders.put(type, builder);
+        }
+        return builder;
+    }
+
+    public JAXBObjectFactoryBuilder getJAXBObjectFactoryBuilder(Class type) {
+        JAXBObjectFactoryBuilder builder = jaxbObjectFactoryBuilders.get(type);
+        return builder;
+    }
+
+    public JAXBObjectFactoryBuilder createJAXBObjectFactoryBuilder(Class type) {
+        JAXBObjectFactoryBuilder builder = jaxbObjectFactoryBuilders.get(type);
+        if (builder == null) {
+            builder = new JAXBObjectFactoryBuilder(this, type);
+            jaxbObjectFactoryBuilders.put(type, builder);
         }
         return builder;
     }
 
     public void write(CodeWriter codeWriter) throws IOException, BuildException {
-        for (MarshallerBuilder builder : marshallerBuilders.values()) {
+        for (JAXBObjectBuilder builder : jaxbObjectBuilders.values()) {
             builder.write();
         }
         
         buildContext.getCodeModel().build(codeWriter);
     }
 
-    public Collection<JAXBMarshaller> compile() {
-        if (!marshallerBuilders.isEmpty()) {
+    public Collection<JAXBClass> compile() {
+        if (!jaxbObjectBuilders.isEmpty() || !jaxbEnumBuilders.isEmpty() || !jaxbObjectFactoryBuilders.isEmpty()) {
             // write generated to code to ouput dir
             File dir;
             try {
@@ -104,20 +140,34 @@ public class BuilderContext {
             ClassLoader classLoader = compiler.compile(dir);
 
             // load the generated classes
-            for (Class type : marshallerBuilders.keySet()) {
-                JAXBMarshaller marshaller = JAXBIntrospectorImpl.loadJAXBMarshaller(type, classLoader);
-                if (marshaller != null) {
-                    marshallers.put(type, marshaller);
+            for (Class type : jaxbObjectBuilders.keySet()) {
+                JAXBClass jaxbClass = JAXBIntrospectorImpl.loadJAXBClass(type, classLoader);
+                if (jaxbClass != null) {
+                    jaxbClasses.put(type, jaxbClass);
+                }
+            }
+            for (Class type : jaxbEnumBuilders.keySet()) {
+                JAXBClass jaxbClass = JAXBIntrospectorImpl.loadJAXBClass(type, classLoader);
+                if (jaxbClass != null) {
+                    jaxbClasses.put(type, jaxbClass);
+                }
+            }
+            for (Class type : jaxbObjectFactoryBuilders.keySet()) {
+                JAXBClass jaxbClass = JAXBIntrospectorImpl.loadJAXBClass(type, classLoader);
+                if (jaxbClass != null) {
+                    jaxbClasses.put(type, jaxbClass);
                 }
             }
 
             // all generated so we can clear the generation state
             buildContext = null;
             codeModel = null;
-            marshallerBuilders.clear();
+            jaxbObjectBuilders.clear();
+            jaxbEnumBuilders.clear();
+            jaxbObjectFactoryBuilders.clear();
         }
 
-        return marshallers.values();
+        return jaxbClasses.values();
     }
 
     public JClass toJClass(Class clazz) {
