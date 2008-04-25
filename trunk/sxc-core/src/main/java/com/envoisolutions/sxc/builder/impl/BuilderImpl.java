@@ -1,5 +1,8 @@
 package com.envoisolutions.sxc.builder.impl;
 
+import java.io.File;
+import java.io.IOException;
+
 import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.Reader;
 import com.envoisolutions.sxc.Writer;
@@ -8,29 +11,22 @@ import com.envoisolutions.sxc.builder.Builder;
 import com.envoisolutions.sxc.builder.ElementParserBuilder;
 import com.envoisolutions.sxc.builder.ElementWriterBuilder;
 import com.envoisolutions.sxc.compiler.Compiler;
-import com.envoisolutions.sxc.compiler.JavacCompiler;
 import com.envoisolutions.sxc.util.Util;
 import com.sun.codemodel.CodeWriter;
+import com.sun.codemodel.JClass;
 import com.sun.codemodel.JClassAlreadyExistsException;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.writer.FileCodeWriter;
-
-import java.io.File;
-import java.io.IOException;
 
 public class BuilderImpl implements Builder {
-
     private ElementParserBuilderImpl parserBuilder;
-    private File file;
+    private CodeWriterImpl codeWriter;
     private BuildContext buildContext;
     private ElementWriterBuilderImpl writerBuilder;
-    private Compiler compiler = new JavacCompiler();
-    private String contextClassName;
+    private String compiler;
 
     /**
      *
@@ -46,10 +42,14 @@ public class BuilderImpl implements Builder {
      */
     public BuilderImpl(String readerClassName, String writerClassName, String contextClassName) {
         this.buildContext = new BuildContext();
-        if(readerClassName!=null)
+
+        if(readerClassName!=null) {
             parserBuilder = new ElementParserBuilderImpl(buildContext,readerClassName);
-        if(writerClassName!=null)
+        }
+
+        if(writerClassName!=null) {
             writerBuilder = new ElementWriterBuilderImpl(buildContext,writerClassName);
+        }
 
         if(contextClassName!=null) {
             try {
@@ -67,7 +67,6 @@ public class BuilderImpl implements Builder {
                 throw new BuildException(e);
             }
         }
-        this.contextClassName = contextClassName;
     }
 
     /**
@@ -102,68 +101,54 @@ public class BuilderImpl implements Builder {
     }
 
     public void write(File dir) throws IOException, BuildException {
-        this.file = dir;
+        dir.mkdirs();
 
-        // file = new File(file, new Long(System.currentTimeMillis()).toString());
-        file.mkdirs();
+        codeWriter = new CodeWriterImpl(dir, true);
 
-        write(new FileCodeWriter(file));
+        write(codeWriter);
     }
 
     public void write(CodeWriter writer) throws IOException, BuildException {
-        if(parserBuilder!=null)
+        if(parserBuilder!=null) {
             parserBuilder.write();
-        if(writerBuilder!=null)
+        }
+        if(writerBuilder!=null) {
             writerBuilder.write();
-        
+        }
         buildContext.getCodeModel().build(writer);
     }
     
     public Context compile() {
-        boolean delete = true;
-        File dir = null;
-        if (file == null) {
+        CodeWriterImpl codeWriter = this.codeWriter;
+        if (codeWriter == null) {
             try {
-                String cdir = System.getProperty("com.envoisolutions.sxc.output.directory");
-                
-                if (cdir == null) {
-                    dir = File.createTempFile("compile", "");
-                } else {
-                    dir = new File(cdir);
-                    delete = false;
-                }
-
-                dir.delete();
-                
-                dir.mkdirs();
-                write(dir);
-                
-                
+                codeWriter = new CodeWriterImpl();
+                write(codeWriter);
             } catch (IOException e) {
                 throw new BuildException(e);
             }
         }
-        
-        ClassLoader cl = compiler.compile(file);
+
+        // compile the generated code
+        Compiler compiler = Compiler.newInstance(this.compiler);
+        ClassLoader classLoader = compiler.compile(codeWriter.getSources());
 
         // Only delete if the output directory hasn't been set
-        if (delete && file == null) {
-            Util.delete(dir);
+        if (System.getProperty("com.envoisolutions.sxc.output.directory") == null) {
+            Util.delete(codeWriter.getBaseDir());
         }
 
         // TODO: simply load the generated context class and get rid of CompiledContext
-        return new CompiledContext(cl,
+        return new CompiledContext(classLoader,
             parserBuilder!=null ? parserBuilder.readerClass.fullName() : null,
             writerBuilder!=null ? writerBuilder.getWriterClass().fullName() : null);
     }
-    
-    public Compiler getCompiler() {
+
+    public String getCompiler() {
         return compiler;
     }
 
-    public void setCompiler(Compiler compiler) {
+    public void setCompiler(String compiler) {
         this.compiler = compiler;
     }
-
-    
 }
