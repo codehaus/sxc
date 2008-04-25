@@ -212,23 +212,31 @@ public class WriterIntrospector {
 
         for (Property property : bean.getProperties()) {
             if (property.getXmlStyle() == Property.XmlStyle.ATTRIBUTE) {
-
                 JBlock block = builder.getWriteMethod().body();
                 block.add(new JBlankLine());
                 block.add(new JLineComment(property.getXmlStyle() + ": " + property.getName()));
 
                 JVar propertyVar = getValue(builder, property, block);
 
-                if (!property.isCollection()) {
+                if (!property.isXmlAny()) {
+                    if (!property.isCollection()) {
+                        // if (value != null)
+                        if (!toClass(property.getType()).isPrimitive()) {
+                            JConditional nullCond = block._if(propertyVar.ne(JExpr._null()));
+                            block = nullCond._then();
+                        }
 
-                    if (!toClass(property.getType()).isPrimitive()) {
-                        JConditional nilCond = block._if(propertyVar.ne(JExpr._null()));
-                        block = nilCond._then();
+                        writeSimpleTypeAttribute(builder, block, property.getXmlName(), toClass(property.getType()), propertyVar);
+                    } else {
+                        logger.info("(JAXB Writer) Attribute lists are not supported yet!");
                     }
-
-                    writeSimpleTypeAttribute(builder, block, property.getXmlName(), toClass(property.getType()), propertyVar);
                 } else {
-                    logger.info("(JAXB Writer) Attribute lists are not supported yet!");
+                    // if (value != null)
+                    JConditional nullCond = block._if(propertyVar.ne(JExpr._null()));
+
+                    String entryName = builder.getWriteVariableManager().createId(property.getName() + "Entry");
+                    JForEach each = nullCond._then().forEach(toJClass(Map.Entry.class).narrow(toJClass(QName.class), getGenericType(property.getComponentType())), entryName, propertyVar.invoke("entrySet"));
+                    writeSimpleTypeAttribute(builder, each.body(), each.var().invoke("getKey"), toClass(property.getComponentType()), each.var().invoke("getValue"));
                 }
             }
         }
@@ -620,6 +628,23 @@ public class WriterIntrospector {
                   .arg(JExpr.lit(name.getNamespaceURI()))
                   .arg(JExpr.lit(name.getLocalPart()))
                   .arg(value));
+    }
+
+    private void writeSimpleTypeAttribute(JAXBObjectBuilder builder, JBlock block, JExpression qnameVar, Class type, JExpression value) {
+        if(isBuiltinType(type)) {
+            value = toString(builder, value, type);
+        } else if (type.equals(byte[].class)) {
+            value = toJClass(Base64.class).staticInvoke("encode").arg(value);
+        } else if (type.equals(QName.class)) {
+            value = builder.getXSW().invoke("getQNameAsString").arg(value);
+        } else if (type.equals(DataHandler.class) || type.equals(Image.class)) {
+            // todo support AttachmentMarshaller
+        } else {
+            logger.info("(JAXB Writer) Cannot map simple attribute type yet: " + type);
+            return;
+        }
+
+        block.add(builder.getXSW().invoke("writeAttribute").arg(qnameVar).arg(value));
     }
 
     private String getMostPopularNS(Set<Property> properties) {

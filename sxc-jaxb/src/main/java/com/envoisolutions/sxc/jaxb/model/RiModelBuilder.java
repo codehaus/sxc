@@ -7,6 +7,7 @@ import java.lang.reflect.Type;
 import java.lang.reflect.ParameterizedType;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.beans.Introspector;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.JAXBElement;
@@ -145,6 +146,68 @@ public class RiModelBuilder {
             Property property = createProperty(bean, runtimePropertyInfo);
             bean.addProperty(property);
         }
+
+        if (runtimeClassInfo.declaresAttributeWildcard()) {
+            Accessor anyAttributeAccessor = runtimeClassInfo.getAttributeWildcard();
+            Property anyAttributeProperty;
+
+            // if we have an AdaptedAccessor wrapper, strip off wrapper but preserve the name of the adapter class
+//        Class<XmlAdapter> xmlAdapterClass = null;
+            if ("com.sun.xml.bind.v2.runtime.reflect.AdaptedAccessor".equals(anyAttributeAccessor.getClass().getName())) {
+                try {
+    //                // fields on AdaptedAccessor are private so use set accessible to grab the values
+    //                Field adapterClassField = accessor.getClass().getDeclaredField("adapter");
+    //                adapterClassField.setAccessible(true);
+    //                xmlAdapterClass = (Class<XmlAdapter>) adapterClassField.get(accessor);
+
+                    Field coreField = anyAttributeAccessor.getClass().getDeclaredField("core");
+                    coreField.setAccessible(true);
+                    anyAttributeAccessor = (Accessor) coreField.get(anyAttributeAccessor);
+                } catch (Throwable e) {
+                    throw new BuildException("Unable to access private fields of AdaptedAccessor class", e);
+                }
+            }
+
+            if (anyAttributeAccessor instanceof Accessor.FieldReflection) {
+                Accessor.FieldReflection fieldReflection = (Accessor.FieldReflection) anyAttributeAccessor;
+                anyAttributeProperty = new Property(bean, fieldReflection.f.getName());
+                anyAttributeProperty.setField(fieldReflection.f);
+                anyAttributeProperty.setType(fieldReflection.f.getGenericType());
+            } else if (anyAttributeAccessor instanceof Accessor.GetterSetterReflection) {
+                Accessor.GetterSetterReflection getterSetterReflection = (Accessor.GetterSetterReflection) anyAttributeAccessor;
+
+                if (getterSetterReflection.getter != null) {
+                    String propertyName = getterSetterReflection.getter.getName();
+                    if (propertyName.startsWith("get")) {
+                        propertyName = Introspector.decapitalize(propertyName.substring(3));
+                    } else if (propertyName.startsWith("is")) {
+                        propertyName = Introspector.decapitalize(propertyName.substring(2));
+                    }
+                    anyAttributeProperty = new Property(bean, propertyName);
+                    anyAttributeProperty.setType(getterSetterReflection.getter.getGenericReturnType());
+                } else if (getterSetterReflection.setter != null) {
+                    String propertyName = getterSetterReflection.setter.getName();
+                    if (propertyName.startsWith("set")) {
+                        propertyName = Introspector.decapitalize(propertyName.substring(3));
+                    }
+                    anyAttributeProperty = new Property(bean, propertyName);
+                    anyAttributeProperty.setType(getterSetterReflection.setter.getGenericParameterTypes()[0]);
+                } else {
+                    throw new BuildException("Any attribute property for class " + bean + " does not have a getter or setter method");
+                }
+
+                anyAttributeProperty.setGetter(getterSetterReflection.getter);
+                anyAttributeProperty.setSetter(getterSetterReflection.setter);
+            } else {
+                throw new BuildException("Unknown property accessor type '" + anyAttributeAccessor.getClass().getName() + "' for class " + bean);
+            }            
+
+            anyAttributeProperty.setXmlStyle(Property.XmlStyle.ATTRIBUTE);
+            anyAttributeProperty.setComponentType(String.class);
+            anyAttributeProperty.setXmlAny(true);
+            bean.addProperty(anyAttributeProperty);
+        }
+
 
         Bean baseClass = null;
         RuntimeClassInfo baseClassInfo = runtimeClassInfo.getBaseClass();
