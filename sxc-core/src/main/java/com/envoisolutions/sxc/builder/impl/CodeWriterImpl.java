@@ -16,9 +16,14 @@ public class CodeWriterImpl extends CodeWriter {
     private final Map<String, File> sources = new HashMap<String, File>();
 
     public CodeWriterImpl() throws IOException {
+        this(null);
+    }
+    public CodeWriterImpl(String outputDir) throws IOException {
         overwrite = true;
-        
-        String outputDir = System.getProperty("com.envoisolutions.sxc.output.directory");
+
+        if (outputDir == null) {
+            outputDir = System.getProperty("com.envoisolutions.sxc.output.directory");
+        }
 
         if (outputDir == null) {
             baseDir = File.createTempFile("compile", "");
