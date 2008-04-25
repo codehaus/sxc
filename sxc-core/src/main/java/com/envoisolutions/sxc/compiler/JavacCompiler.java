@@ -12,13 +12,20 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.util.Util;
 
-public class JavacCompiler implements Compiler {
-
-    public ClassLoader compile(File srcDir) {
+public class JavacCompiler extends Compiler {
+    public ClassLoader compile(Map<String, File> sources) {
+        if (sources.isEmpty()) {
+            throw new IllegalArgumentException("sources is empty");
+        }
+        
         try {
             String tmpdir = System.getProperty("java.io.tmpdir");
             File classDir = new File(new File(tmpdir), "classes" + hashCode() + System.currentTimeMillis());
@@ -31,44 +38,54 @@ public class JavacCompiler implements Compiler {
             String classpath = createClasspath(urlSet);
 
             URLClassLoader newCL = createNewClassLoader();
-            
-            String[] args = {srcDir.getAbsolutePath() + "/generated/sxc/Reader.java",
-                             srcDir.getAbsolutePath() + "/generated/sxc/Writer.java", 
-                             "-g", 
-                             "-d", classDir.getAbsolutePath(), 
-                             "-classpath", classpath,
-                             "-sourcepath", srcDir.getAbsolutePath()};
 
-            // System.out.println("Args: " + Arrays.toString(args));
+            // build arg array
+            List<String> args = new ArrayList<String>(sources.size() + 7);
+            args.add("-g");
+            args.add("-d");
+            args.add(classDir.getAbsolutePath());
+            args.add("-classpath");
+            args.add(classpath);
+            for (File file : sources.values()) {
+                args.add(file.getAbsolutePath());
+            }
 
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            PrintWriter writer = new PrintWriter(bos);
-            int i;
+            // invoke compiler
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            PrintWriter writer = new PrintWriter(out);
+            int exitCode;
             try {
                 Class<?> main = newCL.loadClass("com.sun.tools.javac.Main");
-                Method method = main.getMethod("compile", new Class[] {String[].class, PrintWriter.class});
-                i = (Integer)method.invoke(null, new Object[] {args, writer});
+                Method method = main.getMethod("compile", String[].class, PrintWriter.class);
+                exitCode = (Integer) method.invoke(null, args.toArray(new String[args.size()]), writer);
             } catch (ClassNotFoundException e1) {
                 throw new BuildException("Could not find javac compiler!", e1);
             } catch (Exception e) {
                 throw new BuildException("Could not invoke javac compiler!", e);
             }
 
-            if (i != 0) {
+            // check exit code
+            if (exitCode != 0) {
                 writer.close();
                 
-                System.out.println(bos.toString());
+                System.out.println(out.toString());
                 
-                throw new BuildException("Could not compile generated files! Code: " + i);
+                throw new BuildException("Could not compile generated files! Code: " + exitCode);
             }
 
+            // load classes
             Thread.currentThread().setContextClassLoader(oldCl);
             URLClassLoader cl = new URLClassLoader(new URL[] {classDir.toURL()}, oldCl);
-            try {
-                cl.loadClass("generated.sxc.Reader");
-                cl.loadClass("generated.sxc.Writer");
-            } catch (ClassNotFoundException e) {
-                throw new BuildException("Could not load generated classes.", e);
+            List<String> failedToLoad = new ArrayList<String>();
+            for (String className : sources.keySet()) {
+                try {
+                    cl.loadClass(className);
+                } catch (ClassNotFoundException e) {
+                    failedToLoad.add(className);
+                }
+            }
+            if (!failedToLoad.isEmpty()) {
+                throw new BuildException("Could not load generated classes " + failedToLoad);
             }
 
             Util.delete(classDir);
@@ -134,9 +151,7 @@ public class JavacCompiler implements Compiler {
 
                 URL[] clurls = ucl.getURLs();
                 if (clurls != null) {
-                    for (URL u : clurls) {
-                        urls.add(u);
-                    }
+                    urls.addAll(Arrays.asList(clurls));
                 }
             }
             cl = cl.getParent();

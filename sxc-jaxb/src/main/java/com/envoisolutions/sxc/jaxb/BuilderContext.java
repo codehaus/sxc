@@ -1,6 +1,5 @@
 package com.envoisolutions.sxc.jaxb;
 
-import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
@@ -10,6 +9,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Collections;
 import java.util.concurrent.Callable;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -17,17 +17,16 @@ import javax.xml.namespace.QName;
 
 import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.impl.BuildContext;
+import com.envoisolutions.sxc.builder.impl.CodeWriterImpl;
 import com.envoisolutions.sxc.compiler.Compiler;
-import com.envoisolutions.sxc.compiler.EclipseCompiler;
 import static com.envoisolutions.sxc.jaxb.JavaUtils.toClass;
 import com.envoisolutions.sxc.jaxb.model.Model;
 import com.envoisolutions.sxc.jaxb.model.RiModelBuilder;
 import com.sun.codemodel.CodeWriter;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JType;
 import com.sun.codemodel.JExpression;
-import com.sun.codemodel.writer.FileCodeWriter;
+import com.sun.codemodel.JType;
 
 public class BuilderContext {
     private BuildContext buildContext;
@@ -36,9 +35,12 @@ public class BuilderContext {
     private final Map<Class, JAXBEnumBuilder> jaxbEnumBuilders = new HashMap<Class, JAXBEnumBuilder>();
     private final Map<Class, JAXBObjectFactoryBuilder> jaxbObjectFactoryBuilders = new HashMap<Class, JAXBObjectFactoryBuilder>();
     private final Map<Class, JAXBClass> jaxbClasses = new HashMap<Class, JAXBClass>();
+    private final Map<String, Object> properties;
     private Callable<JAXBContext> schemaGenerator;
 
     public BuilderContext(Map<String, Object> properties, Class... classes) throws JAXBException {
+        if (properties == null) properties = Collections.emptyMap();
+        this.properties = properties;
         buildContext = new BuildContext();
         codeModel = buildContext.getCodeModel();
         buildContext.setUnmarshalContextClass(codeModel.ref(RuntimeContext.class));
@@ -118,26 +120,17 @@ public class BuilderContext {
     public Collection<JAXBClass> compile() {
         if (!jaxbObjectBuilders.isEmpty() || !jaxbEnumBuilders.isEmpty() || !jaxbObjectFactoryBuilders.isEmpty()) {
             // write generated to code to ouput dir
-            File dir;
+            CodeWriterImpl codeWriter;
             try {
-                String outputDir = System.getProperty("com.envoisolutions.sxc.output.directory");
-
-                if (outputDir == null) {
-                    dir = File.createTempFile("compile", "");
-                    dir.delete();
-                } else {
-                    dir = new File(outputDir);
-                }
-                dir.mkdirs();
-
-                write(new FileCodeWriter(dir));
+                codeWriter = new CodeWriterImpl();
+                write(codeWriter);
             } catch (IOException e) {
                 throw new BuildException(e);
             }
 
             // compile the generated code
-            Compiler compiler = new EclipseCompiler();
-            ClassLoader classLoader = compiler.compile(dir);
+            Compiler compiler = Compiler.newInstance((String) properties.get("org.sxc.compiler"));
+            ClassLoader classLoader = compiler.compile(codeWriter.getSources());
 
             // load the generated classes
             for (Class type : jaxbObjectBuilders.keySet()) {
