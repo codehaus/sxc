@@ -47,10 +47,11 @@ public class EclipseCompiler extends com.envoisolutions.sxc.compiler.Compiler {
         Map<String, byte[]> byteCode = new HashMap<String, byte[]>();
 
         // create the compiler
+        CompilerRequestor compilerRequestor = new CompilerRequestor(byteCode);
         Compiler compiler = new Compiler(new NameEnvironment(sources, byteCode),
                 DefaultErrorHandlingPolicies.proceedWithAllProblems(),
                 compilerOptions,
-                new CompilerRequestor(byteCode),
+                compilerRequestor,
                 new DefaultProblemFactory(Locale.getDefault()));
 
         // source files must be wrapped with an eclipse CompilationUnit
@@ -63,17 +64,21 @@ public class EclipseCompiler extends com.envoisolutions.sxc.compiler.Compiler {
         compiler.compile(compilationUnits.toArray(new ICompilationUnit[compilationUnits.size()]));
 
         // report errors (ignore warnings)
-        boolean hasErrors = false;
-        for (IProblem problem : new CompilerRequestor(byteCode).getProblems()) {
-            if (problem.isError()) {
-                System.out.println(new String(problem.getOriginatingFileName()) + ":[" + problem.getSourceLineNumber() + "] " + problem.getMessage());
-                hasErrors = true;
+        int errorCount = 0;
+        if (compilerRequestor.hasErrors()) {
+            for (IProblem problem : compilerRequestor.getProblems()) {
+                if (problem.isError()) {
+                    System.out.println("ERROR " + new String(problem.getOriginatingFileName()) + ":[" + problem.getSourceLineNumber() + "] " + problem.getMessage());
+                    errorCount++;
+                } else {
+                    System.out.println("WARNING " + new String(problem.getOriginatingFileName()) + ":[" + problem.getSourceLineNumber() + "] " + problem.getMessage());
+                }
             }
         }
 
         // throw an exception if we had some errors
-        if (hasErrors) {
-            throw new BuildException("Could not compile generated files!");
+        if (errorCount > 0) {
+            throw new BuildException("Compile completed with " + errorCount + " errors and " + (compilerRequestor.getProblems().size() - errorCount) + " warnings");
         }
 
         // wrap generted byte code with a classloader
@@ -245,11 +250,16 @@ public class EclipseCompiler extends com.envoisolutions.sxc.compiler.Compiler {
     }
 
     private static class CompilerRequestor implements ICompilerRequestor {
+        private boolean hasErrors;
         private final List<IProblem> problems = new ArrayList<IProblem>();
         private final Map<String, byte[]> byteCode;
 
         private CompilerRequestor(Map<String, byte[]> byteCode) {
             this.byteCode = byteCode;
+        }
+
+        public boolean hasErrors() {
+            return hasErrors;
         }
 
         public List<IProblem> getProblems() {
@@ -262,6 +272,7 @@ public class EclipseCompiler extends com.envoisolutions.sxc.compiler.Compiler {
 
         public void acceptResult( org.eclipse.jdt.internal.compiler.CompilationResult result ) {
             if (result.hasProblems()) {
+                if (result.hasErrors()) hasErrors = true;
                 problems.addAll(Arrays.asList((IProblem[]) result.getProblems()));
             }
 

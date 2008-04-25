@@ -3,6 +3,8 @@ package com.envoisolutions.sxc.jaxb;
 import java.awt.Image;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -211,7 +213,7 @@ public class WriterIntrospector {
                 block.add(new JBlankLine());
                 block.add(new JLineComment(property.getXmlStyle() + ": " + property.getName()));
 
-                JVar propertyVar = getValue(builder, property, block);
+                JExpression propertyVar = getValue(builder, property, block);
 
                 if (!property.isXmlAny()) {
                     if (!property.isCollection()) {
@@ -230,6 +232,22 @@ public class WriterIntrospector {
                     JConditional nullCond = block._if(propertyVar.ne(JExpr._null()));
 
                     String entryName = builder.getWriteVariableManager().createId(property.getName() + "Entry");
+
+                    boolean needsCast = true;
+                    if (property.getType() instanceof ParameterizedType) {
+                        ParameterizedType parameterizedType = (ParameterizedType) property.getType();
+                        Type[] arguments = parameterizedType.getActualTypeArguments();
+                        if (arguments.length == 2 &&
+                                QName.class.equals(arguments[0]) &&
+                                property.getComponentType().equals(arguments[1])) {
+                            needsCast = false;
+                        }
+                    }
+
+                    if (needsCast) {
+                        propertyVar = JExpr.cast(context.toJClass(Map.class).narrow(context.toJClass(QName.class), context.getGenericType(property.getComponentType())), propertyVar);
+                    }
+
                     JForEach each = nullCond._then().forEach(context.toJClass(Map.Entry.class).narrow(context.toJClass(QName.class), context.getGenericType(property.getComponentType())), entryName, propertyVar.invoke("entrySet"));
                     writeSimpleTypeAttribute(builder, each.body(), each.var().invoke("getKey"), toClass(property.getComponentType()), each.var().invoke("getValue"));
                 }
