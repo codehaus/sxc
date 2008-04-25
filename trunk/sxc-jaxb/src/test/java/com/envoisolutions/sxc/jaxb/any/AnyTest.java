@@ -2,21 +2,25 @@ package com.envoisolutions.sxc.jaxb.any;
 
 import java.io.ByteArrayOutputStream;
 import java.util.List;
+import java.util.Map;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBElement;
 import javax.xml.bind.Marshaller;
 import javax.xml.transform.stream.StreamSource;
+import javax.xml.namespace.QName;
+import javax.xml.XMLConstants;
 
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import com.envoisolutions.sxc.util.XoTestCase;
+import com.envoisolutions.sxc.jaxb.JAXBContextImpl;
 
 public class AnyTest extends XoTestCase {
     public void testAnyElement() throws Exception {
         System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
 
-        JAXBContext ctx = JAXBContext.newInstance(AnyElement.class);
+        JAXBContext ctx = JAXBContextImpl.newInstance(AnyElement.class);
 
         AnyElement anyElement = (AnyElement) ctx.createUnmarshaller().unmarshal(getClass().getResourceAsStream("anyElement.xml"));
 
@@ -54,7 +58,7 @@ public class AnyTest extends XoTestCase {
     public void testAnyElementArray() throws Exception {
         System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
 
-        JAXBContext ctx = JAXBContext.newInstance(AnyElementArray.class);
+        JAXBContext ctx = JAXBContextImpl.newInstance(AnyElementArray.class);
 
         StreamSource source = new StreamSource(getClass().getResourceAsStream("anyElement.xml"));
         JAXBElement<AnyElementArray> jaxbAnyElementArray = ctx.createUnmarshaller().unmarshal(source, AnyElementArray.class);
@@ -100,7 +104,7 @@ public class AnyTest extends XoTestCase {
     public void testAnyElementList() throws Exception {
         System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
 
-        JAXBContext ctx = JAXBContext.newInstance(AnyElementList.class);
+        JAXBContext ctx = JAXBContextImpl.newInstance(AnyElementList.class);
 
         StreamSource source = new StreamSource(getClass().getResourceAsStream("anyElement.xml"));
         JAXBElement<AnyElementList> jaxbAnyElementList = ctx.createUnmarshaller().unmarshal(source, AnyElementList.class);
@@ -146,7 +150,7 @@ public class AnyTest extends XoTestCase {
     public void testAnyObject() throws Exception {
         System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
 
-        JAXBContext ctx = JAXBContext.newInstance(AnyObject.class, Three.class);
+        JAXBContext ctx = JAXBContextImpl.newInstance(AnyObject.class, Three.class);
 
         StreamSource source = new StreamSource(getClass().getResourceAsStream("anyElement.xml"));
         JAXBElement<AnyObject> jaxbAnyObject = ctx.createUnmarshaller().unmarshal(source, AnyObject.class);
@@ -177,7 +181,7 @@ public class AnyTest extends XoTestCase {
     public void testAnyObjecttArray() throws Exception {
         System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
 
-        JAXBContext ctx = JAXBContext.newInstance(AnyObjectArray.class, Three.class);
+        JAXBContext ctx = JAXBContextImpl.newInstance(AnyObjectArray.class, Three.class);
 
         StreamSource source = new StreamSource(getClass().getResourceAsStream("anyElement.xml"));
         JAXBElement<AnyObjectArray> jaxbAnyObjectArray = ctx.createUnmarshaller().unmarshal(source, AnyObjectArray.class);
@@ -223,7 +227,7 @@ public class AnyTest extends XoTestCase {
     public void testAnyObjectList() throws Exception {
         System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
 
-        JAXBContext ctx = JAXBContext.newInstance(AnyObjectList.class, Three.class);
+        JAXBContext ctx = JAXBContextImpl.newInstance(AnyObjectList.class, Three.class);
 
         StreamSource source = new StreamSource(getClass().getResourceAsStream("anyElement.xml"));
         JAXBElement<AnyObjectList> jaxbAnyObjectList = ctx.createUnmarshaller().unmarshal(source, AnyObjectList.class);
@@ -264,5 +268,53 @@ public class AnyTest extends XoTestCase {
         assertValid("/anyObjectList/three", d);
         assertValid("/anyObjectList/three/tres", d);
         assertValid("/anyObjectList/three/tres[text()='trios']", d);
+    }
+
+    public void testAnyAttribute() throws Exception {
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-jaxb");
+
+        JAXBContext ctx = JAXBContextImpl.newInstance(AnyAttribute.class);
+
+        StreamSource source = new StreamSource(getClass().getResourceAsStream("anyAttribute.xml"));
+        JAXBElement<AnyAttribute> jaxbAnyAttribute = ctx.createUnmarshaller().unmarshal(source, AnyAttribute.class);
+        assertNotNull("jaxbAnyAttribute is null", jaxbAnyAttribute);
+        assertNotNull("jaxbAnyAttribute.getValue() is null", jaxbAnyAttribute.getValue());
+
+        AnyAttribute anyAttribute = jaxbAnyAttribute.getValue();
+        assertNotNull("anyAttribute is null", anyAttribute);
+
+        assertEquals("uno", anyAttribute.getOne());
+        assertEquals("dos", anyAttribute.getTwo());
+        assertEquals("tres", anyAttribute.getThree());
+
+        assertNotNull("anyAttribute.getAttributes() is null", anyAttribute.getAttributes());
+        Map<QName,String> attributes = anyAttribute.getAttributes();
+        assertEquals("cuatro", attributes.get(new QName("", "four")));
+        assertEquals("un", attributes.get(new QName("urn:french", "one")));
+        assertEquals("deux", attributes.get(new QName("urn:french", "two")));
+        assertEquals("trios", attributes.get(new QName("urn:french", "three")));
+        assertEquals("spanish", attributes.get(new QName(XMLConstants.XML_NS_URI, "lang")));
+
+        Marshaller marshaller = ctx.createMarshaller();
+        assertNotNull(marshaller);
+        marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+        
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        marshaller.marshal(anyAttribute, bos);
+
+        System.out.println(new String(bos.toByteArray()));
+
+        Document d = readDocument(bos.toByteArray());
+        addNamespace("f", "urn:french");
+        addNamespace("xml", XMLConstants.XML_NS_URI);
+        assertValid("/anyAttribute", d);
+        assertValid("/anyAttribute[@one='uno']", d);
+        assertValid("/anyAttribute[@two='dos']", d);
+        assertValid("/anyAttribute[@three='tres']", d);
+        assertValid("/anyAttribute[@four='cuatro']", d);
+        assertValid("/anyAttribute[@f:one='un']", d);
+        assertValid("/anyAttribute[@f:two='deux']", d);
+        assertValid("/anyAttribute[@f:three='trios']", d);
+        assertValid("/anyAttribute[@xml:lang='spanish']", d);
     }
 }

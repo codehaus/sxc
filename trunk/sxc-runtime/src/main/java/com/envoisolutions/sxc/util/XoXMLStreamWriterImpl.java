@@ -51,12 +51,17 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
     }
 
     private void writeAndDeclareIfUndeclared(String prefix, String namespace, boolean useExactPrefix) throws XMLStreamException {
+        // xml prefixes are automatic
+        if (prefix.startsWith("xml")) {
+            return;
+        }
+
         if (useExactPrefix) {
             // prefix must match exactally
             Iterator prefixes = getNamespaceContext().getPrefixes(namespace);
             while (prefixes.hasNext()) {
                 if (prefix.equals(prefixes.next())) {
-                    break;
+                    return;
                 }
             }
         } else if (!namespace.equals(defaultNamespace.getNamespaceURI()) && getPrefix(namespace) == null) {
@@ -160,7 +165,7 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
         } else {
             value = new StringBuilder(prefix).append(":").append(local).toString();
         }
-        
+
         String xsiP = getPrefix(XSI_NS);
         if (xsiP == null) {
             xsiP = "xsi";
@@ -174,17 +179,20 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
     }
     
     public String getUniquePrefix(String namespaceURI, boolean declare) throws XMLStreamException {
+        // attributes use namespace ""
+        if ("".equals(namespaceURI)) {
+            return "";
+        }
+
         if (namespaceURI.equals(defaultNamespace.getNamespaceURI())) {
             return "";
         }
 
         String prefix = getNamespaceContext().getPrefix(namespaceURI);
-        if (prefix == null)
-        {
+        if (prefix == null) {
             prefix = getUniquePrefix();
 
-            if (declare) 
-            {
+            if (declare) {
                 setPrefix(prefix, namespaceURI);
                 writeNamespace(prefix, namespaceURI);
             }
@@ -299,6 +307,18 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
 
     public void setPrefix(String prefix, String uri) throws XMLStreamException {
         delegate.setPrefix(prefix, uri);
+    }
+
+    public void writeAttribute(QName name, String value) throws XMLStreamException {
+        String prefix = name.getPrefix();
+        if (prefix.length() > 0) {
+            writeAndDeclareIfUndeclared(prefix, name.getNamespaceURI(), true);
+        } else {
+            if (!name.getNamespaceURI().equals(defaultNamespace.getNamespaceURI())) {
+                prefix = getUniquePrefix(name.getNamespaceURI(), true);
+            }
+        }
+        delegate.writeAttribute(prefix, name.getNamespaceURI(), name.getLocalPart(), value);
     }
 
     public void writeAttribute(String prefix, String namespaceURI, String localName, String value) throws XMLStreamException {

@@ -219,18 +219,24 @@ public class ReaderIntrospector {
 
             switch (property.getXmlStyle()) {
                 case ATTRIBUTE: {
-                    // create attribute block
-                    JBlock block = builder.expectAttribute(property.getXmlName());
+                    if (!property.isXmlAny()) {
+                        // create attribute block
+                        JBlock block = builder.expectAttribute(property.getXmlName());
 
-                    // add comment for readability
-                    block.add(new JLineComment(property.getXmlStyle() + ": " + property.getName()));
+                        // add comment for readability
+                        block.add(new JLineComment(property.getXmlStyle() + ": " + property.getName()));
 
-                    // create collection var if necessary
-                    JVar collectionVar = handleCollection(builder, property, beanVar);
+                        // create collection var if necessary
+                        JVar collectionVar = handleCollection(builder, property, beanVar);
 
-                    // read and set
-                    JExpression toSet = handleAttribute(builder, block, property);
-                    doSet(builder, block, property, beanVar, toSet, collectionVar);
+                        // read and set
+                        JExpression toSet = handleAttribute(builder, block, property);
+                        doSet(builder, block, property, beanVar, toSet, collectionVar);
+                    } else {
+                        handleAnyAttribute(builder, property, beanVar);
+
+                    }
+
                 }
                 break;
 
@@ -310,10 +316,10 @@ public class ReaderIntrospector {
             toSet = adapterVar.invoke("unmarshal").arg(valueVar);
         } else {
             String propertyName = property.getName();
-            if (property.isCollection()) propertyName += "Item";
+            if (property.isCollection() || property.isXmlAny()) propertyName += "Item";
             propertyName = builder.getReadVariableManager().createId(propertyName);
 
-            Class clazz = toClass(property.getType());
+            Class clazz = toClass(property.getComponentType());
             if (isBuiltinType(clazz)) {
                 toSet = block.decl(toJClass(clazz), propertyName, coerce(builder, builder.getXSR(), valueVar, clazz));
             } else if (clazz.equals(byte[].class)) {
@@ -330,6 +336,134 @@ public class ReaderIntrospector {
             }
         }
         return toSet;
+    }
+
+    private void handleAnyAttribute(JAXBObjectBuilder builder, Property property, JVar beanVar) {
+        // create element block
+        JBlock block = builder.expectAnyAttribute();
+
+        // add comment for readability
+        block.add(new JLineComment(property.getXmlStyle() + ": " + property.getName()));
+
+        //
+        // declare any attribute map property at top of method
+        String mapVarName = builder.getReadVariableManager().createId(property.getName());
+        JVar mapVar = builder.getReadMethod().body().decl(getGenericType(property.getType()), mapVarName, JExpr._null());
+
+        //
+        // read attribute
+        JExpression toSet = handleAttribute(builder, block, property);
+
+        //
+        // add attribute to map
+
+        // if (map == null) {
+        JBlock createMapBlock = block._if(mapVar.eq(JExpr._null()))._then();
+        //     map = (Map) bean.getAnyTypeMap();
+        if (property.getField() == null && property.getGetter() == null) {
+            // write only maps are not allowed by the spec, but we can support it anyway
+            JType mapType = getMapClass(property.getType(), property.getComponentType());
+            if (mapType == null) {
+                throw new BuildException("AnyAttribute map property does not have a getter and map does not have a default constructor: " +
+                        property.getBean().getType().getName() + "." + property.getName());
+            }
+            createMapBlock.assign(mapVar, JExpr._new(mapType));
+        } else {
+            if (property.getField() != null) {
+                Field field = property.getField();
+
+                if (!isPrivate(field)) {
+                    createMapBlock.assign(mapVar, beanVar.ref(field.getName()));
+                } else {
+                    JFieldVar fieldAccessorField = builder.getPrivateFieldAccessor(field);
+                    createMapBlock.assign(mapVar, fieldAccessorField.invoke("getObject").arg(builder.getXSR()).arg(builder.getReadContextVar()).arg(beanVar));
+                }
+            } else {
+                Method getter = property.getGetter() ;
+                if (!isPrivate(getter)) {
+                    JTryBlock tryGetter = createMapBlock._try();
+                    tryGetter.body().assign(mapVar, beanVar.invoke(getter.getName()));
+
+                    JCatchBlock catchException = tryGetter._catch(toJClass(Exception.class));
+                    catchException.body().invoke(builder.getReadContextVar(), "getterError")
+                            .arg(builder.getXSR())
+                            .arg(builderContext.dotclass(property.getBean().getType()))
+                            .arg(getter.getName())
+                            .arg(catchException.param("e"));
+                    catchException.body()._continue();
+                } else {
+                    JFieldVar propertyAccessorField = builder.getPrivatePropertyAccessor(property.getGetter(), property.getSetter(), property.getName());
+                    createMapBlock.assign(mapVar, propertyAccessorField.invoke("getObject").arg(builder.getXSR()).arg(builder.getReadContextVar()).arg(beanVar));
+                }
+            }
+
+            //     if (map != null) {
+            //         map.clear();
+            JConditional arrayFoundCondition = createMapBlock._if(mapVar.ne(JExpr._null()));
+            arrayFoundCondition._then().invoke(mapVar, "clear");
+
+            //     } else {
+            //         map = new ArrayList();
+            JType mapType = getMapClass(property.getType(), property.getComponentType());
+            if (mapType != null) {
+                arrayFoundCondition._else().assign(mapVar, JExpr._new(mapType));
+            } else {
+                arrayFoundCondition._else().invoke(builder.getReadContextVar(), "uncreatableMap")
+                        .arg(builder.getXSR())
+                        .arg(builderContext.dotclass(property.getBean().getType()))
+                        .arg(property.getName())
+                        .arg(builderContext.dotclass(property.getType()));
+                arrayFoundCondition._else()._continue();
+            }
+        }
+        //     }
+        // }
+
+        // collection.add(item);
+        block.add(mapVar.invoke("put").arg(builder.getAttributeVar().invoke("getName")).arg(toSet));
+
+
+        //
+        // set the map into the bean at the bottom of the method
+        //
+        // if (map != null) {
+        //     bean.setAnyAttribute(map);
+        // }
+        if (property.getField() != null) {
+            Field field = property.getField();
+
+            JBlock assignMapBlock = builder.getReadTailBlock()._if(mapVar.ne(JExpr._null()))._then();
+
+            if (!isPrivate(field)) {
+                assignMapBlock.assign(beanVar.ref(field.getName()), mapVar);
+            } else {
+                JFieldVar fieldAccessorField = builder.getPrivateFieldAccessor(field);
+                assignMapBlock.add(fieldAccessorField.invoke("setObject").arg(builder.getXSR()).arg(builder.getReadContextVar()).arg(beanVar).arg(mapVar));
+            }
+        } else {
+            // if there is no setter method, the map is not assigned into the class
+            // this assumes that the getter returned the a map instance and held on to a reference
+            Method setter = property.getSetter();
+            if (setter != null) {
+                JBlock assignMapBlock = builder.getReadTailBlock()._if(mapVar.ne(JExpr._null()))._then();
+                if (!isPrivate(setter)) {
+
+                    JTryBlock trySetter = assignMapBlock._try();
+                    trySetter.body().add(beanVar.invoke(setter.getName()).arg(mapVar));
+
+                    JCatchBlock catchException = trySetter._catch(toJClass(Exception.class));
+                    catchException.body().invoke(builder.getReadContextVar(), "setterError")
+                            .arg(builder.getXSR())
+                            .arg(builderContext.dotclass(property.getBean().getType()))
+                            .arg(setter.getName())
+                            .arg(builderContext.dotclass(setter.getParameterTypes()[0]))
+                            .arg(catchException.param("e"));
+                } else {
+                    JFieldVar propertyAccessorField = builder.getPrivatePropertyAccessor(property.getGetter(), property.getSetter(), property.getName());
+                    assignMapBlock.add(propertyAccessorField.invoke("setObject").arg(builder.getXSR()).arg(builder.getReadContextVar()).arg(beanVar).arg(mapVar));
+                }
+            }
+        }
     }
 
     private JExpression handleElement(JAXBObjectBuilder builder, JVar xsrVar, JBlock block, Property property, boolean nillable, Type componentType) {
@@ -709,6 +843,20 @@ public class ReaderIntrospector {
             return toJClass(ArrayList.class).narrow(getGenericType(itemType));
         } else if (Collection.class.equals(collectionClass)) {
             return toJClass(ArrayList.class).narrow(getGenericType(itemType));
+        }
+        return null;
+    }
+
+    private JType getMapClass(Type mapType, Type itemType) {
+        Class mapClass = toClass(mapType);
+        if (!mapClass.isInterface()) {
+            try {
+                mapClass.getConstructor();
+                return getGenericType(mapType);
+            } catch (NoSuchMethodException e) {
+            }
+        } else if (Map.class.equals(mapClass)) {
+            return toJClass(LinkedHashMap.class).narrow(getGenericType(QName.class), getGenericType(itemType));
         }
         return null;
     }
