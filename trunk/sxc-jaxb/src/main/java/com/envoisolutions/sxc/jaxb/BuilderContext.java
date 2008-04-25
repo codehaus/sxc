@@ -122,7 +122,7 @@ public class BuilderContext {
             // write generated to code to ouput dir
             CodeWriterImpl codeWriter;
             try {
-                codeWriter = new CodeWriterImpl();
+                codeWriter = new CodeWriterImpl((String) properties.get("com.envoisolutions.sxc.output.directory"));
                 write(codeWriter);
             } catch (IOException e) {
                 throw new BuildException(e);
