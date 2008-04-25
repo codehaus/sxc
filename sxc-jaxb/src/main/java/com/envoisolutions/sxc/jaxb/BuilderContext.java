@@ -171,7 +171,7 @@ public class BuilderContext {
         return codeModel.ref(clazz);
     }
 
-    private JType toJType(Class<?> c) {
+    public JType toJType(Class<?> c) {
         return codeModel._ref(c);
     }
 

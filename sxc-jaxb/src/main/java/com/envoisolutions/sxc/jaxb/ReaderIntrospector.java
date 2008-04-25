@@ -34,16 +34,14 @@ import static com.envoisolutions.sxc.jaxb.JavaUtils.isPrivate;
 import static com.envoisolutions.sxc.jaxb.JavaUtils.toClass;
 import com.envoisolutions.sxc.jaxb.model.Bean;
 import com.envoisolutions.sxc.jaxb.model.ElementMapping;
+import com.envoisolutions.sxc.jaxb.model.EnumInfo;
 import com.envoisolutions.sxc.jaxb.model.Model;
 import com.envoisolutions.sxc.jaxb.model.Property;
-import com.envoisolutions.sxc.jaxb.model.EnumInfo;
 import com.envoisolutions.sxc.util.ArrayUtil;
 import com.envoisolutions.sxc.util.Base64;
 import com.sun.codemodel.JArray;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCatchBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JConditional;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
@@ -58,16 +56,14 @@ import org.w3c.dom.Element;
 public class ReaderIntrospector {
     private static final Logger logger = Logger.getLogger(ReaderIntrospector.class.getName());
 
-    private final BuilderContext builderContext;
+    private final BuilderContext context;
     private final Model model;
-    private final JCodeModel codeModel;
     private final Map<Bean, JAXBObjectBuilder> builders = new LinkedHashMap<Bean, JAXBObjectBuilder>();
     private final Map<Class, JAXBEnumBuilder> enumBuilders = new LinkedHashMap<Class, JAXBEnumBuilder>();
 
-    public ReaderIntrospector(BuilderContext builderContext, Model model) {
-        this.builderContext = builderContext;
+    public ReaderIntrospector(BuilderContext context, Model model) {
+        this.context = context;
         this.model = model;
-        codeModel = builderContext.getCodeModel();
 
         // build all enum parsers so they are available for use by bean readers
         for (EnumInfo enumInfo : model.getEnums()) {
@@ -76,7 +72,7 @@ public class ReaderIntrospector {
 
         // declare all parser methods first, so everything exists when we build
         for (Bean bean : this.model.getBeans()) {
-            JAXBObjectBuilder builder = builderContext.createJAXBObjectBuilder(bean.getType(), bean.getRootElementName(), bean.getSchemaTypeName());
+            JAXBObjectBuilder builder = context.createJAXBObjectBuilder(bean.getType(), bean.getRootElementName(), bean.getSchemaTypeName());
 
             LinkedHashSet<Property> allProperties = new LinkedHashSet<Property>();
             for (Bean b = bean; b != null; b = b.getBaseClass()) {
@@ -176,7 +172,7 @@ public class ReaderIntrospector {
     }
 
     private void addEnum(EnumInfo enumInfo) {
-        JAXBEnumBuilder builder = builderContext.createJAXBEnumBuilder(enumInfo.getType(), enumInfo.getRootElementName(), enumInfo.getSchemaTypeName());
+        JAXBEnumBuilder builder = context.createJAXBEnumBuilder(enumInfo.getType(), enumInfo.getRootElementName(), enumInfo.getSchemaTypeName());
 
         JMethod method = builder.getParseMethod();
 
@@ -188,12 +184,12 @@ public class ReaderIntrospector {
 
             JExpression textCompare = JExpr.lit(enumText).invoke("equals").arg(builder.getParseValue());
             JBlock block = enumCond.addCondition(textCompare);
-            block._return(toJClass(enumInfo.getType()).staticRef(enumValue.name()));
+            block._return(context.toJClass(enumInfo.getType()).staticRef(enumValue.name()));
         }
 
         JInvocation unexpectedInvoke = enumCond._else().invoke(builder.getParseContext(), "unexpectedEnumValue")
                 .arg(builder.getParseXSR())
-                .arg(toJClass(enumInfo.getType()).dotclass())
+                .arg(context.toJClass(enumInfo.getType()).dotclass())
                 .arg(builder.getParseValue());
 
         for (String expectedValue : enumInfo.getEnumMap().values()) {
@@ -273,7 +269,7 @@ public class ReaderIntrospector {
                         // read and set
                         JInvocation toSet = builder.getReadContextVar().invoke("readXmlAny")
                                 .arg(builder.getXSR())
-                                .arg(builderContext.dotclass(property.getComponentType()))
+                                .arg(context.dotclass(property.getComponentType()))
                                 .arg(property.isLax() ? JExpr.TRUE : JExpr.FALSE);
                         doSet(builder, block, property, parentVar, toSet, collectionVar);
                     }
@@ -321,9 +317,9 @@ public class ReaderIntrospector {
 
             Class clazz = toClass(property.getComponentType());
             if (isBuiltinType(clazz)) {
-                toSet = block.decl(toJClass(clazz), propertyName, coerce(builder, builder.getXSR(), valueVar, clazz));
+                toSet = block.decl(context.toJClass(clazz), propertyName, coerce(builder, builder.getXSR(), valueVar, clazz));
             } else if (clazz.equals(byte[].class)) {
-                toSet = toJClass(Base64.class).staticInvoke("decode").arg(valueVar);
+                toSet = context.toJClass(Base64.class).staticInvoke("decode").arg(valueVar);
             } else if (clazz.equals(QName.class)) {
                 JVar var = as(builder, valueVar, block, String.class, propertyName);
                 toSet = builder.getXSR().invoke("getAsQName").arg(var);
@@ -348,7 +344,7 @@ public class ReaderIntrospector {
         //
         // declare any attribute map property at top of method
         String mapVarName = builder.getReadVariableManager().createId(property.getName());
-        JVar mapVar = builder.getReadMethod().body().decl(getGenericType(property.getType()), mapVarName, JExpr._null());
+        JVar mapVar = builder.getReadMethod().body().decl(context.getGenericType(property.getType()), mapVarName, JExpr._null());
 
         //
         // read attribute
@@ -384,10 +380,10 @@ public class ReaderIntrospector {
                     JTryBlock tryGetter = createMapBlock._try();
                     tryGetter.body().assign(mapVar, beanVar.invoke(getter.getName()));
 
-                    JCatchBlock catchException = tryGetter._catch(toJClass(Exception.class));
+                    JCatchBlock catchException = tryGetter._catch(context.toJClass(Exception.class));
                     catchException.body().invoke(builder.getReadContextVar(), "getterError")
                             .arg(builder.getXSR())
-                            .arg(builderContext.dotclass(property.getBean().getType()))
+                            .arg(context.dotclass(property.getBean().getType()))
                             .arg(getter.getName())
                             .arg(catchException.param("e"));
                     catchException.body()._continue();
@@ -410,9 +406,9 @@ public class ReaderIntrospector {
             } else {
                 arrayFoundCondition._else().invoke(builder.getReadContextVar(), "uncreatableMap")
                         .arg(builder.getXSR())
-                        .arg(builderContext.dotclass(property.getBean().getType()))
+                        .arg(context.dotclass(property.getBean().getType()))
                         .arg(property.getName())
-                        .arg(builderContext.dotclass(property.getType()));
+                        .arg(context.dotclass(property.getType()));
                 arrayFoundCondition._else()._continue();
             }
         }
@@ -451,12 +447,12 @@ public class ReaderIntrospector {
                     JTryBlock trySetter = assignMapBlock._try();
                     trySetter.body().add(beanVar.invoke(setter.getName()).arg(mapVar));
 
-                    JCatchBlock catchException = trySetter._catch(toJClass(Exception.class));
+                    JCatchBlock catchException = trySetter._catch(context.toJClass(Exception.class));
                     catchException.body().invoke(builder.getReadContextVar(), "setterError")
                             .arg(builder.getXSR())
-                            .arg(builderContext.dotclass(property.getBean().getType()))
+                            .arg(context.dotclass(property.getBean().getType()))
                             .arg(setter.getName())
-                            .arg(builderContext.dotclass(setter.getParameterTypes()[0]))
+                            .arg(context.dotclass(setter.getParameterTypes()[0]))
                             .arg(catchException.param("e"));
                 } else {
                     JFieldVar propertyAccessorField = builder.getPrivatePropertyAccessor(property.getGetter(), property.getSetter(), property.getName());
@@ -481,20 +477,20 @@ public class ReaderIntrospector {
         if (property.getAdapterType() != null) {
             JVar adapterVar = builder.getAdapter(property.getAdapterType());
 
-            JVar xmlValueVar = block.decl(toJClass(String.class), builder.getReadVariableManager().createId(propertyName + "Raw"), xsrVar.invoke("getElementText"));
+            JVar xmlValueVar = block.decl(context.toJClass(String.class), builder.getReadVariableManager().createId(propertyName + "Raw"), xsrVar.invoke("getElementText"));
             block.add(new JBlankLine());
 
-            JVar valueVar = block.decl(toJClass(targetType), propertyName);
+            JVar valueVar = block.decl(context.toJClass(targetType), propertyName);
             JTryBlock tryBlock = block._try();
             tryBlock.body().assign(valueVar, adapterVar.invoke("unmarshal").arg(xmlValueVar));
 
-            JCatchBlock catchException = tryBlock._catch(toJClass(Exception.class));
+            JCatchBlock catchException = tryBlock._catch(context.toJClass(Exception.class));
             JBlock catchBody = catchException.body();
             catchBody.invoke(builder.getReadContextVar(), "xmlAdapterError")
                     .arg(xsrVar)
-                    .arg(builderContext.dotclass(property.getAdapterType()))
-                    .arg(builderContext.dotclass(targetType))
-                    .arg(builderContext.dotclass(targetType))
+                    .arg(context.dotclass(property.getAdapterType()))
+                    .arg(context.dotclass(targetType))
+                    .arg(context.dotclass(targetType))
                     .arg(catchException.param("e"));
             catchBody._continue();
 
@@ -503,11 +499,11 @@ public class ReaderIntrospector {
             toSet = valueVar;
         } else if (targetType.equals(Byte.class) || targetType.equals(byte.class)) {
             // todo why the special read method for byte?
-            toSet = JExpr.cast(toJType(byte.class), xsrVar.invoke("getElementAsInt"));
+            toSet = JExpr.cast(context.toJType(byte.class), xsrVar.invoke("getElementAsInt"));
         } else if (isBuiltinType(targetType)) {
             toSet = as(builder, xsrVar, block, targetType, propertyName, nillable);
         } else if (targetType.equals(byte[].class)) {
-            toSet = toJClass(BinaryUtils.class).staticInvoke("decodeAsBytes").arg(xsrVar);
+            toSet = context.toJClass(BinaryUtils.class).staticInvoke("decodeAsBytes").arg(xsrVar);
         } else if (targetType.equals(QName.class)) {
             toSet = xsrVar.invoke("getElementAsQName");
         } else if (targetType.equals(DataHandler.class) || targetType.equals(Image.class)) {
@@ -520,7 +516,7 @@ public class ReaderIntrospector {
             Bean targetBean = model.getBean(toClass(componentType));
             JAXBObjectBuilder elementBuilder = builders.get(targetBean);
             if (elementBuilder == null) {
-                toSet = builder.getReadContextVar().invoke("unexpectedXsiType").arg(builder.getXSR()).arg(JExpr.dotclass(builderContext.toJClass(toClass(componentType))));
+                toSet = builder.getReadContextVar().invoke("unexpectedXsiType").arg(builder.getXSR()).arg(JExpr.dotclass(context.toJClass(toClass(componentType))));
             } else {
                 // invoke the reader method
                 JInvocation invocation = invokeParser(builder, builder.getChildElementVar(), elementBuilder);
@@ -552,23 +548,23 @@ public class ReaderIntrospector {
         if (property.getAdapterType() != null) {
             JVar adapterVar = builder.getAdapter(property.getAdapterType());
 
-            JVar xmlValueVar = block.decl(toJClass(String.class), builder.getReadVariableManager().createId(propertyName + "Raw"), xsrVar.invoke("getElementText"));
+            JVar xmlValueVar = block.decl(context.toJClass(String.class), builder.getReadVariableManager().createId(propertyName + "Raw"), xsrVar.invoke("getElementText"));
             block.add(new JBlankLine());
 
-            JVar valueVar = block.decl(toJClass(targetType), propertyName, JExpr._null());
-            JVar isConvertedVar = block.decl(toJType(boolean.class), builder.getReadVariableManager().createId(propertyName + "Converted"));
+            JVar valueVar = block.decl(context.toJClass(targetType), propertyName, JExpr._null());
+            JVar isConvertedVar = block.decl(context.toJType(boolean.class), builder.getReadVariableManager().createId(propertyName + "Converted"));
 
             JTryBlock tryBlock = block._try();
             tryBlock.body().assign(valueVar, adapterVar.invoke("unmarshal").arg(xmlValueVar));
             tryBlock.body().assign(isConvertedVar, JExpr.TRUE);
 
-            JCatchBlock catchException = tryBlock._catch(toJClass(Exception.class));
+            JCatchBlock catchException = tryBlock._catch(context.toJClass(Exception.class));
             JBlock catchBody = catchException.body();
             catchBody.invoke(builder.getReadContextVar(), "xmlAdapterError")
                     .arg(xsrVar)
-                    .arg(builderContext.dotclass(property.getAdapterType()))
-                    .arg(builderContext.dotclass(targetType)) // currently we only support conversion between same type
-                    .arg(builderContext.dotclass(targetType))
+                    .arg(context.dotclass(property.getAdapterType()))
+                    .arg(context.dotclass(targetType)) // currently we only support conversion between same type
+                    .arg(context.dotclass(targetType))
                     .arg(catchException.param("e"));
             catchBody.assign(isConvertedVar, JExpr.FALSE);
 
@@ -578,11 +574,11 @@ public class ReaderIntrospector {
             block = block._if(isConvertedVar)._then();
         } else if (targetType.equals(Byte.class) || targetType.equals(byte.class)) {
             // todo why the special read method for byte?
-            toSet = JExpr.cast(toJType(byte.class), xsrVar.invoke("getElementAsInt"));
+            toSet = JExpr.cast(context.toJType(byte.class), xsrVar.invoke("getElementAsInt"));
         } else if (isBuiltinType(targetType)) {
             toSet = as(builder, xsrVar, block, targetType, propertyName, false);
         } else if (targetType.equals(byte[].class)) {
-            toSet = toJClass(BinaryUtils.class).staticInvoke("decodeAsBytes").arg(xsrVar);
+            toSet = context.toJClass(BinaryUtils.class).staticInvoke("decodeAsBytes").arg(xsrVar);
         } else if (targetType.equals(QName.class)) {
             toSet = xsrVar.invoke("getElementAsQName");
         } else if (targetType.equals(DataHandler.class) || targetType.equals(Image.class)) {
@@ -607,24 +603,24 @@ public class ReaderIntrospector {
         if (propertyType.isArray()) {
             Class componentType = propertyType.getComponentType();
             if (Boolean.TYPE.equals(componentType)) {
-                collectionType = toJClass(ArrayUtil.BooleanArray.class);
+                collectionType = context.toJClass(ArrayUtil.BooleanArray.class);
             } else if (Character.TYPE.equals(componentType)) {
-                collectionType = toJClass(ArrayUtil.CharArray.class);
+                collectionType = context.toJClass(ArrayUtil.CharArray.class);
             } else if (Short.TYPE.equals(componentType)) {
-                collectionType = toJClass(ArrayUtil.ShortArray.class);
+                collectionType = context.toJClass(ArrayUtil.ShortArray.class);
             } else if (Integer.TYPE.equals(componentType)) {
-                collectionType = toJClass(ArrayUtil.IntArray.class);
+                collectionType = context.toJClass(ArrayUtil.IntArray.class);
             } else if (Long.TYPE.equals(componentType)) {
-                collectionType = toJClass(ArrayUtil.LongArray.class);
+                collectionType = context.toJClass(ArrayUtil.LongArray.class);
             } else if (Float.TYPE.equals(componentType)) {
-                collectionType = toJClass(ArrayUtil.FloatArray.class);
+                collectionType = context.toJClass(ArrayUtil.FloatArray.class);
             } else if (Double.TYPE.equals(componentType)) {
-                collectionType = toJClass(ArrayUtil.DoubleArray.class);
+                collectionType = context.toJClass(ArrayUtil.DoubleArray.class);
             } else {
-                collectionType = toJClass(ArrayList.class).narrow(componentType);
+                collectionType = context.toJClass(ArrayList.class).narrow(componentType);
             }
         } else {
-            collectionType = getGenericType(property.getType());
+            collectionType = context.getGenericType(property.getType());
         }
 
         String collectionVarName = builder.getReadVariableManager().createId(property.getName());
@@ -640,7 +636,7 @@ public class ReaderIntrospector {
             if (propertyType.getComponentType().isPrimitive()) {
                 collectionAssignment = collectionVar.invoke("toArray");
             } else {
-                JArray newArray = JExpr.newArray(toJClass(propertyType.getComponentType()), collectionVar.invoke("size"));
+                JArray newArray = JExpr.newArray(context.toJClass(propertyType.getComponentType()), collectionVar.invoke("size"));
                 collectionAssignment = collectionVar.invoke("toArray").arg(newArray);
             }
         }
@@ -666,12 +662,12 @@ public class ReaderIntrospector {
                     JTryBlock trySetter = assignCollectionBlock._try();
                     trySetter.body().add(beanVar.invoke(setter.getName()).arg(collectionAssignment));
 
-                    JCatchBlock catchException = trySetter._catch(toJClass(Exception.class));
+                    JCatchBlock catchException = trySetter._catch(context.toJClass(Exception.class));
                     catchException.body().invoke(builder.getReadContextVar(), "setterError")
                             .arg(builder.getXSR())
-                            .arg(builderContext.dotclass(property.getBean().getType()))
+                            .arg(context.dotclass(property.getBean().getType()))
                             .arg(setter.getName())
-                            .arg(builderContext.dotclass(setter.getParameterTypes()[0]))
+                            .arg(context.dotclass(setter.getParameterTypes()[0]))
                             .arg(catchException.param("e"));
                 } else {
                     JFieldVar propertyAccessorField = builder.getPrivatePropertyAccessor(property.getGetter(), property.getSetter(), property.getName());
@@ -738,12 +734,12 @@ public class ReaderIntrospector {
                 JTryBlock trySetter = block._try();
                 trySetter.body().add(bean.invoke(property.getSetter().getName()).arg(value));
 
-                JCatchBlock catchException = trySetter._catch(toJClass(Exception.class));
+                JCatchBlock catchException = trySetter._catch(context.toJClass(Exception.class));
                 catchException.body().invoke(builder.getReadContextVar(), "setterError")
                         .arg(builder.getXSR())
-                        .arg(builderContext.dotclass(property.getBean().getType()))
+                        .arg(context.dotclass(property.getBean().getType()))
                         .arg(setter.getName())
-                        .arg(builderContext.dotclass(setter.getParameterTypes()[0]))
+                        .arg(context.dotclass(setter.getParameterTypes()[0]))
                         .arg(catchException.param("e"));
             } else {
                 JFieldVar propertyAccessorField = builder.getPrivatePropertyAccessor(property.getGetter(), property.getSetter(), property.getName());
@@ -786,10 +782,10 @@ public class ReaderIntrospector {
                     JTryBlock tryGetter = createCollectionBlock._try();
                     tryGetter.body().assign(collectionVar, beanVar.invoke(getter.getName()));
 
-                    JCatchBlock catchException = tryGetter._catch(toJClass(Exception.class));
+                    JCatchBlock catchException = tryGetter._catch(context.toJClass(Exception.class));
                     catchException.body().invoke(builder.getReadContextVar(), "getterError")
                             .arg(builder.getXSR())
-                            .arg(builderContext.dotclass(property.getBean().getType()))
+                            .arg(context.dotclass(property.getBean().getType()))
                             .arg(getter.getName())
                             .arg(catchException.param("e"));
                     catchException.body()._continue();
@@ -812,9 +808,9 @@ public class ReaderIntrospector {
             } else {
                 arrayFoundCondition._else().invoke(builder.getReadContextVar(), "uncreatableCollection")
                         .arg(builder.getXSR())
-                        .arg(builderContext.dotclass(property.getBean().getType()))
+                        .arg(context.dotclass(property.getBean().getType()))
                         .arg(property.getName())
-                        .arg(builderContext.dotclass(property.getType()));
+                        .arg(context.dotclass(property.getType()));
                 arrayFoundCondition._else()._continue();
             }
         }
@@ -830,19 +826,19 @@ public class ReaderIntrospector {
         if (!collectionClass.isInterface()) {
             try {
                 collectionClass.getConstructor();
-                return getGenericType(collectionType);
+                return context.getGenericType(collectionType);
             } catch (NoSuchMethodException e) {
             }
         } else if (SortedSet.class.equals(collectionClass)) {
-            return toJClass(TreeSet.class).narrow(getGenericType(itemType));
+            return context.toJClass(TreeSet.class).narrow(context.getGenericType(itemType));
         } else if (Set.class.equals(collectionClass)) {
-            return toJClass(LinkedHashSet.class).narrow(getGenericType(itemType));
+            return context.toJClass(LinkedHashSet.class).narrow(context.getGenericType(itemType));
         } else if (Queue.class.equals(collectionClass)) {
-            return toJClass(LinkedList.class).narrow(getGenericType(itemType));
+            return context.toJClass(LinkedList.class).narrow(context.getGenericType(itemType));
         } else if (List.class.equals(collectionClass)) {
-            return toJClass(ArrayList.class).narrow(getGenericType(itemType));
+            return context.toJClass(ArrayList.class).narrow(context.getGenericType(itemType));
         } else if (Collection.class.equals(collectionClass)) {
-            return toJClass(ArrayList.class).narrow(getGenericType(itemType));
+            return context.toJClass(ArrayList.class).narrow(context.getGenericType(itemType));
         }
         return null;
     }
@@ -852,42 +848,26 @@ public class ReaderIntrospector {
         if (!mapClass.isInterface()) {
             try {
                 mapClass.getConstructor();
-                return getGenericType(mapType);
+                return context.getGenericType(mapType);
             } catch (NoSuchMethodException e) {
             }
         } else if (Map.class.equals(mapClass)) {
-            return toJClass(LinkedHashMap.class).narrow(getGenericType(QName.class), getGenericType(itemType));
+            return context.toJClass(LinkedHashMap.class).narrow(context.getGenericType(QName.class), context.getGenericType(itemType));
         }
         return null;
     }
 
     private JInvocation newJaxBElement(JVar xsrVar, Class type, JExpression expression) {
-        JType jaxbElementType = toJClass(JAXBElement.class).narrow(type);
+        JType jaxbElementType = context.toJClass(JAXBElement.class).narrow(type);
         JInvocation newJaxBElement = JExpr._new(jaxbElementType)
                 .arg(xsrVar.invoke("getName"))
-                .arg(JExpr.dotclass(toJClass(type)))
+                .arg(JExpr.dotclass(context.toJClass(type)))
                 .arg(expression);
         return newJaxBElement;
     }
 
-    private JClass toJClass(Class clazz) {
-        if (clazz.isPrimitive()) {
-            // Code model maps primitives to JPrimitiveType which not a JClass... use toJType instead
-            throw new IllegalArgumentException("Internal Error: clazz is a primitive");
-        }
-        return codeModel.ref(clazz);
-    }
-
-    private JType toJType(Class<?> c) {
-        return codeModel._ref(c);
-    }
-
-    private JClass getGenericType(Type type) {
-        return builderContext.getGenericType(type);
-    }
-
     private JVar as(JAXBObjectBuilder builder, JExpression attributeVar, JBlock block, Class<?> cls, String name) {
-        return block.decl(toJType(cls), name, coerce(builder, builder.getXSR(), attributeVar, cls));
+        return block.decl(context.toJType(cls), name, coerce(builder, builder.getXSR(), attributeVar, cls));
     }
 
     private JVar as(JAXBObjectBuilder builder, JVar xsrVar, JBlock block, Class<?> cls, String name, boolean nillable) {
@@ -895,12 +875,12 @@ public class ReaderIntrospector {
 
         JVar var;
         if (!cls.isPrimitive() && nillable) {
-            var = block.decl(toJType(cls), name, JExpr._null());
+            var = block.decl(context.toJType(cls), name, JExpr._null());
             JConditional cond = block._if(xsrVar.invoke("isXsiNil").not());
 
             cond._then().assign(var, value);
         } else {
-            var = block.decl(toJType(cls), name, value);
+            var = block.decl(context.toJType(cls), name, value);
         }
 
         return var;
@@ -934,17 +914,17 @@ public class ReaderIntrospector {
             if (destType.equals(boolean.class)) {
                 return JExpr.lit("1").invoke("equals").arg(stringValue).cor(JExpr.lit("true").invoke("equals").arg(stringValue));
             } else if (destType.equals(byte.class)) {
-                return toJClass(Byte.class).staticInvoke("parseByte").arg(stringValue);
+                return context.toJClass(Byte.class).staticInvoke("parseByte").arg(stringValue);
             } else if (destType.equals(short.class)) {
-                return toJClass(Short.class).staticInvoke("parseShort").arg(stringValue);
+                return context.toJClass(Short.class).staticInvoke("parseShort").arg(stringValue);
             } else if (destType.equals(int.class)) {
-                return toJClass(Integer.class).staticInvoke("parseInt").arg(stringValue);
+                return context.toJClass(Integer.class).staticInvoke("parseInt").arg(stringValue);
             } else if (destType.equals(long.class)) {
-                return toJClass(Long.class).staticInvoke("parseLong").arg(stringValue);
+                return context.toJClass(Long.class).staticInvoke("parseLong").arg(stringValue);
             } else if (destType.equals(float.class)) {
-                return toJClass(Float.class).staticInvoke("parseFloat").arg(stringValue);
+                return context.toJClass(Float.class).staticInvoke("parseFloat").arg(stringValue);
             } else if (destType.equals(double.class)) {
-                return toJClass(Double.class).staticInvoke("parseDouble").arg(stringValue);
+                return context.toJClass(Double.class).staticInvoke("parseDouble").arg(stringValue);
             }
         } else {
             if (destType.equals(String.class)) {
@@ -952,25 +932,25 @@ public class ReaderIntrospector {
             } else if (destType.equals(Boolean.class)) {
                 return JExpr.lit("1").invoke("equals").arg(stringValue).cor(JExpr.lit("true").invoke("equals").arg(stringValue));
             } else if (destType.equals(Byte.class)) {
-                return toJClass(Byte.class).staticInvoke("valueOf").arg(stringValue);
+                return context.toJClass(Byte.class).staticInvoke("valueOf").arg(stringValue);
             } else if (destType.equals(Short.class)) {
-                return toJClass(Short.class).staticInvoke("valueOf").arg(stringValue);
+                return context.toJClass(Short.class).staticInvoke("valueOf").arg(stringValue);
             } else if (destType.equals(Integer.class)) {
-                return toJClass(Integer.class).staticInvoke("valueOf").arg(stringValue);
+                return context.toJClass(Integer.class).staticInvoke("valueOf").arg(stringValue);
             } else if (destType.equals(Long.class)) {
-                return toJClass(Long.class).staticInvoke("valueOf").arg(stringValue);
+                return context.toJClass(Long.class).staticInvoke("valueOf").arg(stringValue);
             } else if (destType.equals(Float.class)) {
-                return toJClass(Float.class).staticInvoke("valueOf").arg(stringValue);
+                return context.toJClass(Float.class).staticInvoke("valueOf").arg(stringValue);
             } else if (destType.equals(Double.class)) {
-                return toJClass(Double.class).staticInvoke("valueOf").arg(stringValue);
+                return context.toJClass(Double.class).staticInvoke("valueOf").arg(stringValue);
             } else if (destType.equals(XMLGregorianCalendar.class)) {
                 return builder.getDatatypeFactory().invoke("newXMLGregorianCalendar").arg(stringValue);
             } else if (destType.equals(Duration.class)) {
                 return builder.getDatatypeFactory().invoke("newDuration").arg(stringValue);
             } else if (destType.equals(BigDecimal.class)) {
-                return JExpr._new(toJClass(BigDecimal.class)).arg(stringValue);
+                return JExpr._new(context.toJClass(BigDecimal.class)).arg(stringValue);
             } else if (destType.equals(BigInteger.class)) {
-                return JExpr._new(toJClass(BigInteger.class)).arg(stringValue);
+                return JExpr._new(context.toJClass(BigInteger.class)).arg(stringValue);
             } else if (destType.isEnum()) {
                 JAXBEnumBuilder enumBuilder = enumBuilders.get(destType);
                 if (enumBuilder == null) {

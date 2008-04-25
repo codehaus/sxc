@@ -3,7 +3,6 @@ package com.envoisolutions.sxc.jaxb;
 import java.awt.Image;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.lang.reflect.Type;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -31,14 +30,12 @@ import static com.envoisolutions.sxc.jaxb.JavaUtils.isPrivate;
 import static com.envoisolutions.sxc.jaxb.JavaUtils.toClass;
 import com.envoisolutions.sxc.jaxb.model.Bean;
 import com.envoisolutions.sxc.jaxb.model.ElementMapping;
+import com.envoisolutions.sxc.jaxb.model.EnumInfo;
 import com.envoisolutions.sxc.jaxb.model.Model;
 import com.envoisolutions.sxc.jaxb.model.Property;
-import com.envoisolutions.sxc.jaxb.model.EnumInfo;
 import com.envoisolutions.sxc.util.Base64;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCatchBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JConditional;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
@@ -54,16 +51,14 @@ import org.w3c.dom.Element;
 public class WriterIntrospector {
 	private static final Logger logger = Logger.getLogger(WriterIntrospector.class.getName());
 
-    private final BuilderContext builderContext;
+    private final BuilderContext context;
     private final Model model;
-    private final JCodeModel codeModel;
     private final Map<Bean, JAXBObjectBuilder> builders = new LinkedHashMap<Bean, JAXBObjectBuilder>();
     private final Map<Class, JAXBEnumBuilder> enumBuilders = new LinkedHashMap<Class, JAXBEnumBuilder>();
 
     public WriterIntrospector(BuilderContext context, Model model) throws JAXBException {
-        builderContext = context;
+        this.context = context;
         this.model = model;
-        this.codeModel = context.getCodeModel();
 
         List<Bean> mybeans = new ArrayList<Bean>(model.getBeans());
         Collections.sort(mybeans, new BeanComparator());
@@ -129,27 +124,27 @@ public class WriterIntrospector {
         // perform instance checks
         JIfElseBlock ifElseBlock = new JIfElseBlock();
         block.add(ifElseBlock);
-        JInvocation unexpectedSubclass = builder.getWriteContextVar().invoke("unexpectedSubclass").arg(builder.getXSW()).arg(builder.getWriteObject()).arg(builderContext.dotclass(bean.getType()));
+        JInvocation unexpectedSubclass = builder.getWriteContextVar().invoke("unexpectedSubclass").arg(builder.getXSW()).arg(builder.getWriteObject()).arg(context.dotclass(bean.getType()));
         for (Bean altBean : getSubstitutionTypes(builder.getType())) {
             if (bean == altBean) continue;
 
             // add condition
-            JBlock altBlock = ifElseBlock.addCondition(builderContext.dotclass(altBean.getType()).eq(builder.getWriteObject().invoke("getClass")));
+            JBlock altBlock = ifElseBlock.addCondition(context.dotclass(altBean.getType()).eq(builder.getWriteObject().invoke("getClass")));
 
             // write xsi:type
             QName typeName = altBean.getSchemaTypeName();
             altBlock.invoke(builder.getXSW(), "writeXsiType").arg(typeName.getNamespaceURI()).arg(typeName.getLocalPart());
 
             // call alternate marshaller
-            writeClassWriter(builder, altBean, altBlock, JExpr.cast(toJClass(altBean.getType()), builder.getWriteObject()));
+            writeClassWriter(builder, altBean, altBlock, JExpr.cast(context.toJClass(altBean.getType()), builder.getWriteObject()));
             altBlock._return();
 
             // add as expected subclass arg
-            unexpectedSubclass.arg(builderContext.dotclass(altBean.getType()));
+            unexpectedSubclass.arg(context.dotclass(altBean.getType()));
         }
 
         // if the class isn't exactally this bean's type, then we have an unexpceted subclass
-        JBlock unknownSubclassBlock = ifElseBlock.addCondition(builderContext.dotclass(builder.getType()).ne(builder.getWriteObject().invoke("getClass")));
+        JBlock unknownSubclassBlock = ifElseBlock.addCondition(context.dotclass(builder.getType()).ne(builder.getWriteObject().invoke("getClass")));
         unknownSubclassBlock.add(unexpectedSubclass);
         unknownSubclassBlock._return();
 
@@ -159,7 +154,7 @@ public class WriterIntrospector {
     }
 
     private void addEnum(EnumInfo enumInfo) {
-        JAXBEnumBuilder builder = builderContext.createJAXBEnumBuilder(enumInfo.getType(), enumInfo.getRootElementName(), enumInfo.getSchemaTypeName());
+        JAXBEnumBuilder builder = context.createJAXBEnumBuilder(enumInfo.getType(), enumInfo.getRootElementName(), enumInfo.getSchemaTypeName());
 
         JMethod method = builder.getToStringMethod();
 
@@ -169,7 +164,7 @@ public class WriterIntrospector {
             Enum enumValue = entry.getKey();
             String enumText = entry.getValue();
 
-            JBlock enumCase = enumSwitch.addCondition(toJClass(enumInfo.getType()).staticRef(enumValue.name()).eq(builder.getToStringValue()));
+            JBlock enumCase = enumSwitch.addCondition(context.toJClass(enumInfo.getType()).staticRef(enumValue.name()).eq(builder.getToStringValue()));
             enumCase._return(JExpr.lit(enumText));
         }
 
@@ -179,7 +174,7 @@ public class WriterIntrospector {
                 .arg(builder.getToStringValue());
 
         for (Enum expectedValue : enumInfo.getEnumMap().keySet()) {
-            unexpectedInvoke.arg(toJClass(enumInfo.getType()).staticRef(expectedValue.name()));
+            unexpectedInvoke.arg(context.toJClass(enumInfo.getType()).staticRef(expectedValue.name()));
         }
         enumSwitch._else()._return(JExpr._null());
 
@@ -235,7 +230,7 @@ public class WriterIntrospector {
                     JConditional nullCond = block._if(propertyVar.ne(JExpr._null()));
 
                     String entryName = builder.getWriteVariableManager().createId(property.getName() + "Entry");
-                    JForEach each = nullCond._then().forEach(toJClass(Map.Entry.class).narrow(toJClass(QName.class), getGenericType(property.getComponentType())), entryName, propertyVar.invoke("entrySet"));
+                    JForEach each = nullCond._then().forEach(context.toJClass(Map.Entry.class).narrow(context.toJClass(QName.class), context.getGenericType(property.getComponentType())), entryName, propertyVar.invoke("entrySet"));
                     writeSimpleTypeAttribute(builder, each.body(), each.var().invoke("getKey"), toClass(property.getComponentType()), each.var().invoke("getValue"));
                 }
             }
@@ -280,9 +275,9 @@ public class WriterIntrospector {
 
                         JType itemType;
                         if (!toClass(property.getComponentType()).isPrimitive()) {
-                            itemType = getGenericType(property.getComponentType());
+                            itemType = context.getGenericType(property.getComponentType());
                         } else {
-                            itemType = toJType(toClass(property.getComponentType()));
+                            itemType = context.toJType((Class<?>) toClass(property.getComponentType()));
                         }
 
                         String itemName = builder.getWriteVariableManager().createId(property.getName() + "Item");
@@ -346,7 +341,7 @@ public class WriterIntrospector {
 
 
                             // add instance of check
-                            JExpression isInstance = outerVar._instanceof(toJClass(itemType));
+                            JExpression isInstance = outerVar._instanceof(context.toJClass(itemType));
                             JBlock block = conditional.addCondition(isInstance);
 
                             // declare item variable
@@ -355,7 +350,7 @@ public class WriterIntrospector {
                                 itemVar = outerVar;
                             } else {
                                 String itemName = builder.getWriteVariableManager().createId(itemType.getSimpleName());
-                                itemVar = block.decl(toJClass(itemType), itemName, JExpr.cast(toJClass(itemType), outerVar));
+                                itemVar = block.decl(context.toJClass(itemType), itemName, JExpr.cast(context.toJClass(itemType), outerVar));
                             }
                             writeElement(builder, block, mapping, itemVar, itemType, false);
                         }
@@ -379,7 +374,7 @@ public class WriterIntrospector {
                         // if not a recogonized type or null, report unknown type error
                         JInvocation unexpected = conditional._else().invoke(builder.getWriteContextVar(), "unexpectedElementType").arg(builder.getXSW()).arg(builder.getWriteObject()).arg(property.getName()).arg(outerVar);
                         for (Class expectedType : expectedTypes.keySet()) {
-                            unexpected.arg(builderContext.dotclass(expectedType));
+                            unexpected.arg(context.dotclass(expectedType));
                         }
                     }
                     break;
@@ -392,9 +387,9 @@ public class WriterIntrospector {
 
                         JType itemType;
                         if (!toClass(property.getComponentType()).isPrimitive()) {
-                            itemType = getGenericType(property.getComponentType());
+                            itemType = context.getGenericType(property.getComponentType());
                         } else {
-                            itemType = toJType(toClass(property.getComponentType()));
+                            itemType = context.toJType((Class<?>) toClass(property.getComponentType()));
                         }
 
                         String itemName = builder.getWriteVariableManager().createId( property.getName() + "Item");
@@ -470,7 +465,7 @@ public class WriterIntrospector {
         propertyName = builder.getWriteVariableManager().createId(propertyName);
 
         JVar propertyVar = block.decl(
-                getGenericType(property.getType()),
+                context.getGenericType(property.getType()),
                 propertyName);
 
         if (property.getField() != null) {
@@ -512,11 +507,11 @@ public class WriterIntrospector {
                 JTryBlock tryGetter = block._try();
                 tryGetter.body().assign(propertyVar, builder.getWriteObject().invoke(getter.getName()));
 
-                JCatchBlock catchException = tryGetter._catch(toJClass(Exception.class));
+                JCatchBlock catchException = tryGetter._catch(context.toJClass(Exception.class));
                 catchException.body().invoke(builder.getReadContextVar(), "getterError")
                         .arg(builder.getWriteObject())
                         .arg(property.getName())
-                        .arg(builderContext.dotclass(property.getBean().getType()))
+                        .arg(context.dotclass(property.getBean().getType()))
                         .arg(getter.getName())
                         .arg(catchException.param("e"));
             } else {
@@ -567,19 +562,19 @@ public class WriterIntrospector {
     private JVar writeAdapterConversion(JAXBObjectBuilder builder, JBlock block, Property property, JVar propertyVar) {
         if (property.getAdapterType() != null) {
             JVar adapterVar = builder.getAdapter(property.getAdapterType());
-            JVar valueVar = block.decl(toJClass(String.class), builder.getWriteVariableManager().createId(property.getName()), JExpr._null());
+            JVar valueVar = block.decl(context.toJClass(String.class), builder.getWriteVariableManager().createId(property.getName()), JExpr._null());
 
             JTryBlock tryBlock = block._try();
             tryBlock.body().assign(valueVar, adapterVar.invoke("marshal").arg(propertyVar));
 
-            JCatchBlock catchException = tryBlock._catch(toJClass(Exception.class));
+            JCatchBlock catchException = tryBlock._catch(context.toJClass(Exception.class));
             JBlock catchBody = catchException.body();
             catchBody.invoke(builder.getReadContextVar(), "xmlAdapterError")
                     .arg(builder.getWriteObject())
                     .arg(property.getName())
-                    .arg(builderContext.dotclass(property.getAdapterType()))
-                    .arg(builderContext.dotclass(toClass(property.getType())))  // currently we only support conversion between same type
-                    .arg(builderContext.dotclass(toClass(property.getType())))
+                    .arg(context.dotclass(property.getAdapterType()))
+                    .arg(context.dotclass(toClass(property.getType())))  // currently we only support conversion between same type
+                    .arg(context.dotclass(toClass(property.getType())))
                     .arg(catchException.param("e"));
 
             propertyVar = valueVar;
@@ -591,13 +586,13 @@ public class WriterIntrospector {
         if(isBuiltinType(type)) {
             block.add(builder.getXSW().invoke("writeCharacters").arg(toString(builder, object, type)));
         } else if (type.equals(byte[].class)) {
-            block.add(toJClass(BinaryUtils.class).staticInvoke("encodeBytes").arg(builder.getXSW()).arg(object));
+            block.add(context.toJClass(BinaryUtils.class).staticInvoke("encodeBytes").arg(builder.getXSW()).arg(object));
         } else if (type.equals(QName.class)) {
             block.add(builder.getXSW().invoke("writeQName").arg(object));
         } else if (type.equals(DataHandler.class) || type.equals(Image.class)) {
             // todo support AttachmentMarshaller
         } else if (type.equals(Object.class)) {
-            block.add(builder.getXSW().invoke("writeDomElement").arg(JExpr.cast(builderContext.toJClass(Element.class), object)).arg(JExpr.FALSE));
+            block.add(builder.getXSW().invoke("writeDomElement").arg(JExpr.cast(context.toJClass(Element.class), object)).arg(JExpr.FALSE));
         } else {
         	logger.info("(JAXB Writer) Cannot map simple type yet: " + type);
         }
@@ -607,7 +602,7 @@ public class WriterIntrospector {
         if(isBuiltinType(type)) {
             value = toString(builder, value, type);
         } else if (type.equals(byte[].class)) {
-            value = toJClass(Base64.class).staticInvoke("encode").arg(value);
+            value = context.toJClass(Base64.class).staticInvoke("encode").arg(value);
         } else if (type.equals(QName.class)) {
             value = builder.getXSW().invoke("getQNameAsString").arg(value);
         } else if (type.equals(DataHandler.class) || type.equals(Image.class)) {
@@ -634,7 +629,7 @@ public class WriterIntrospector {
         if(isBuiltinType(type)) {
             value = toString(builder, value, type);
         } else if (type.equals(byte[].class)) {
-            value = toJClass(Base64.class).staticInvoke("encode").arg(value);
+            value = context.toJClass(Base64.class).staticInvoke("encode").arg(value);
         } else if (type.equals(QName.class)) {
             value = builder.getXSW().invoke("getQNameAsString").arg(value);
         } else if (type.equals(DataHandler.class) || type.equals(Image.class)) {
@@ -680,22 +675,6 @@ public class WriterIntrospector {
         return mostPopularNS;
     }
 
-    private JClass toJClass(Class clazz) {
-        if (clazz.isPrimitive()) {
-            // Code model maps primitives to JPrimitiveType which not a JClass... use toJType instead
-            throw new IllegalArgumentException("Internal Error: clazz is a primitive");
-        }
-        return codeModel.ref(clazz);
-    }
-
-    private JType toJType(Class<?> c) {
-        return codeModel._ref(c);
-    }
-
-    private JClass getGenericType(Type type) {
-        return builderContext.getGenericType(type);
-    }
-    
     private boolean isBuiltinType(Class type) {
         return type.equals(boolean.class) ||
                 type.equals(byte.class) ||
@@ -722,37 +701,37 @@ public class WriterIntrospector {
     private JExpression toString(JAXBObjectBuilder builder, JExpression value, Class<?> type) {
         if (type.isPrimitive()) {
             if (type.equals(boolean.class)) {
-                return toJClass(Boolean.class).staticInvoke("toString").arg(value);
+                return context.toJClass(Boolean.class).staticInvoke("toString").arg(value);
             } else if (type.equals(byte.class)) {
-                return toJClass(Byte.class).staticInvoke("toString").arg(value);
+                return context.toJClass(Byte.class).staticInvoke("toString").arg(value);
             } else if (type.equals(short.class)) {
-                return toJClass(Short.class).staticInvoke("toString").arg(value);
+                return context.toJClass(Short.class).staticInvoke("toString").arg(value);
             } else if (type.equals(int.class)) {
-                return toJClass(Integer.class).staticInvoke("toString").arg(value);
+                return context.toJClass(Integer.class).staticInvoke("toString").arg(value);
             } else if (type.equals(long.class)) {
-                return toJClass(Long.class).staticInvoke("toString").arg(value);
+                return context.toJClass(Long.class).staticInvoke("toString").arg(value);
             } else if (type.equals(float.class)) {
-                return toJClass(Float.class).staticInvoke("toString").arg(value);
+                return context.toJClass(Float.class).staticInvoke("toString").arg(value);
             } else if (type.equals(double.class)) {
-                return toJClass(Double.class).staticInvoke("toString").arg(value);
+                return context.toJClass(Double.class).staticInvoke("toString").arg(value);
             }
         } else {
             if (type.equals(String.class)) {
                 return value;
             } else if (type.equals(Boolean.class)) {
-                return toJClass(Boolean.class).staticInvoke("toString").arg(value);
+                return context.toJClass(Boolean.class).staticInvoke("toString").arg(value);
             } else if (type.equals(Byte.class)) {
-                return toJClass(Byte.class).staticInvoke("toString").arg(value);
+                return context.toJClass(Byte.class).staticInvoke("toString").arg(value);
             } else if (type.equals(Short.class)) {
-                return toJClass(Short.class).staticInvoke("toString").arg(value);
+                return context.toJClass(Short.class).staticInvoke("toString").arg(value);
             } else if (type.equals(Integer.class)) {
-                return toJClass(Integer.class).staticInvoke("toString").arg(value);
+                return context.toJClass(Integer.class).staticInvoke("toString").arg(value);
             } else if (type.equals(Long.class)) {
-                return toJClass(Long.class).staticInvoke("toString").arg(value);
+                return context.toJClass(Long.class).staticInvoke("toString").arg(value);
             } else if (type.equals(Float.class)) {
-                return toJClass(Float.class).staticInvoke("toString").arg(value);
+                return context.toJClass(Float.class).staticInvoke("toString").arg(value);
             } else if (type.equals(Double.class)) {
-                return toJClass(Double.class).staticInvoke("toString").arg(value);
+                return context.toJClass(Double.class).staticInvoke("toString").arg(value);
             } else if (type.equals(XMLGregorianCalendar.class)) {
                 return value.invoke("toXMLFormat");
             } else if (type.equals(Duration.class)) {
