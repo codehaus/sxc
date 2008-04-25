@@ -302,8 +302,6 @@ public class AnyTest extends XoTestCase {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         marshaller.marshal(anyAttribute, bos);
 
-        System.out.println(new String(bos.toByteArray()));
-
         Document d = readDocument(bos.toByteArray());
         addNamespace("f", "urn:french");
         addNamespace("xml", XMLConstants.XML_NS_URI);
