@@ -1,15 +1,19 @@
 package com.envoisolutions.sxc.jaxb;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
 import javax.xml.bind.UnmarshalException;
+import javax.xml.bind.Unmarshaller;
 import javax.xml.bind.ValidationEvent;
 import javax.xml.bind.ValidationEventHandler;
-import javax.xml.bind.Unmarshaller;
-import javax.xml.bind.Marshaller;
 import javax.xml.bind.helpers.ValidationEventImpl;
 import javax.xml.namespace.QName;
 import javax.xml.stream.Location;
@@ -23,10 +27,12 @@ import org.w3c.dom.Element;
 @SuppressWarnings({"StringEquality"})
 public class RuntimeContext {
     private final Map<String, Object> properties = new HashMap<String, Object>();
+    private final Map<String, Object> idRegistry = new HashMap<String, Object>();
+    private final Map<String, Collection<IdRefTarget>> unresolvedRefs = new HashMap<String, Collection<IdRefTarget>>();
     private final MarshallerImpl marshaller;
     private final UnmarshallerImpl unmarshaller;
 
-    private final LinkedList<Object> unmarshalStack = new LinkedList<Object>();
+    private final LinkedList<Object> stack = new LinkedList<Object>();
 
     public RuntimeContext() {
         marshaller = null;
@@ -51,12 +57,63 @@ public class RuntimeContext {
         return properties.put(name, value);
     }
 
+    public void addXmlId(XoXMLStreamReader reader, String id, Object value) throws JAXBException {
+        if (reader == null) throw new NullPointerException("reader is null");
+        if (id == null) throw new NullPointerException("id is null");
+        if (value == null) throw new NullPointerException("object is null");
+
+        if (idRegistry.containsKey(id)) {
+            String message = "Duplicate xml id " + id;
+            validationError(message, reader.getLocation(), null);
+        } else {
+            idRegistry.put(id, value);
+        }
+    }
+
+    public void resolveXmlIdRef(XoXMLStreamReader reader, String id, IdRefTarget target) throws JAXBException {
+        if (reader == null) throw new NullPointerException("reader is null");
+        if (id == null) throw new NullPointerException("id is null");
+        if (target == null) throw new NullPointerException("object is null");
+
+        if (idRegistry.containsKey(id)) {
+            Object value = idRegistry.get(id);
+            target.resolved(value);
+        } else {
+            Collection<IdRefTarget> targets = unresolvedRefs.get(id);
+            if (targets == null) {
+                targets = new ArrayList<IdRefTarget>();
+                unresolvedRefs.put(id, targets);
+            }
+            targets.add(target);
+        }
+    }
+
+    public void resolveXmlIdRefs() throws JAXBException {
+        List<String> unresolvedIds = new ArrayList<String>();
+        for (Map.Entry<String, Collection<IdRefTarget>> entry : unresolvedRefs.entrySet()) {
+            String id = entry.getKey();
+            if (idRegistry.containsKey(id)) {
+                Object value = idRegistry.get(id);
+                for (IdRefTarget target : entry.getValue()) {
+                    target.resolved(value);
+                }
+            } else {
+                unresolvedIds.add(id);
+            }
+        }
+        if (!unresolvedIds.isEmpty()) {
+            // For some strange reason the RI does not report this 
+            // String message = "Unresolved xml id references " + unresolvedIds;
+            // validationError(message, (Location) null, null);
+        }
+    }
+
     public void beforeUnmarshal(Object bean, LifecycleCallback lifecycleCallback) throws Exception {
         Object parent = null;
-        if (!unmarshalStack.isEmpty()) {
-            parent = unmarshalStack.getFirst();
+        if (!stack.isEmpty()) {
+            parent = stack.getFirst();
         }
-        unmarshalStack.addFirst(bean);
+        stack.addFirst(bean);
         if (unmarshaller != null) {
             if (lifecycleCallback != null) {
                 lifecycleCallback.beforeUnmarshal(bean, unmarshaller, parent);
@@ -70,14 +127,14 @@ public class RuntimeContext {
     }
 
     public void afterUnmarshal(Object bean, LifecycleCallback lifecycleCallback) throws Exception {
-        if (unmarshalStack.isEmpty()) throw new IllegalStateException("afterUnmarshal without beforeUnmarshal being called");
+        if (stack.isEmpty()) throw new IllegalStateException("afterUnmarshal called without beforeUnmarshal being called first");
 
         // pop this bean off the stack
-        unmarshalStack.removeFirst();
+        stack.removeFirst();
 
         Object parent = null;
-        if (!unmarshalStack.isEmpty()) {
-            parent = unmarshalStack.getFirst();
+        if (!stack.isEmpty()) {
+            parent = stack.getFirst();
         }
         if (unmarshaller != null) {
             if (lifecycleCallback != null) {
@@ -92,6 +149,25 @@ public class RuntimeContext {
     }
 
     public void beforeMarshal(Object bean, LifecycleCallback lifecycleCallback) throws Exception {
+        // if this is slow we could introduce an IdentityHashMap for the lookup
+        // but my guess is linear search will be faster for the short depts in
+        // xml documents
+        if (stack.contains(bean)) {
+            ArrayList<Object> cycle = new ArrayList<Object>(stack);
+            Collections.reverse(cycle);
+            cycle.add(bean);
+            String message = "Marshal cycle detected " + cycle;
+            if (marshaller != null) {
+                ValidationEventHandler validationEventHandler = marshaller.getEventHandler();
+                if (validationEventHandler != null) {
+                    validationEventHandler.handleEvent(new ValidationEventImpl(ValidationEvent.FATAL_ERROR, message, new ValidationEventLocatorImpl(bean, null)));
+                }
+            }
+            throw new UnmarshalException(message);
+
+        }
+        stack.addFirst(bean);
+
         if (marshaller != null) {
             if (lifecycleCallback != null) {
                 lifecycleCallback.beforeMarshal(bean, marshaller);
@@ -105,6 +181,11 @@ public class RuntimeContext {
     }
 
     public void afterMarshal(Object bean, LifecycleCallback lifecycleCallback) throws Exception {
+        if (stack.isEmpty()) throw new IllegalStateException("afterMarshal called without beforeMarshal being called first");
+
+        // pop this bean off the stack
+        stack.removeFirst();
+
         if (marshaller != null) {
             if (lifecycleCallback != null) {
                 lifecycleCallback.afterMarshal(bean, marshaller);

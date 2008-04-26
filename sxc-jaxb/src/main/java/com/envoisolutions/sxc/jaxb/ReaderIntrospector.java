@@ -230,7 +230,6 @@ public class ReaderIntrospector {
                         doSet(builder, block, property, beanVar, toSet, collectionVar);
                     } else {
                         handleAnyAttribute(builder, property, beanVar);
-
                     }
 
                 }
@@ -307,7 +306,9 @@ public class ReaderIntrospector {
         JExpression valueVar = builder.getAttributeVar().invoke("getValue");
 
         JExpression toSet;
-        if (property.getAdapterType() != null) {
+        if (property.isIdref()) {
+            toSet = valueVar;
+        } else if (property.getAdapterType() != null) {
             JVar adapterVar = builder.getAdapter(property.getAdapterType());
             toSet = adapterVar.invoke("unmarshal").arg(valueVar);
         } else {
@@ -474,7 +475,9 @@ public class ReaderIntrospector {
         propertyName = builder.getReadVariableManager().createId(propertyName);
 
         JExpression toSet;
-        if (property.getAdapterType() != null) {
+        if (property.isIdref()) {
+            toSet = xsrVar.invoke("getElementAsString");
+        } else if (property.getAdapterType() != null) {
             JVar adapterVar = builder.getAdapter(property.getAdapterType());
 
             JVar xmlValueVar = block.decl(context.toJClass(String.class), builder.getReadVariableManager().createId(propertyName + "Raw"), xsrVar.invoke("getElementText"));
@@ -683,6 +686,17 @@ public class ReaderIntrospector {
             return;
         }
 
+        if (property.isId()) {
+            JVar id;
+            if (toSet instanceof JVar) {
+                id = (JVar) toSet;
+            } else {
+                id = block.decl(context.toJClass(String.class), builder.getReadVariableManager().createId(property.getName()), toSet);
+                toSet = id;
+            }
+            block.invoke(builder.getReadContextVar(), "addXmlId").arg(builder.getXSR()).arg(id).arg(beanVar);
+        }
+
         if (!property.isCollection()) {
             setSingleValue(builder, block, property, beanVar, toSet);
         } else {
@@ -701,7 +715,11 @@ public class ReaderIntrospector {
         if (property.getField() != null) {
             Field field = property.getField();
 
-            if (!isPrivate(field)) {
+            if (property.isIdref()) {
+                JFieldVar fieldAccessorField = builder.getPrivateFieldAccessor(field);
+                JExpression target = JExpr._new(context.toJClass(FieldRefTarget.class)).arg(builder.getXSR()).arg(builder.getReadContextVar()).arg(bean).arg(fieldAccessorField);
+                block.add(builder.getReadContextVar().invoke("resolveXmlIdRef").arg(builder.getXSR()).arg(value).arg(target));
+            } else if (!isPrivate(field)) {
                 block.assign(bean.ref(field.getName()), value);
             } else {
                 JFieldVar fieldAccessorField = builder.getPrivateFieldAccessor(field);
@@ -730,7 +748,11 @@ public class ReaderIntrospector {
             }
         } else if (property.getSetter() != null) {
             Method setter = property.getSetter();
-            if (!isPrivate(setter)) {
+            if (property.isIdref()) {
+                JFieldVar propertyAccessorField = builder.getPrivatePropertyAccessor(property.getGetter(), property.getSetter(), property.getName());
+                JExpression target = JExpr._new(context.toJClass(FieldRefTarget.class)).arg(builder.getXSR()).arg(builder.getReadContextVar()).arg(bean).arg(propertyAccessorField);
+                block.add(builder.getReadContextVar().invoke("resolveXmlIdRef").arg(builder.getXSR()).arg(value).arg(target));
+            } else if (!isPrivate(setter)) {
                 JTryBlock trySetter = block._try();
                 trySetter.body().add(bean.invoke(property.getSetter().getName()).arg(value));
 
@@ -818,7 +840,12 @@ public class ReaderIntrospector {
         // }
 
         // collection.add(item);
-        block.add(collectionVar.invoke("add").arg(toSet));
+        if (property.isIdref()) {
+            JExpression target = JExpr._new(context.toJClass(CollectionRefTarget.class)).arg(collectionVar);
+            block.add(builder.getReadContextVar().invoke("resolveXmlIdRef").arg(builder.getXSR()).arg(toSet).arg(target));
+        } else {
+            block.add(collectionVar.invoke("add").arg(toSet));
+        }
     }
 
     private JType getCollectionClass(Type collectionType, Type itemType) {

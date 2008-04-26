@@ -215,13 +215,19 @@ public class UnmarshallerImpl implements Unmarshaller {
         if (xmlStreamReader == null) throw new IllegalArgumentException("xmlStreamReader is null");
         if (declaredType == null) throw new IllegalArgumentException("declaredType is null");
 
-        return (JAXBElement<T>) read(xmlStreamReader, declaredType, true, new RuntimeContext(this));
+        RuntimeContext runtimeContext = new RuntimeContext(this);
+        JAXBElement<T> element = (JAXBElement<T>) read(xmlStreamReader, declaredType, true, runtimeContext);
+        runtimeContext.resolveXmlIdRefs();
+        return element;
     }
 
     public Object unmarshal(XMLStreamReader xmlStreamReader) throws JAXBException {
         if (xmlStreamReader == null) throw new IllegalArgumentException("xmlStreamReader is null");
 
-        return read(xmlStreamReader, null, null, new RuntimeContext(this));
+        RuntimeContext runtimeContext = new RuntimeContext(this);
+        Object value = read(xmlStreamReader, null, null, runtimeContext);
+        runtimeContext.resolveXmlIdRefs();        
+        return value;
     }
 
     public Object read(XMLStreamReader xmlStreamReader, Class<?> declaredType, Boolean jaxbElementWrap, RuntimeContext runtimeContext) throws JAXBException {
