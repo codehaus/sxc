@@ -284,14 +284,6 @@ public class JAXBObjectBuilder {
                 JBlock contextNullBlock = body._if(writerBuilder.getContextVar().eq(JExpr._null()))._then();
                 contextNullBlock.assign(writerBuilder.getContextVar(), JExpr._new(builderContext.toJClass(RuntimeContext.class)));
                 body.add(new JBlankLine());
-
-                // add beforeMarshal
-                JExpression lifecycleCallbackRef = lifecycleCallbackVar;
-                if (writerBuilder.getVariableManager().containsId(lifecycleCallbackVar.name())) {
-                    lifecycleCallbackRef = jaxbObjectClass.staticRef(lifecycleCallbackVar.name());
-                }
-                body.invoke(getReadContextVar(), "beforeMarshal").arg(getWriteObject()).arg(lifecycleCallbackRef);
-                body.add(new JBlankLine());
             }
 
         }

@@ -152,6 +152,16 @@ public class WriterIntrospector {
 
         block.add(new JBlankLine());
 
+        // add beforeMarshal
+        JExpression lifecycleCallbackRef = builder.getLifecycleCallbackVar();
+        if (builder.getWriteVariableManager().containsId(builder.getLifecycleCallbackVar().name())) {
+            lifecycleCallbackRef = builder.getJAXBObjectClass().staticRef(builder.getLifecycleCallbackVar().name());
+        }
+        block.invoke(builder.getWriteContextVar(), "beforeMarshal").arg(builder.getWriteObject()).arg(lifecycleCallbackRef);
+
+        block.add(new JBlankLine());
+
+
         writeProperties(builder, bean);
     }
 
@@ -216,17 +226,17 @@ public class WriterIntrospector {
                 JExpression propertyVar = getValue(builder, property, block);
 
                 if (!property.isXmlAny()) {
-                    if (!property.isCollection()) {
-                        // if (value != null)
-                        if (!toClass(property.getType()).isPrimitive()) {
-                            JConditional nullCond = block._if(propertyVar.ne(JExpr._null()));
-                            block = nullCond._then();
-                        }
-
-                        writeSimpleTypeAttribute(builder, block, property.getXmlName(), toClass(property.getType()), propertyVar);
-                    } else {
+                    if (property.isCollection()) {
                         logger.info("(JAXB Writer) Attribute lists are not supported yet!");
+                        continue;
                     }
+
+                    if (!toClass(property.getType()).isPrimitive()) {
+                        JConditional nullCond = block._if(propertyVar.ne(JExpr._null()));
+                        block = nullCond._then();
+                    }
+
+                    writeSimpleTypeAttribute(builder, block, property, propertyVar);
                 } else {
                     // if (value != null)
                     JConditional nullCond = block._if(propertyVar.ne(JExpr._null()));
@@ -442,10 +452,28 @@ public class WriterIntrospector {
     }
 
     private void writeElement(JAXBObjectBuilder builder, JBlock block, ElementMapping mapping, JVar itemVar, Class type, boolean nillable) {
+        // if this is an id ref we write the ID property of the target bean instead of the bean itself
+        if (mapping.getProperty().isIdref()) {
+            Property property = mapping.getProperty();
+            Property idProperty = findReferencedIdProperty(property);
+
+            // read the id value
+            itemVar = getValue(builder, itemVar, idProperty, property.getName() + JavaUtils.capitalize(idProperty.getName()), block);
+
+            // the written type is always a non-nillable String
+            type = String.class;
+            nillable = false;
+
+            // if (id != null) write the value
+            JConditional nullCond = block._if(itemVar.ne(JExpr._null()));
+            block = nullCond._then();
+        }
+
         // write start element
         QName name = mapping.getXmlName();
         block.add(builder.getWriteStartElement(name));
 
+        // if nillable, we need to write xsi:nil when value is null
         JBlock elementWriteBlock = block;
         if (nillable && !type.isPrimitive()) {
             JConditional nilCond = block._if(itemVar.ne(JExpr._null()));
@@ -456,10 +484,8 @@ public class WriterIntrospector {
         // write element
         Bean targetBean = model.getBean(type);
         if (targetBean == null || targetBean.getType().isEnum()) {
-            writeSimpleTypeElement(builder,
-                    itemVar,
-                    type,
-                    elementWriteBlock);
+            // simple built in types like String
+            writeSimpleTypeElement(builder, itemVar, type, elementWriteBlock);
         } else {
             if (!mapping.getComponentType().equals(type)) {
                 QName typeName = targetBean.getSchemaTypeName();
@@ -474,13 +500,22 @@ public class WriterIntrospector {
     }
 
     private JVar getValue(JAXBObjectBuilder builder, Property property, JBlock block) {
-        Class propertyType = toClass(property.getType());
+        return getValue(builder, builder.getWriteObject(), property, block);
+    }
 
+    private JVar getValue(JAXBObjectBuilder builder, JExpression beanVar, Property property, JBlock block) {
         String propertyName = property.getName();
         if (property.getAdapterType() != null) {
             propertyName += "Raw";
         }
-        propertyName = builder.getWriteVariableManager().createId(propertyName);
+
+        return getValue(builder, beanVar, property, propertyName, block);
+    }
+
+    private JVar getValue(JAXBObjectBuilder builder, JExpression beanVar, Property property, String propertyNameHint, JBlock block) {
+        Class propertyType = toClass(property.getType());
+
+        String propertyName = builder.getWriteVariableManager().createId(propertyNameHint);
 
         JVar propertyVar = block.decl(
                 context.getGenericType(property.getType()),
@@ -490,7 +525,7 @@ public class WriterIntrospector {
             Field field = property.getField();
 
             if (!isPrivate(field)) {
-                propertyVar.init(builder.getWriteObject().ref(field.getName()));
+                propertyVar.init(beanVar.ref(field.getName()));
             } else {
                 JFieldVar fieldAccessorField = builder.getPrivateFieldAccessor(field);
 
@@ -515,7 +550,7 @@ public class WriterIntrospector {
                     methodName = "getObject";
                 }
 
-                propertyVar.init(fieldAccessorField.invoke(methodName).arg(builder.getWriteObject()).arg(builder.getWriteContextVar()).arg(builder.getWriteObject()));
+                propertyVar.init(fieldAccessorField.invoke(methodName).arg(beanVar).arg(builder.getWriteContextVar()).arg(beanVar));
             }
         } else if (property.getGetter() != null) {
             Method getter = property.getGetter();
@@ -523,18 +558,18 @@ public class WriterIntrospector {
                 propertyVar.init(JExpr._null());
 
                 JTryBlock tryGetter = block._try();
-                tryGetter.body().assign(propertyVar, builder.getWriteObject().invoke(getter.getName()));
+                tryGetter.body().assign(propertyVar, beanVar.invoke(getter.getName()));
 
                 JCatchBlock catchException = tryGetter._catch(context.toJClass(Exception.class));
                 catchException.body().invoke(builder.getReadContextVar(), "getterError")
-                        .arg(builder.getWriteObject())
+                        .arg(beanVar)
                         .arg(property.getName())
                         .arg(context.dotclass(property.getBean().getType()))
                         .arg(getter.getName())
                         .arg(catchException.param("e"));
             } else {
                 JFieldVar propertyAccessorField = builder.getPrivatePropertyAccessor(property.getGetter(), property.getSetter(), property.getName());
-                propertyVar.init(propertyAccessorField.invoke("getObject").arg(builder.getWriteObject()).arg(builder.getWriteContextVar()).arg(builder.getWriteObject()));
+                propertyVar.init(propertyAccessorField.invoke("getObject").arg(beanVar).arg(builder.getWriteContextVar()).arg(beanVar));
             }
         } else {
             throw new BuildException("Property does not have a getter " + property.getBean().getClass().getName() + "." + property.getName());
@@ -616,13 +651,29 @@ public class WriterIntrospector {
         }
     }
 
-    private void writeSimpleTypeAttribute(JAXBObjectBuilder builder, JBlock block, QName name, Class type, JExpression value) {
+    private void writeSimpleTypeAttribute(JAXBObjectBuilder builder, JBlock block, Property property, JExpression propertyVar) {
+        Class type = toClass(property.getType());
+        // if this is an id ref we write the ID property of the target bean instead of the bean itself
+        if (property.isIdref()) {
+            Property idProperty = findReferencedIdProperty(property);
+
+            // read the id value
+            propertyVar = getValue(builder, propertyVar, idProperty, property.getName() + JavaUtils.capitalize(idProperty.getName()), block);
+
+            // the written type is always String
+            type = String.class;
+
+            // if (id != null) write the value
+            JConditional nullCond = block._if(propertyVar.ne(JExpr._null()));
+            block = nullCond._then();
+        }
+
         if(isBuiltinType(type)) {
-            value = toString(builder, value, type);
+            propertyVar = toString(builder, propertyVar, type);
         } else if (type.equals(byte[].class)) {
-            value = context.toJClass(Base64.class).staticInvoke("encode").arg(value);
+            propertyVar = context.toJClass(Base64.class).staticInvoke("encode").arg(propertyVar);
         } else if (type.equals(QName.class)) {
-            value = builder.getXSW().invoke("getQNameAsString").arg(value);
+            propertyVar = builder.getXSW().invoke("getQNameAsString").arg(propertyVar);
         } else if (type.equals(DataHandler.class) || type.equals(Image.class)) {
             // todo support AttachmentMarshaller
         } else {
@@ -630,6 +681,7 @@ public class WriterIntrospector {
             return;
         }
 
+        QName name = property.getXmlName();
         JExpression prefix;
         if (name.getNamespaceURI().length() > 0) {
             prefix = builder.getWriterPrefix(name.getNamespaceURI());
@@ -640,7 +692,33 @@ public class WriterIntrospector {
                   .arg(prefix)
                   .arg(JExpr.lit(name.getNamespaceURI()))
                   .arg(JExpr.lit(name.getLocalPart()))
-                  .arg(value));
+                  .arg(propertyVar));
+    }
+
+    private Property findReferencedIdProperty(Property property) {
+        // find referenced bean
+        Bean targetBean = model.getBean(toClass(property.getComponentType()));
+        if (targetBean == null) {
+            throw new BuildException("Unknown bean " + toClass(property.getType()));
+        }
+
+        // find id property on referenced bean
+        Property idProperty = null;
+        while (idProperty == null) {
+            for (Property targetProperty : targetBean.getProperties()) {
+                if (targetProperty.isId()) {
+                    idProperty = targetProperty;
+                    break;
+                }
+            }
+            if (idProperty == null) {
+                if (targetBean.getBaseClass() == null) {
+                    throw new BuildException("Property " + property + " is an IDREF, but property type " + toClass(property.getType()).getName() + " does not have an ID property");
+                }
+                targetBean = targetBean.getBaseClass();
+            }
+        }
+        return idProperty;
     }
 
     private void writeSimpleTypeAttribute(JAXBObjectBuilder builder, JBlock block, JExpression qnameVar, Class type, JExpression value) {

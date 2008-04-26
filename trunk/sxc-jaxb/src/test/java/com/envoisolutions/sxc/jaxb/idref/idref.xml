@@ -1,0 +1,18 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<idRefGraph>
+    <node id="one" self="one" next="two">
+        <all>three</all>
+        <all>two</all>
+        <all>one</all>
+    </node>
+    <node id="two" self="two" next="three">
+        <all>three</all>
+        <all>two</all>
+        <all>one</all>
+    </node>
+    <node id="three" self="three" next="one">
+        <all>three</all>
+        <all>two</all>
+        <all>one</all>
+    </node>
+</idRefGraph>

@@ -28,6 +28,9 @@ public class Property {
     private Type type;
     private Type componentType;
 
+    private boolean id;
+    private boolean idref;
+
     private boolean required;
     private boolean nillable;
     private boolean collection;
@@ -90,6 +93,22 @@ public class Property {
 
     public void setComponentType(Type componentType) {
         this.componentType = componentType;
+    }
+
+    public boolean isId() {
+        return id;
+    }
+
+    public void setId(boolean id) {
+        this.id = id;
+    }
+
+    public boolean isIdref() {
+        return idref;
+    }
+
+    public void setIdref(boolean idref) {
+        this.idref = idref;
     }
 
     public boolean isRequired() {

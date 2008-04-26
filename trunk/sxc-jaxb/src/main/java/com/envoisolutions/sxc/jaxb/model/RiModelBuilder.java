@@ -34,6 +34,7 @@ import com.sun.xml.bind.v2.model.runtime.RuntimeTypeInfoSet;
 import com.sun.xml.bind.v2.model.runtime.RuntimeTypeRef;
 import com.sun.xml.bind.v2.model.runtime.RuntimeValuePropertyInfo;
 import com.sun.xml.bind.v2.model.core.WildcardMode;
+import com.sun.xml.bind.v2.model.core.ID;
 import com.sun.xml.bind.v2.runtime.JAXBContextImpl;
 import com.sun.xml.bind.v2.runtime.Transducer;
 import com.sun.xml.bind.v2.runtime.reflect.Accessor;
@@ -226,6 +227,8 @@ public class RiModelBuilder {
         property.setType(runtimePropertyInfo.getRawType());
         property.setComponentType(runtimePropertyInfo.getIndividualType());
 
+        property.setId(runtimePropertyInfo.id() == ID.ID);
+        property.setIdref(runtimePropertyInfo.id() == ID.IDREF);
         property.setCollection(runtimePropertyInfo.isCollection());
 
         if (runtimePropertyInfo.getAdapter() != null) {
