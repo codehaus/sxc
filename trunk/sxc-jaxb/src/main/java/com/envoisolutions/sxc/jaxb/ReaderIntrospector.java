@@ -465,24 +465,24 @@ public class ReaderIntrospector {
 
     private JExpression handleElement(JAXBObjectBuilder builder, JVar xsrVar, JBlock block, Property property, boolean nillable, Type componentType) {
 
-        Class targetType = toClass(property.getType());
-        if (property.isCollection()) {
-            targetType = toClass(componentType);
-        }
-
         String propertyName = property.getName();
         if (property.isCollection()) propertyName += "Item";
         propertyName = builder.getReadVariableManager().createId(propertyName);
 
         JExpression toSet;
         if (property.isIdref()) {
+            // id ref... read string value which will later be turned into correct type
             toSet = xsrVar.invoke("getElementAsString");
         } else if (property.getAdapterType() != null) {
+            // adapted type
             JVar adapterVar = builder.getAdapter(property.getAdapterType());
 
-            JVar xmlValueVar = block.decl(context.toJClass(String.class), builder.getReadVariableManager().createId(propertyName + "Raw"), xsrVar.invoke("getElementText"));
+            // read the raw value
+            JVar xmlValueVar = readElement(builder, xsrVar, block, nillable, builder.getReadVariableManager().createId(propertyName + "Raw"), property.getComponentAdaptedType());
             block.add(new JBlankLine());
 
+            // convert raw value into bound type
+            Class targetType = toClass(componentType);
             JVar valueVar = block.decl(context.toJClass(targetType), propertyName);
             JTryBlock tryBlock = block._try();
             tryBlock.body().assign(valueVar, adapterVar.invoke("unmarshal").arg(xmlValueVar));
@@ -500,31 +500,9 @@ public class ReaderIntrospector {
             block.add(new JBlankLine());
 
             toSet = valueVar;
-        } else if (targetType.equals(Byte.class) || targetType.equals(byte.class)) {
-            // todo why the special read method for byte?
-            toSet = JExpr.cast(context.toJType(byte.class), xsrVar.invoke("getElementAsInt"));
-        } else if (isBuiltinType(targetType)) {
-            toSet = as(builder, xsrVar, block, targetType, propertyName, nillable);
-        } else if (targetType.equals(byte[].class)) {
-            toSet = context.toJClass(BinaryUtils.class).staticInvoke("decodeAsBytes").arg(xsrVar);
-        } else if (targetType.equals(QName.class)) {
-            toSet = xsrVar.invoke("getElementAsQName");
-        } else if (targetType.equals(DataHandler.class) || targetType.equals(Image.class)) {
-            // todo support AttachmentMarshaller
-            toSet = JExpr._null();
-        } else if (targetType.equals(Object.class) || targetType.equals(Element.class)) {
-            toSet = xsrVar.invoke("getElementAsDomElement");
         } else {
-            // Complex type which will already have an element builder defined
-            Bean targetBean = model.getBean(toClass(componentType));
-            JAXBObjectBuilder elementBuilder = builders.get(targetBean);
-            if (elementBuilder == null) {
-                toSet = builder.getReadContextVar().invoke("unexpectedXsiType").arg(builder.getXSR()).arg(JExpr.dotclass(context.toJClass(toClass(componentType))));
-            } else {
-                // invoke the reader method
-                JInvocation invocation = invokeParser(builder, builder.getChildElementVar(), elementBuilder);
-                toSet = invocation;
-            }
+            // plain old element type
+            toSet = readElement(builder,  xsrVar, block, nillable, propertyName, toClass(componentType));
         }
 
         // JaxB refs need to be wrapped with a JAXBElement
@@ -532,6 +510,37 @@ public class ReaderIntrospector {
             toSet = newJaxBElement(xsrVar, toClass(componentType), toSet);
         }
 
+        return toSet;
+    }
+
+    private JVar readElement(JAXBObjectBuilder builder, JVar xsrVar, JBlock block, boolean nillable, String propertyName, Class targetType) {
+        JVar toSet;
+        if (targetType.equals(Byte.class) || targetType.equals(byte.class)) {
+            // todo why the special read method for byte?
+            toSet = block.decl(context.toJType(byte.class), propertyName, JExpr.cast(context.toJType(byte.class), xsrVar.invoke("getElementAsInt")));
+        } else if (isBuiltinType(targetType)) {
+            toSet = as(builder, xsrVar, block, targetType, propertyName, nillable);
+        } else if (targetType.equals(byte[].class)) {
+            toSet = block.decl(context.toJClass(byte[].class), propertyName, context.toJClass(BinaryUtils.class).staticInvoke("decodeAsBytes").arg(xsrVar));
+        } else if (targetType.equals(QName.class)) {
+            toSet = block.decl(context.toJClass(QName.class), propertyName, xsrVar.invoke("getElementAsQName"));
+        } else if (targetType.equals(DataHandler.class) || targetType.equals(Image.class)) {
+            // todo support AttachmentMarshaller
+            toSet = block.decl(context.toJClass(targetType), propertyName, JExpr._null());
+        } else if (targetType.equals(Object.class) || targetType.equals(Element.class)) {
+            toSet = block.decl(context.toJClass(Element.class), propertyName, xsrVar.invoke("getElementAsDomElement"));
+        } else {
+            // Complex type which will already have an element builder defined
+            Bean targetBean = model.getBean(targetType);
+            JAXBObjectBuilder elementBuilder = builders.get(targetBean);
+            if (elementBuilder == null) {
+                toSet = block.decl(context.toJClass(targetType), propertyName, builder.getReadContextVar().invoke("unexpectedXsiType").arg(builder.getXSR()).arg(JExpr.dotclass(context.toJClass(targetType))));
+            } else {
+                // invoke the reader method
+                JInvocation invocation = invokeParser(builder, builder.getChildElementVar(), elementBuilder);
+                toSet = block.decl(context.toJClass(targetType), propertyName, invocation);
+            }
+        }
         return toSet;
     }
 
@@ -885,6 +894,9 @@ public class ReaderIntrospector {
     }
 
     private JInvocation newJaxBElement(JVar xsrVar, Class type, JExpression expression) {
+        if (JAXBElement.class.equals(type)) {
+            throw new IllegalArgumentException("Can't wrap a JAXBElement with a JAXBElement");
+        }
         JType jaxbElementType = context.toJClass(JAXBElement.class).narrow(type);
         JInvocation newJaxBElement = JExpr._new(jaxbElementType)
                 .arg(xsrVar.invoke("getName"))

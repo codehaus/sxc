@@ -319,9 +319,13 @@ public class WriterIntrospector {
                         outerBlock = each.body();
                         outerVar = each.var();
                     }
+                    Class propertyType = toClass(property.getComponentType());
 
                     // process value through adapter
                     outerVar = writeAdapterConversion(builder, outerBlock, property, outerVar);
+                    if (property.getAdapterType() != null) {
+                        propertyType = property.getComponentAdaptedType();
+                    }
 
                     // determine types that may be substuited for this value
                     Map<Class, ElementMapping> expectedTypes = new TreeMap<Class, ElementMapping>(new ClassComparator());
@@ -339,13 +343,13 @@ public class WriterIntrospector {
                         // null check for non-nillable elements
                         JBlock block = outerBlock;
                         JConditional nullCond = null;
-                        if (!mapping.isNillable() && !toClass(property.getComponentType()).isPrimitive()) {
+                        if (!mapping.isNillable() && !propertyType.isPrimitive()) {
                             nullCond = outerBlock._if(outerVar.ne(JExpr._null()));
                             block = nullCond._then();
                         }
 
                         // write element
-                        writeElement(builder, block, mapping, outerVar, toClass(property.getComponentType()), mapping.isNillable());
+                        writeElement(builder, block, mapping, outerVar, propertyType, mapping.isNillable());
 
                         // property is required and does not support nill, then an error is reported if the value was null
                         if (property.isRequired() && !mapping.isNillable() && nullCond != null) {
@@ -443,7 +447,7 @@ public class WriterIntrospector {
                     // process value through adapter
                     propertyVar = writeAdapterConversion(builder, block, property, propertyVar);
 
-                    writeSimpleTypeElement(builder, propertyVar, toClass(property.getType()), block);
+                    writeSimpleTypeElement(builder, propertyVar, toClass(property.getComponentType()), block);
                     break;
                 default:
                     throw new BuildException("Unknown XmlMapping type " + property.getXmlStyle());
@@ -612,10 +616,10 @@ public class WriterIntrospector {
         return beans;
     }
 
-    private JVar writeAdapterConversion(JAXBObjectBuilder builder, JBlock block, Property property, JVar propertyVar) {
+    private <T extends JExpression> T writeAdapterConversion(JAXBObjectBuilder builder, JBlock block, Property property, T propertyVar) {
         if (property.getAdapterType() != null) {
             JVar adapterVar = builder.getAdapter(property.getAdapterType());
-            JVar valueVar = block.decl(context.toJClass(String.class), builder.getWriteVariableManager().createId(property.getName()), JExpr._null());
+            JVar valueVar = block.decl(context.toJClass(property.getComponentAdaptedType()), builder.getWriteVariableManager().createId(property.getName()), JExpr._null());
 
             JTryBlock tryBlock = block._try();
             tryBlock.body().assign(valueVar, adapterVar.invoke("marshal").arg(propertyVar));
@@ -630,7 +634,8 @@ public class WriterIntrospector {
                     .arg(context.dotclass(toClass(property.getType())))
                     .arg(catchException.param("e"));
 
-            propertyVar = valueVar;
+            //noinspection unchecked
+            propertyVar = (T) valueVar;
         }
         return propertyVar;
     }
@@ -652,7 +657,15 @@ public class WriterIntrospector {
     }
 
     private void writeSimpleTypeAttribute(JAXBObjectBuilder builder, JBlock block, Property property, JExpression propertyVar) {
-        Class type = toClass(property.getType());
+        propertyVar = writeAdapterConversion(builder, block, property, propertyVar);
+
+        Class type;
+        if (property.getAdapterType() == null) {
+            type = toClass(property.getComponentType());
+        } else {
+            type = property.getComponentAdaptedType();
+        }
+
         // if this is an id ref we write the ID property of the target bean instead of the bean itself
         if (property.isIdref()) {
             Property idProperty = findReferencedIdProperty(property);

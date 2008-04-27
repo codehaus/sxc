@@ -43,6 +43,7 @@ public class Property {
     private Method setter;
 
     private Class adapterType;
+    private Class componentAdaptedType;
 
     public Property(Bean bean, String name) {
         if (bean == null) throw new NullPointerException("bean is null");
@@ -181,6 +182,14 @@ public class Property {
 
     public void setAdapterType(Class adapterType) {
         this.adapterType = adapterType;
+    }
+
+    public Class getComponentAdaptedType() {
+        return componentAdaptedType;
+    }
+
+    public void setComponentAdaptedType(Class componentAdaptedType) {
+        this.componentAdaptedType = componentAdaptedType;
     }
 
     public boolean equals(Object o) {

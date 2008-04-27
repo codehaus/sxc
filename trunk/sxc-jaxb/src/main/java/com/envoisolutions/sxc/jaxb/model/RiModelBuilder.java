@@ -153,14 +153,8 @@ public class RiModelBuilder {
             Property anyAttributeProperty;
 
             // if we have an AdaptedAccessor wrapper, strip off wrapper but preserve the name of the adapter class
-//        Class<XmlAdapter> xmlAdapterClass = null;
             if ("com.sun.xml.bind.v2.runtime.reflect.AdaptedAccessor".equals(anyAttributeAccessor.getClass().getName())) {
                 try {
-    //                // fields on AdaptedAccessor are private so use set accessible to grab the values
-    //                Field adapterClassField = accessor.getClass().getDeclaredField("adapter");
-    //                adapterClassField.setAccessible(true);
-    //                xmlAdapterClass = (Class<XmlAdapter>) adapterClassField.get(accessor);
-
                     Field coreField = anyAttributeAccessor.getClass().getDeclaredField("core");
                     coreField.setAccessible(true);
                     anyAttributeAccessor = (Accessor) coreField.get(anyAttributeAccessor);
@@ -231,24 +225,22 @@ public class RiModelBuilder {
         property.setIdref(runtimePropertyInfo.id() == ID.IDREF);
         property.setCollection(runtimePropertyInfo.isCollection());
 
-        if (runtimePropertyInfo.getAdapter() != null) {
-            property.setAdapterType(runtimePropertyInfo.getAdapter().adapterType);
-        }
-
         Accessor accessor = runtimePropertyInfo.getAccessor();
 
+        if (runtimePropertyInfo.getAdapter() != null) {
+            property.setAdapterType(runtimePropertyInfo.getAdapter().adapterType);
+            property.setComponentType(runtimePropertyInfo.getAdapter().customType);
+            property.setComponentAdaptedType(JavaUtils.toClass(runtimePropertyInfo.getAdapter().defaultType));
+        }
+
         // if we have an AdaptedAccessor wrapper, strip off wrapper but preserve the name of the adapter class
-//        Class<XmlAdapter> xmlAdapterClass = null;
         if ("com.sun.xml.bind.v2.runtime.reflect.AdaptedAccessor".equals(accessor.getClass().getName())) {
             try {
-//                // fields on AdaptedAccessor are private so use set accessible to grab the values
-//                Field adapterClassField = accessor.getClass().getDeclaredField("adapter");
-//                adapterClassField.setAccessible(true);
-//                xmlAdapterClass = (Class<XmlAdapter>) adapterClassField.get(accessor);
 
                 Field coreField = accessor.getClass().getDeclaredField("core");
                 coreField.setAccessible(true);
                 accessor = (Accessor) coreField.get(accessor);
+
             } catch (Throwable e) {
                 throw new BuildException("Unable to access private fields of AdaptedAccessor class", e);
             }
@@ -311,7 +303,11 @@ public class RiModelBuilder {
 
         mapping.setNillable(runtimeTypeRef.isNillable());
 
-        mapping.setComponentType(runtimeTypeRef.getTarget().getType());
+        if (property.getAdapterType() == null) {
+            mapping.setComponentType(runtimeTypeRef.getTarget().getType());
+        } else {
+            mapping.setComponentType(property.getComponentType());
+        }
 
         return mapping;
     }
@@ -319,7 +315,11 @@ public class RiModelBuilder {
     private ElementMapping createXmlMapping(Property property, RuntimeElementInfo runtimeElement) {
         ElementMapping mapping = new ElementMapping(property, runtimeElement.getElementName());
 
-        mapping.setComponentType(runtimeElement.getContentType().getType());
+        if (property.getAdapterType() == null) {
+            mapping.setComponentType(runtimeElement.getContentType().getType());
+        } else {
+            mapping.setComponentType(property.getComponentType());
+        }
 
         return mapping;
     }
@@ -327,7 +327,11 @@ public class RiModelBuilder {
     private ElementMapping createXmlMapping(Property property, RuntimeClassInfo runtimeClassInfo) {
         ElementMapping mapping = new ElementMapping(property, runtimeClassInfo.getElementName());
 
-        mapping.setComponentType(runtimeClassInfo.getClazz());
+        if (property.getAdapterType() == null) {
+            mapping.setComponentType(runtimeClassInfo.getClazz());
+        } else {
+            mapping.setComponentType(property.getComponentType());            
+        }
 
         return mapping;
     }
