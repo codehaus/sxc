@@ -56,21 +56,21 @@ public class XmlListTest extends XoTestCase {
         marshaller.marshal(element, bos);
 
         Document d = readDocument(bos.toByteArray());
-        assertValid("/xmlListElement/booleanArray[text()='" + arrayToString(element.booleanArray) + " ']", d);
-        assertValid("/xmlListElement/shortArray[text()='" + arrayToString(element.shortArray) + " ']", d);
-        assertValid("/xmlListElement/intArray[text()='" + arrayToString(element.intArray) + " ']", d);
-        assertValid("/xmlListElement/longArray[text()='" + arrayToString(element.longArray) + " ']", d);
-        assertValid("/xmlListElement/floatArray[text()='" + arrayToString(element.floatArray) + " ']", d);
-        assertValid("/xmlListElement/doubleArray[text()='" + arrayToString(element.doubleArray) + " ']", d);
-        assertValid("/xmlListElement/stringArray[text()='" + arrayToString(element.stringArray) + " ']", d);
+        assertValid("/xmlListElement/booleanArray[text()='" + arrayToString(element.booleanArray) + "']", d);
+        assertValid("/xmlListElement/shortArray[text()='" + arrayToString(element.shortArray) + "']", d);
+        assertValid("/xmlListElement/intArray[text()='" + arrayToString(element.intArray) + "']", d);
+        assertValid("/xmlListElement/longArray[text()='" + arrayToString(element.longArray) + "']", d);
+        assertValid("/xmlListElement/floatArray[text()='" + arrayToString(element.floatArray) + "']", d);
+        assertValid("/xmlListElement/doubleArray[text()='" + arrayToString(element.doubleArray) + "']", d);
+        assertValid("/xmlListElement/stringArray[text()='" + arrayToString(element.stringArray) + "']", d);
 
-        assertValid("/xmlListElement/booleanList[text()='" + toString(element.booleanList) + " ']", d);
-        assertValid("/xmlListElement/shortList[text()='" + toString(element.shortList) + " ']", d);
-        assertValid("/xmlListElement/intList[text()='" + toString(element.intList) + " ']", d);
-        assertValid("/xmlListElement/longList[text()='" + toString(element.longList) + " ']", d);
-        assertValid("/xmlListElement/floatList[text()='" + toString(element.floatList) + " ']", d);
-        assertValid("/xmlListElement/doubleList[text()='" + toString(element.doubleList) + " ']", d);
-        assertValid("/xmlListElement/stringList[text()='" + toString(element.stringList) + " ']", d);
+        assertValid("/xmlListElement/booleanList[text()='" + toString(element.booleanList) + "']", d);
+        assertValid("/xmlListElement/shortList[text()='" + toString(element.shortList) + "']", d);
+        assertValid("/xmlListElement/intList[text()='" + toString(element.intList) + "']", d);
+        assertValid("/xmlListElement/longList[text()='" + toString(element.longList) + "']", d);
+        assertValid("/xmlListElement/floatList[text()='" + toString(element.floatList) + "']", d);
+        assertValid("/xmlListElement/doubleList[text()='" + toString(element.doubleList) + "']", d);
+        assertValid("/xmlListElement/stringList[text()='" + toString(element.stringList) + "']", d);
 
         assertValid("/xmlListElement[@booleanArrayAttribute='" + arrayToString(element.booleanArrayAttribute) + "']", d);
         assertValid("/xmlListElement[@shortArrayAttribute='" + arrayToString(element.shortArrayAttribute) + "']", d);
@@ -117,21 +117,21 @@ public class XmlListTest extends XoTestCase {
         marshaller.marshal(element, bos);
 
         Document d = readDocument(bos.toByteArray());
-        assertValid("/listValues/booleanArrayValue[text()='" + arrayToString(element.booleanArrayValue.value) + " ']", d);
-        assertValid("/listValues/shortArrayValue[text()='" + arrayToString(element.shortArrayValue.value) + " ']", d);
-        assertValid("/listValues/intArrayValue[text()='" + arrayToString(element.intArrayValue.value) + " ']", d);
-        assertValid("/listValues/longArrayValue[text()='" + arrayToString(element.longArrayValue.value) + " ']", d);
-        assertValid("/listValues/floatArrayValue[text()='" + arrayToString(element.floatArrayValue.value) + " ']", d);
-        assertValid("/listValues/doubleArrayValue[text()='" + arrayToString(element.doubleArrayValue.value) + " ']", d);
-        assertValid("/listValues/stringArrayValue[text()='" + arrayToString(element.stringArrayValue.value) + " ']", d);
+        assertValid("/listValues/booleanArrayValue[text()='" + arrayToString(element.booleanArrayValue.value) + "']", d);
+        assertValid("/listValues/shortArrayValue[text()='" + arrayToString(element.shortArrayValue.value) + "']", d);
+        assertValid("/listValues/intArrayValue[text()='" + arrayToString(element.intArrayValue.value) + "']", d);
+        assertValid("/listValues/longArrayValue[text()='" + arrayToString(element.longArrayValue.value) + "']", d);
+        assertValid("/listValues/floatArrayValue[text()='" + arrayToString(element.floatArrayValue.value) + "']", d);
+        assertValid("/listValues/doubleArrayValue[text()='" + arrayToString(element.doubleArrayValue.value) + "']", d);
+        assertValid("/listValues/stringArrayValue[text()='" + arrayToString(element.stringArrayValue.value) + "']", d);
 
-        assertValid("/listValues/booleanListValue[text()='" + toString(element.booleanListValue.value) + " ']", d);
-        assertValid("/listValues/shortListValue[text()='" + toString(element.shortListValue.value) + " ']", d);
-        assertValid("/listValues/intListValue[text()='" + toString(element.intListValue.value) + " ']", d);
-        assertValid("/listValues/longListValue[text()='" + toString(element.longListValue.value) + " ']", d);
-        assertValid("/listValues/floatListValue[text()='" + toString(element.floatListValue.value) + " ']", d);
-        assertValid("/listValues/doubleListValue[text()='" + toString(element.doubleListValue.value) + " ']", d);
-        assertValid("/listValues/stringListValue[text()='" + toString(element.stringListValue.value) + " ']", d);
+        assertValid("/listValues/booleanListValue[text()='" + toString(element.booleanListValue.value) + "']", d);
+        assertValid("/listValues/shortListValue[text()='" + toString(element.shortListValue.value) + "']", d);
+        assertValid("/listValues/intListValue[text()='" + toString(element.intListValue.value) + "']", d);
+        assertValid("/listValues/longListValue[text()='" + toString(element.longListValue.value) + "']", d);
+        assertValid("/listValues/floatListValue[text()='" + toString(element.floatListValue.value) + "']", d);
+        assertValid("/listValues/doubleListValue[text()='" + toString(element.doubleListValue.value) + "']", d);
+        assertValid("/listValues/stringListValue[text()='" + toString(element.stringListValue.value) + "']", d);
 
     }
 
