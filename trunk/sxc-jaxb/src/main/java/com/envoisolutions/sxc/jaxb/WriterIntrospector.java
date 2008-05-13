@@ -279,6 +279,7 @@ public class WriterIntrospector {
                     JVar outerVar = propertyVar;
                     JBlock outerBlock = builder.getWriteMethod().body();
 
+                    JVar firstVar = null;
                     if (property.isCollection()) {
                         QName wrapperElement = property.getXmlName();
 
@@ -303,6 +304,11 @@ public class WriterIntrospector {
                             itemType = context.getGenericType(property.getComponentType());
                         } else {
                             itemType = context.toJType((Class<?>) toClass(property.getComponentType()));
+                        }
+
+                        // if xml list add code to properly space items
+                        if (property.isXmlList()) {
+                            firstVar = nullCond._then().decl(context.toJType(boolean.class), builder.getWriteVariableManager().createId(property.getName() + "First"), JExpr.TRUE);
                         }
 
                         String itemName = builder.getWriteVariableManager().createId(property.getName() + "Item");
@@ -349,6 +355,16 @@ public class WriterIntrospector {
                             block = nullCond._then();
                         }
 
+                        // add space (' ') separator for XmlList
+                        if (property.isXmlList()) {
+                            // if (fooFirst) {
+                            //    writer.writeCharacters(" ");
+                            // }
+                            // fooFirst = false;
+                            block._if(firstVar.not())._then().add(builder.getXSW().invoke("writeCharacters").arg(" "));
+                            block.assign(firstVar, JExpr.FALSE);
+                        }
+
                         // write element
                         writeElement(builder, block, mapping, outerVar, propertyType, mapping.isNillable(), property.isXmlList());
 
@@ -376,6 +392,16 @@ public class WriterIntrospector {
                             // add instance of check
                             JExpression isInstance = outerVar._instanceof(context.toJClass(itemType));
                             JBlock block = conditional.addCondition(isInstance);
+
+                            // add space (' ') separator for XmlList
+                            if (property.isXmlList()) {
+                                // if (fooFirst) {
+                                //    writer.writeCharacters(" ");
+                                // }
+                                // fooFirst = false;
+                                block._if(firstVar.not())._then().add(builder.getXSW().invoke("writeCharacters").arg(" "));
+                                block.assign(firstVar, JExpr.FALSE);
+                            }
 
                             // declare item variable
                             JVar itemVar;
@@ -446,6 +472,7 @@ public class WriterIntrospector {
                     block = builder.getWriteMethod().body();
 
                     itemVar = propertyVar;
+                    firstVar = null;
                     if (property.isCollection()) {
                         JBlock collectionNotNull = block._if(propertyVar.ne(JExpr._null()))._then();
 
@@ -456,6 +483,8 @@ public class WriterIntrospector {
                             itemType = context.toJType((Class<?>) toClass(property.getComponentType()));
                         }
 
+                        firstVar = collectionNotNull.decl(context.toJType(boolean.class), builder.getWriteVariableManager().createId(property.getName() + "First"), JExpr.TRUE);
+
                         String itemName = builder.getWriteVariableManager().createId( property.getName() + "Item");
                         JForEach each = collectionNotNull.forEach(itemType, itemName, propertyVar);
 
@@ -464,14 +493,21 @@ public class WriterIntrospector {
                         itemVar = each.var();
                     }
 
+                    // add space (' ') separator for XmlList
+                    if (property.isCollection()) {
+                        // if (fooFirst) {
+                        //    writer.writeCharacters(" ");
+                        // }
+                        // fooFirst = false;
+                        block._if(firstVar.not())._then().add(builder.getXSW().invoke("writeCharacters").arg(" "));
+                        block.assign(firstVar, JExpr.FALSE);
+                    }
+
                     // process value through adapter
                     propertyVar = writeAdapterConversion(builder, block, property, itemVar);
 
+                    // write it
                     writeSimpleTypeElement(builder, propertyVar, toClass(property.getComponentType()), block);
-
-                    if (property.isCollection()) {
-                        block.invoke(builder.getXSW(), "writeCharacters").arg(" ");
-                    }
 
                     break;
                 default:
@@ -529,8 +565,6 @@ public class WriterIntrospector {
         // close element
         if (!xmlList) {
             block.add(builder.getXSW().invoke("writeEndElement"));
-        } else {
-            block.add(builder.getXSW().invoke("writeCharacters").arg(" "));
         }
     }
 
