@@ -34,6 +34,7 @@ public class Property {
     private boolean required;
     private boolean nillable;
     private boolean collection;
+    private boolean xmlList;
 
     private boolean xmlAny;
     private boolean lax;
@@ -134,6 +135,14 @@ public class Property {
 
     public void setCollection(boolean collection) {
         this.collection = collection;
+    }
+
+    public boolean isXmlList() {
+        return xmlList;
+    }
+
+    public void setXmlList(boolean xmlList) {
+        this.xmlList = xmlList;
     }
 
     public boolean isXmlAny() {

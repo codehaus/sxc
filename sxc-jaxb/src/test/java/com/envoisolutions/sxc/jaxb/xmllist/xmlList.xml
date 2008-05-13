@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xmlListElement
+    booleanArrayAttribute="true false true false true true"
+    doubleArrayAttribute="0.0 1.11 2.22 3.33 4.44"
+    floatArrayAttribute="0.0 1.1 2.2 3.3 4.4"
+    intArrayAttribute="0 11 22 33 44"
+    longArrayAttribute="0 111 222 333 444"
+    shortArrayAttribute=" 0  1  2  3  4"
+    stringArrayAttribute="stringArrayAttribute0 stringArrayAttribute1 stringArrayAttribute2 stringArrayAttribute3 stringArrayAttribute4"
+
+    booleanListAttribute="true false true false true true"
+    doubleListAttribute="0.0 1.11 2.22 3.33 4.44"
+    floatListAttribute="0.0 1.1 2.2 3.3 4.4"
+    intListAttribute="0 11 22 33 44"
+    longListAttribute="0 111 222 333 444"
+    shortListAttribute=" 0  1  2  3  4  "
+    stringListAttribute="stringListAttribute0 stringListAttribute1 stringListAttribute2 stringListAttribute3 stringListAttribute4"
+>
+
+    <booleanArray>true false true false true true</booleanArray>
+    <doubleArray>0.0 1.11 2.22 3.33 4.44</doubleArray>
+    <floatArray>0.0 1.1 2.2 3.3 4.4</floatArray>
+    <intArray>0 11 22 33 44</intArray>
+    <longArray>0 111 222 333 444</longArray>
+    <shortArray> 0  1  2  3  4  </shortArray>
+    <stringArray>
+        stringArray0
+        stringArray1
+        stringArray2
+        stringArray3
+        stringArray4
+    </stringArray>
+
+    <booleanList>true false true false true true</booleanList>
+    <doubleList>0.0 1.11 2.22 3.33 4.44</doubleList>
+    <floatList>0.0 1.1 2.2 3.3 4.4</floatList>
+    <intList>0 11 22 33 44</intList>
+    <longList>0 111 222 333 444</longList>
+    <shortList> 0  1  2  3  4  </shortList>
+    <stringList>
+        stringList0
+        stringList1
+        stringList2
+        stringList3
+        stringList4
+    </stringList>
+</xmlListElement>

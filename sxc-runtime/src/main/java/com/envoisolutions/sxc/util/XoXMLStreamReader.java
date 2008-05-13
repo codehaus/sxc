@@ -25,7 +25,9 @@ public interface XoXMLStreamReader extends XMLStreamReader {
 
     QName getElementAsQName() throws XMLStreamException;
     QName getAsQName(String val) throws XMLStreamException;
-    
+
+    Iterable<String> getElementAsXmlList() throws XMLStreamException;
+
     int nextTagIgnoreAll() throws XMLStreamException;
 
     /**
@@ -58,4 +60,5 @@ public interface XoXMLStreamReader extends XMLStreamReader {
      * while advancing to the first child
      */
     Iterable<XoXMLStreamReader> getChildElements();
+
 }

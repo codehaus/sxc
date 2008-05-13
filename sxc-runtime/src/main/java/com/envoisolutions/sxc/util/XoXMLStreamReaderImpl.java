@@ -1,8 +1,10 @@
 package com.envoisolutions.sxc.util;
 
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
+import java.util.List;
 import javax.xml.namespace.NamespaceContext;
 import javax.xml.namespace.QName;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -103,6 +105,10 @@ public class XoXMLStreamReaderImpl implements XoXMLStreamReader {
     public boolean getElementAsBoolean() throws XMLStreamException {
         String s = getElementAsString();
         return s.equals("true") || s.equals("1");
+    }
+
+    public Iterable<String> getElementAsXmlList() throws XMLStreamException {
+        return Arrays.asList(getElementAsString().split("\\s+"));
     }
 
     public Element getElementAsDomElement() throws XMLStreamException {
@@ -510,6 +516,40 @@ public class XoXMLStreamReaderImpl implements XoXMLStreamReader {
 
         public String getValue() {
             return XoXMLStreamReaderImpl.this.getAttributeValue(attributesIterator.index);
+        }
+
+        public boolean getBooleanValue() {
+            return Boolean.parseBoolean(getValue());
+        }
+
+        public byte getByteValue() {
+            return Byte.parseByte(getValue());
+        }
+
+        public short getShortValue() {
+            return Short.parseShort(getValue());
+        }
+
+        public int getIntValue() {
+            return Integer.parseInt(getValue());
+        }
+
+        public long getLongValue() {
+            return Long.parseLong(getValue());
+        }
+
+        public float getFloatValue() {
+            return Float.parseFloat(getValue());
+        }
+
+        public double getDoubleValue() {
+            return Double.parseDouble(getValue());
+        }
+
+        public Iterable<String> getXmlListValue() {
+            String value = getValue().trim();
+            List<String> list = Arrays.asList(value.split("\\s+"));
+            return list;
         }
 
         public int getIndex() {

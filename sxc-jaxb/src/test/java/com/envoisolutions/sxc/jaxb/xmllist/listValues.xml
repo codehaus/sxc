@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<listValues>
+
+    <booleanArrayValue>true false true false true true</booleanArrayValue>
+    <doubleArrayValue>0.0 1.11 2.22 3.33 4.44</doubleArrayValue>
+    <floatArrayValue>0.0 1.1 2.2 3.3 4.4</floatArrayValue>
+    <intArrayValue>0 11 22 33 44</intArrayValue>
+    <longArrayValue>0 111 222 333 444</longArrayValue>
+    <shortArrayValue> 0  1  2  3  4  </shortArrayValue>
+    <stringArrayValue>
+        stringArray0
+        stringArray1
+        stringArray2
+        stringArray3
+        stringArray4
+    </stringArrayValue>
+
+    <booleanListValue>true false true false true true</booleanListValue>
+    <doubleListValue>0.0 1.11 2.22 3.33 4.44</doubleListValue>
+    <floatListValue>0.0 1.1 2.2 3.3 4.4</floatListValue>
+    <intListValue>0 11 22 33 44</intListValue>
+    <longListValue>0 111 222 333 444</longListValue>
+    <shortListValue> 0  1  2  3  4  </shortListValue>
+    <stringListValue>
+        stringListValue0
+        stringListValue1
+        stringListValue2
+        stringListValue3
+        stringListValue4
+    </stringListValue>
+</listValues>

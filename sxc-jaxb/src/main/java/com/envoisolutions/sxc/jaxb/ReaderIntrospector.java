@@ -51,6 +51,7 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JTryBlock;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
+import com.sun.codemodel.JForEach;
 import org.w3c.dom.Element;
 
 public class ReaderIntrospector {
@@ -225,8 +226,18 @@ public class ReaderIntrospector {
                         // create collection var if necessary
                         JVar collectionVar = handleCollection(builder, property, beanVar);
 
+                        // get the value to evaluate
+                        JExpression value;
+                        if (!property.isCollection()) {
+                            value = builder.getAttributeVar().invoke("getValue");
+                        } else {
+                            JForEach forEach = block.forEach(context.toJClass(String.class), builder.getReadVariableManager().createId(property.getName() + "Item"), builder.getAttributeVar().invoke("getXmlListValue"));
+                            block = forEach.body();
+                            value = forEach.var();
+                        }
+                        
                         // read and set
-                        JExpression toSet = handleAttribute(builder, block, property);
+                        JExpression toSet = handleAttribute(builder, block, property, value);
                         doSet(builder, block, property, beanVar, toSet, collectionVar);
                     } else {
                         handleAnyAttribute(builder, property, beanVar);
@@ -239,7 +250,7 @@ public class ReaderIntrospector {
                 case ELEMENT_REF: {
                     JAXBObjectBuilder elementBuilder = builder;
                     JVar parentVar = beanVar;
-                    if (property.getXmlName() != null) {
+                    if (property.getXmlName() != null && !property.isXmlList()) {
                         elementBuilder = builder.expectWrapperElement(property.getXmlName(), beanVar, property.getName());
                     }
 
@@ -253,9 +264,60 @@ public class ReaderIntrospector {
                         // add comment for readability
                         block.add(new JLineComment(property.getXmlStyle() + ": " + property.getName()));
 
-                        // read and set
-                        JExpression toSet = handleElement(builder, builder.getChildElementVar(), block, property, mapping.isNillable(), mapping.getComponentType());
-                        doSet(builder, block, property, parentVar, toSet, collectionVar);
+                        // get the value to evaluate
+                        JVar xsrVar = builder.getChildElementVar();
+                        if (!property.isXmlList()) {
+                            // read and set
+                            JExpression toSet = handleElement(builder, xsrVar, block, property, mapping.isNillable(), mapping.getComponentType());
+                            doSet(builder, block, property, parentVar, toSet, collectionVar);
+                        } else {
+                            JForEach forEach = block.forEach(context.toJClass(String.class), builder.getReadVariableManager().createId(property.getName() + "Item"), xsrVar.invoke("getElementAsXmlList"));
+                            block = forEach.body();
+                            JExpression value = forEach.var();
+
+                            // read and set
+                            String propertyName = property.getName();
+                            if (property.isCollection()) propertyName += "Item";
+                            propertyName = builder.getReadVariableManager().createId(propertyName);
+
+                            JExpression toSet;
+                            if (property.isIdref() || property.getAdapterType() == null) {
+                                toSet = coerce(builder, xsrVar, value, toClass(mapping.getComponentType()));
+                            } else {
+                                // adapted type
+                                JVar adapterVar = builder.getAdapter(property.getAdapterType());
+                    
+                                block.add(new JBlankLine());
+
+                                // convert raw value into bound type
+                                Class targetType = toClass(mapping.getComponentType());
+                                JVar valueVar = block.decl(context.toJClass(targetType), propertyName);
+                                JTryBlock tryBlock = block._try();
+                                tryBlock.body().assign(valueVar, adapterVar.invoke("unmarshal").arg(value));
+
+                                JCatchBlock catchException = tryBlock._catch(context.toJClass(Exception.class));
+                                JBlock catchBody = catchException.body();
+                                catchBody.invoke(builder.getReadContextVar(), "xmlAdapterError")
+                                        .arg(xsrVar)
+                                        .arg(context.dotclass(property.getAdapterType()))
+                                        .arg(context.dotclass(targetType))
+                                        .arg(context.dotclass(targetType))
+                                        .arg(catchException.param("e"));
+                                catchBody._continue();
+
+                                block.add(new JBlankLine());
+
+                                toSet = valueVar;
+                            }
+
+                            // JaxB refs need to be wrapped with a JAXBElement
+                            if (toClass(property.getComponentType()).equals(JAXBElement.class)) {
+                                toSet = newJaxBElement(xsrVar, toClass(mapping.getComponentType()), toSet);
+                            }
+
+                            doSet(builder, block, property, parentVar, toSet, collectionVar);
+                        }
+
                     }
 
                     if (property.isXmlAny()) {
@@ -296,21 +358,13 @@ public class ReaderIntrospector {
         }
     }
 
-    private JExpression handleAttribute(JAXBObjectBuilder builder, JBlock block, Property property) {
-        // Collections are not supported yet
-        if (property.isCollection()) {
-            logger.info("Reader: attribute lists are not supported yet!");
-            return null;
-        }
-
-        JExpression valueVar = builder.getAttributeVar().invoke("getValue");
-
+    private JExpression handleAttribute(JAXBObjectBuilder builder, JBlock block, Property property, JExpression value) {
         JExpression toSet;
         if (property.isIdref()) {
-            toSet = valueVar;
+            toSet = value;
         } else if (property.getAdapterType() != null) {
             JVar adapterVar = builder.getAdapter(property.getAdapterType());
-            toSet = adapterVar.invoke("unmarshal").arg(valueVar);
+            toSet = adapterVar.invoke("unmarshal").arg(value);
         } else {
             String propertyName = property.getName();
             if (property.isCollection() || property.isXmlAny()) propertyName += "Item";
@@ -318,11 +372,11 @@ public class ReaderIntrospector {
 
             Class clazz = toClass(property.getComponentType());
             if (isBuiltinType(clazz)) {
-                toSet = block.decl(context.toJClass(clazz), propertyName, coerce(builder, builder.getXSR(), valueVar, clazz));
+                toSet = block.decl(context.toJType(clazz), propertyName, coerce(builder, builder.getXSR(), value, clazz));
             } else if (clazz.equals(byte[].class)) {
-                toSet = context.toJClass(Base64.class).staticInvoke("decode").arg(valueVar);
+                toSet = context.toJClass(Base64.class).staticInvoke("decode").arg(value);
             } else if (clazz.equals(QName.class)) {
-                JVar var = as(builder, valueVar, block, String.class, propertyName);
+                JVar var = as(builder, value, block, String.class, propertyName);
                 toSet = builder.getXSR().invoke("getAsQName").arg(var);
             } else if (clazz.equals(DataHandler.class) || clazz.equals(Image.class)) {
                 // todo support AttachmentMarshaller
@@ -349,7 +403,7 @@ public class ReaderIntrospector {
 
         //
         // read attribute
-        JExpression toSet = handleAttribute(builder, block, property);
+        JExpression toSet = handleAttribute(builder, block, property, builder.getAttributeVar().invoke("getValue"));
 
         //
         // add attribute to map
@@ -545,13 +599,21 @@ public class ReaderIntrospector {
     }
 
     private void handleValue(JAXBObjectBuilder builder, JVar xsrVar, JBlock block, Property property, JVar beanVar) {
-        // Collections are not supported yet
-        if (property.isCollection()) {
-            logger.info("Reader: value lists are not supported yet!");
-            return;
+        // if this is a collection, create the collection variable
+        JVar collectionVar = handleCollection(builder, property, beanVar);
+
+        // get the value to evaluate 
+        JExpression value;
+        if (!property.isCollection()) {
+            value = xsrVar.invoke("getElementText");
+        } else {
+            JForEach forEach = block.forEach(context.toJClass(String.class), builder.getReadVariableManager().createId(property.getName() + "Item"), builder.getXSR().invoke("getElementAsXmlList"));
+            block = forEach.body();
+            value = forEach.var();
         }
 
-        Class targetType = toClass(property.getType());
+        // read and set value
+        Class targetType = toClass(property.getComponentType());
 
         String propertyName = property.getName();
         propertyName = builder.getReadVariableManager().createId(propertyName);
@@ -560,7 +622,7 @@ public class ReaderIntrospector {
         if (property.getAdapterType() != null) {
             JVar adapterVar = builder.getAdapter(property.getAdapterType());
 
-            JVar xmlValueVar = block.decl(context.toJClass(String.class), builder.getReadVariableManager().createId(propertyName + "Raw"), xsrVar.invoke("getElementText"));
+            JVar xmlValueVar = block.decl(context.toJClass(String.class), builder.getReadVariableManager().createId(propertyName + "Raw"), value);
             block.add(new JBlankLine());
 
             JVar valueVar = block.decl(context.toJClass(targetType), propertyName, JExpr._null());
@@ -584,24 +646,23 @@ public class ReaderIntrospector {
 
             toSet = valueVar;
             block = block._if(isConvertedVar)._then();
-        } else if (targetType.equals(Byte.class) || targetType.equals(byte.class)) {
+        } else if (!property.isCollection() && (targetType.equals(Byte.class) || targetType.equals(byte.class))) {
             // todo why the special read method for byte?
             toSet = JExpr.cast(context.toJType(byte.class), xsrVar.invoke("getElementAsInt"));
         } else if (isBuiltinType(targetType)) {
-            toSet = as(builder, xsrVar, block, targetType, propertyName, false);
-        } else if (targetType.equals(byte[].class)) {
+            toSet = coerce(builder, builder.getXSR(), value, targetType);
+        } else if (!property.isCollection() && targetType.equals(byte[].class)) {
             toSet = context.toJClass(BinaryUtils.class).staticInvoke("decodeAsBytes").arg(xsrVar);
-        } else if (targetType.equals(QName.class)) {
+        } else if (!property.isCollection() && targetType.equals(QName.class)) {
             toSet = xsrVar.invoke("getElementAsQName");
-        } else if (targetType.equals(DataHandler.class) || targetType.equals(Image.class)) {
+        } else if (!property.isCollection() && (targetType.equals(DataHandler.class) || targetType.equals(Image.class))) {
             // todo support AttachmentMarshaller
             toSet = JExpr._null();
         } else {
             logger.severe("Could not map element value " + propertyName + " of type " + property.getType());
             toSet = JExpr._null();
         }
-
-        doSet(builder, block, property, beanVar, toSet, null);
+        doSet(builder, block, property, beanVar, toSet, collectionVar);
     }
 
     private JVar handleCollection(JAXBObjectBuilder builder, Property property, JVar beanVar) {

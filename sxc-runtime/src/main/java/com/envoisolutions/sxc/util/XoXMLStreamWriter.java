@@ -1,5 +1,6 @@
 package com.envoisolutions.sxc.util;
 
+import java.util.Collection;
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
@@ -28,4 +29,13 @@ public interface XoXMLStreamWriter extends XMLStreamWriter {
     void writeAndDeclareIfUndeclared(String prefix, String namespace) throws XMLStreamException ;
 
     String getUniquePrefix(String namespaceURI) throws XMLStreamException;
+
+    void writeAsXmlList(Collection<Object> values) throws XMLStreamException;
+    void writeAsXmlList(Object[] values) throws XMLStreamException;
+    void writeAsXmlList(boolean[] values) throws XMLStreamException;
+    void writeAsXmlList(short[] values) throws XMLStreamException;
+    void writeAsXmlList(int[] values) throws XMLStreamException;
+    void writeAsXmlList(long[] values) throws XMLStreamException;
+    void writeAsXmlList(float[] values) throws XMLStreamException;
+    void writeAsXmlList(double[] values) throws XMLStreamException;
 }
