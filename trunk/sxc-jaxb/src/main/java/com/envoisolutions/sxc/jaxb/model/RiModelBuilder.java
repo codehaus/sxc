@@ -1,18 +1,18 @@
 package com.envoisolutions.sxc.jaxb.model;
 
+import java.beans.Introspector;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.lang.reflect.Type;
 import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.beans.Introspector;
 import javax.xml.bind.JAXBContext;
-import javax.xml.bind.JAXBException;
 import javax.xml.bind.JAXBElement;
-import javax.xml.bind.annotation.XmlRegistry;
+import javax.xml.bind.JAXBException;
 import javax.xml.bind.annotation.XmlElementDecl;
+import javax.xml.bind.annotation.XmlRegistry;
 import javax.xml.bind.annotation.XmlSchema;
 import javax.xml.namespace.QName;
 
@@ -21,6 +21,8 @@ import com.envoisolutions.sxc.jaxb.JAXBModelFactory;
 import com.envoisolutions.sxc.jaxb.JavaUtils;
 import com.sun.xml.bind.api.AccessorException;
 import com.sun.xml.bind.v2.ContextFactory;
+import com.sun.xml.bind.v2.model.core.ID;
+import com.sun.xml.bind.v2.model.core.WildcardMode;
 import com.sun.xml.bind.v2.model.runtime.RuntimeAttributePropertyInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeClassInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeElement;
@@ -33,8 +35,6 @@ import com.sun.xml.bind.v2.model.runtime.RuntimeReferencePropertyInfo;
 import com.sun.xml.bind.v2.model.runtime.RuntimeTypeInfoSet;
 import com.sun.xml.bind.v2.model.runtime.RuntimeTypeRef;
 import com.sun.xml.bind.v2.model.runtime.RuntimeValuePropertyInfo;
-import com.sun.xml.bind.v2.model.core.WildcardMode;
-import com.sun.xml.bind.v2.model.core.ID;
 import com.sun.xml.bind.v2.runtime.JAXBContextImpl;
 import com.sun.xml.bind.v2.runtime.Transducer;
 import com.sun.xml.bind.v2.runtime.reflect.Accessor;
@@ -262,16 +262,31 @@ public class RiModelBuilder {
             property.setXmlStyle(Property.XmlStyle.ATTRIBUTE);
             property.setXmlName(attributeProperty.getXmlName());
             property.setRequired(attributeProperty.isRequired());
+            if (property.isCollection()) property.setXmlList(true);
         } else if (runtimePropertyInfo instanceof RuntimeElementPropertyInfo) {
             RuntimeElementPropertyInfo elementProperty = (RuntimeElementPropertyInfo) runtimePropertyInfo;
             property.setXmlStyle(Property.XmlStyle.ELEMENT);
-            property.setXmlName(elementProperty.getXmlName());
-            for (RuntimeTypeRef typeRef : elementProperty.getTypes()) {
-                ElementMapping elementMapping = createXmlMapping(property, typeRef);
+            if (!elementProperty.isValueList()) {
+                property.setXmlName(elementProperty.getXmlName());
+                for (RuntimeTypeRef typeRef : elementProperty.getTypes()) {
+                    ElementMapping elementMapping = createXmlMapping(property, typeRef);
+                    property.getElementMappings().add(elementMapping);
+                }
+                property.setRequired(elementProperty.isRequired());
+                property.setNillable(elementProperty.isCollectionNillable());
+            } else {
+                property.setXmlList(true);
+
+                if (elementProperty.getTypes().size() != 1) throw new BuildException("Expected 1 element mapped to property " + property + " but there are " + elementProperty.getTypes().size() + " mappings");
+                RuntimeTypeRef elementType = elementProperty.getTypes().get(0);
+                ElementMapping elementMapping = createXmlMapping(property, elementType);
+                elementMapping.setNillable(false);
                 property.getElementMappings().add(elementMapping);
+
+                property.setXmlName(elementType.getTagName());
+                property.setRequired(false);
+                property.setNillable(false);
             }
-            property.setRequired(elementProperty.isRequired());
-            property.setNillable(elementProperty.isCollectionNillable());
         } else  if (runtimePropertyInfo instanceof RuntimeReferencePropertyInfo) {
             RuntimeReferencePropertyInfo referenceProperty = (RuntimeReferencePropertyInfo) runtimePropertyInfo;
             property.setXmlStyle(Property.XmlStyle.ELEMENT_REF);
@@ -291,6 +306,7 @@ public class RiModelBuilder {
             property.setLax(referenceProperty.getWildcard() == WildcardMode.LAX);
         } else if (runtimePropertyInfo instanceof RuntimeValuePropertyInfo) {
             property.setXmlStyle(Property.XmlStyle.VALUE);
+            if (property.isCollection()) property.setXmlList(true);
         } else {
             throw new BuildException("Unknown property type " + runtimePropertyInfo.getClass().getName());
         }

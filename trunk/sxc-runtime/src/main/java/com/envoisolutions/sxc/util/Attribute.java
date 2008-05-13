@@ -61,6 +61,15 @@ public interface Attribute {
      */
     String getValue();
 
+    boolean getBooleanValue();
+    byte getByteValue();
+    short getShortValue();
+    int getIntValue();
+    long getLongValue();
+    float getFloatValue();
+    double getDoubleValue();
+    Iterable<String> getXmlListValue();
+
     /**
      * Returns the index of the current attribute in the XoXMLStreamREader.
      * @return the index of the current attribute

@@ -226,11 +226,6 @@ public class WriterIntrospector {
                 JExpression propertyVar = getValue(builder, property, block);
 
                 if (!property.isXmlAny()) {
-                    if (property.isCollection()) {
-                        logger.info("(JAXB Writer) Attribute lists are not supported yet!");
-                        continue;
-                    }
-
                     if (!toClass(property.getType()).isPrimitive()) {
                         JConditional nullCond = block._if(propertyVar.ne(JExpr._null()));
                         block = nullCond._then();
@@ -285,20 +280,22 @@ public class WriterIntrospector {
                     JBlock outerBlock = builder.getWriteMethod().body();
 
                     if (property.isCollection()) {
+                        QName wrapperElement = property.getXmlName();
+
+                        // if wrapper tag is required, start tag before null check
+                        if (wrapperElement != null && (property.isRequired() || property.isNillable())) {
+                            outerBlock.add(builder.getWriteStartElement(wrapperElement));
+                        }
+
                         // if collection is not null, process it; otherwise write xsi:nil
                         JConditional nullCond = outerBlock._if(outerVar.ne(JExpr._null()));
                         if (property.isNillable()) {
                             nullCond._else().add(builder.getXSW().invoke("writeXsiNil"));
                         }
 
-                        // write wraper element opening tag
-                        QName wrapperElement = property.getXmlName();
-                        JBlock wrapperElementBlock = outerBlock;
-                        if (wrapperElement != null) {
-                            if (property.isRequired() || property.isNillable()) {
-                                wrapperElementBlock = nullCond._then();
-                            }
-                            wrapperElementBlock.add(builder.getWriteStartElement(wrapperElement));
+                        // if wrapper tag is not required, start the tag inside of the null block
+                        if (wrapperElement != null && !property.isRequired() && !property.isNillable()) {
+                            nullCond._then().add(builder.getWriteStartElement(wrapperElement));
                         }
 
                         JType itemType;
@@ -313,7 +310,11 @@ public class WriterIntrospector {
 
                         // write wraper element closing tag
                         if (wrapperElement != null) {
-                            wrapperElementBlock.add(builder.getXSW().invoke("writeEndElement"));
+                            if (property.isRequired() || property.isNillable()) {
+                                outerBlock.add(builder.getXSW().invoke("writeEndElement"));
+                            } else {
+                                nullCond._then().add(builder.getXSW().invoke("writeEndElement"));
+                            }
                         }
 
                         outerBlock = each.body();
@@ -349,7 +350,7 @@ public class WriterIntrospector {
                         }
 
                         // write element
-                        writeElement(builder, block, mapping, outerVar, propertyType, mapping.isNillable());
+                        writeElement(builder, block, mapping, outerVar, propertyType, mapping.isNillable(), property.isXmlList());
 
                         // property is required and does not support nill, then an error is reported if the value was null
                         if (property.isRequired() && !mapping.isNillable() && nullCond != null) {
@@ -384,7 +385,7 @@ public class WriterIntrospector {
                                 String itemName = builder.getWriteVariableManager().createId(itemType.getSimpleName());
                                 itemVar = block.decl(context.toJClass(itemType), itemName, JExpr.cast(context.toJClass(itemType), outerVar));
                             }
-                            writeElement(builder, block, mapping, itemVar, itemType, false);
+                            writeElement(builder, block, mapping, itemVar, itemType, false, property.isXmlList());
                         }
 
                         // if item was null, write xsi:nil or report an error
@@ -444,10 +445,34 @@ public class WriterIntrospector {
                 case VALUE:
                     block = builder.getWriteMethod().body();
 
+                    itemVar = propertyVar;
+                    if (property.isCollection()) {
+                        JBlock collectionNotNull = block._if(propertyVar.ne(JExpr._null()))._then();
+
+                        JType itemType;
+                        if (!toClass(property.getComponentType()).isPrimitive()) {
+                            itemType = context.getGenericType(property.getComponentType());
+                        } else {
+                            itemType = context.toJType((Class<?>) toClass(property.getComponentType()));
+                        }
+
+                        String itemName = builder.getWriteVariableManager().createId( property.getName() + "Item");
+                        JForEach each = collectionNotNull.forEach(itemType, itemName, propertyVar);
+
+                        JBlock newBody = each.body();
+                        block = newBody;
+                        itemVar = each.var();
+                    }
+
                     // process value through adapter
-                    propertyVar = writeAdapterConversion(builder, block, property, propertyVar);
+                    propertyVar = writeAdapterConversion(builder, block, property, itemVar);
 
                     writeSimpleTypeElement(builder, propertyVar, toClass(property.getComponentType()), block);
+
+                    if (property.isCollection()) {
+                        block.invoke(builder.getXSW(), "writeCharacters").arg(" ");
+                    }
+
                     break;
                 default:
                     throw new BuildException("Unknown XmlMapping type " + property.getXmlStyle());
@@ -455,7 +480,7 @@ public class WriterIntrospector {
         }
     }
 
-    private void writeElement(JAXBObjectBuilder builder, JBlock block, ElementMapping mapping, JVar itemVar, Class type, boolean nillable) {
+    private void writeElement(JAXBObjectBuilder builder, JBlock block, ElementMapping mapping, JVar itemVar, Class type, boolean nillable, boolean xmlList) {
         // if this is an id ref we write the ID property of the target bean instead of the bean itself
         if (mapping.getProperty().isIdref()) {
             Property property = mapping.getProperty();
@@ -474,12 +499,14 @@ public class WriterIntrospector {
         }
 
         // write start element
-        QName name = mapping.getXmlName();
-        block.add(builder.getWriteStartElement(name));
+        if (!xmlList) {
+            QName name = mapping.getXmlName();
+            block.add(builder.getWriteStartElement(name));
+        }
 
         // if nillable, we need to write xsi:nil when value is null
         JBlock elementWriteBlock = block;
-        if (nillable && !type.isPrimitive()) {
+        if (nillable && !type.isPrimitive() && !xmlList) {
             JConditional nilCond = block._if(itemVar.ne(JExpr._null()));
             elementWriteBlock = nilCond._then();
             nilCond._else().add(builder.getXSW().invoke("writeXsiNil"));
@@ -500,7 +527,11 @@ public class WriterIntrospector {
         }
 
         // close element
-        block.add(builder.getXSW().invoke("writeEndElement"));
+        if (!xmlList) {
+            block.add(builder.getXSW().invoke("writeEndElement"));
+        } else {
+            block.add(builder.getXSW().invoke("writeCharacters").arg(" "));
+        }
     }
 
     private JVar getValue(JAXBObjectBuilder builder, Property property, JBlock block) {
@@ -657,7 +688,37 @@ public class WriterIntrospector {
     }
 
     private void writeSimpleTypeAttribute(JAXBObjectBuilder builder, JBlock block, Property property, JExpression propertyVar) {
-        propertyVar = writeAdapterConversion(builder, block, property, propertyVar);
+        JVar stringBuilder = null;
+        JExpression itemVar = propertyVar;
+        JBlock itemBlock = block;
+        if (property.isCollection()) {
+            JType itemType;
+            if (!toClass(property.getComponentType()).isPrimitive()) {
+                itemType = context.getGenericType(property.getComponentType());
+            } else {
+                itemType = context.toJType((Class<?>) toClass(property.getComponentType()));
+            }
+
+
+            String valueName = builder.getWriteVariableManager().createId( property.getName() + "Value");
+            stringBuilder = block.decl(context.toJClass(StringBuilder.class), valueName, JExpr._new(context.toJClass(StringBuilder.class)));
+
+            String itemName = builder.getWriteVariableManager().createId( property.getName() + "Item");
+            JForEach each = block.forEach(itemType, itemName, propertyVar);
+
+            JBlock newBody = each.body();
+            itemBlock = newBody;
+            itemVar = each.var();
+
+            // if (booleanArrayAttribute.length != 0) booleanArrayAttributeValue.append(" ");
+            itemBlock._if(stringBuilder.invoke("length").ne(JExpr.lit(0)))._then().invoke(stringBuilder, "append").arg(" ");
+
+            // the final value assigned to the property is stringBuilder.toString()
+            propertyVar = stringBuilder.invoke("toString");
+        }
+
+
+        itemVar = writeAdapterConversion(builder, itemBlock, property, itemVar);
 
         Class type;
         if (property.getAdapterType() == null) {
@@ -671,27 +732,33 @@ public class WriterIntrospector {
             Property idProperty = findReferencedIdProperty(property);
 
             // read the id value
-            propertyVar = getValue(builder, propertyVar, idProperty, property.getName() + JavaUtils.capitalize(idProperty.getName()), block);
+            itemVar = getValue(builder, itemVar, idProperty, property.getName() + JavaUtils.capitalize(idProperty.getName()), itemBlock);
 
             // the written type is always String
             type = String.class;
 
             // if (id != null) write the value
-            JConditional nullCond = block._if(propertyVar.ne(JExpr._null()));
-            block = nullCond._then();
+            JConditional nullCond = itemBlock._if(itemVar.ne(JExpr._null()));
+            itemBlock = nullCond._then();
         }
 
         if(isBuiltinType(type)) {
-            propertyVar = toString(builder, propertyVar, type);
+            itemVar = toString(builder, itemVar, type);
         } else if (type.equals(byte[].class)) {
-            propertyVar = context.toJClass(Base64.class).staticInvoke("encode").arg(propertyVar);
+            itemVar = context.toJClass(Base64.class).staticInvoke("encode").arg(itemVar);
         } else if (type.equals(QName.class)) {
-            propertyVar = builder.getXSW().invoke("getQNameAsString").arg(propertyVar);
+            itemVar = builder.getXSW().invoke("getQNameAsString").arg(itemVar);
         } else if (type.equals(DataHandler.class) || type.equals(Image.class)) {
             // todo support AttachmentMarshaller
         } else {
             logger.info("(JAXB Writer) Cannot map simple attribute type yet: " + type);
             return;
+        }
+
+        if (stringBuilder != null) {
+            itemBlock.invoke(stringBuilder, "append").arg(itemVar);
+        } else {
+            propertyVar = itemVar;
         }
 
         QName name = property.getXmlName();

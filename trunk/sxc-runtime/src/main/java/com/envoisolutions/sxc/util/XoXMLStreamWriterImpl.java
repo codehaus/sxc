@@ -1,6 +1,7 @@
 package com.envoisolutions.sxc.util;
 
 import java.util.Iterator;
+import java.util.Collection;
 import javax.xml.namespace.NamespaceContext;
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamException;
@@ -132,12 +133,12 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
             if (child instanceof Element) {
                 Element childElement = (Element) child;
                 writeDomElement(childElement, true);
-            } else if (child instanceof Text) {
-                Text text = (Text) child;
-                writeString(text.getData());
             } else if (child instanceof CDATASection) {
                 CDATASection cdataSection = (CDATASection) child;
                 writeCData(cdataSection.getData());
+            } else if (child instanceof Text) {
+                Text text = (Text) child;
+                writeString(text.getData());
             } else if (child instanceof Comment) {
                 Comment comment = (Comment) child;
                 writeComment(comment.getData());
@@ -177,7 +178,63 @@ public class XoXMLStreamWriterImpl implements XoXMLStreamWriter {
     public String getUniquePrefix(String namespaceURI) throws XMLStreamException {
         return getUniquePrefix(namespaceURI, true);
     }
-    
+
+    public void writeAsXmlList(Collection<Object> values) throws XMLStreamException {
+        for (Object value : values) {
+            writeCharacters(value.toString());
+            writeCharacters(" ");
+        }
+    }
+
+    public void writeAsXmlList(Object[] values) throws XMLStreamException {
+        for (Object value : values) {
+            writeCharacters(value.toString());
+            writeCharacters(" ");
+        }
+    }
+
+    public void writeAsXmlList(boolean[] values) throws XMLStreamException {
+        for (boolean value : values) {
+            writeBoolean(value);
+            writeCharacters(" ");
+        }
+    }
+
+    public void writeAsXmlList(short[] values) throws XMLStreamException {
+        for (short value : values) {
+            writeShort(value);
+            writeCharacters(" ");
+        }
+    }
+
+    public void writeAsXmlList(int[] values) throws XMLStreamException {
+        for (int value : values) {
+            writeInt(value);
+            writeCharacters(" ");
+        }
+    }
+
+    public void writeAsXmlList(long[] values) throws XMLStreamException {
+        for (long value : values) {
+            writeLong(value);
+            writeCharacters(" ");
+        }
+    }
+
+    public void writeAsXmlList(float[] values) throws XMLStreamException {
+        for (float value : values) {
+            writeFloat(value);
+            writeCharacters(" ");
+        }
+    }
+
+    public void writeAsXmlList(double[] values) throws XMLStreamException {
+        for (double value : values) {
+            writeDouble(value);
+            writeCharacters(" ");
+        }
+    }
+
     public String getUniquePrefix(String namespaceURI, boolean declare) throws XMLStreamException {
         // attributes use namespace ""
         if ("".equals(namespaceURI)) {
