@@ -90,7 +90,14 @@ public class ReaderIntrospector {
 
         // declare all parser methods first, so everything exists when we build
         for (Bean bean : this.model.getBeans()) {
-            JAXBObjectBuilder builder = context.createJAXBObjectBuilder(bean.getType(), bean.getRootElementName(), bean.getSchemaTypeName());
+            boolean mixed = false;
+            for (Property property : bean.getProperties()) {
+                if (property.isMixed() && property.getXmlName() == null) {
+                    mixed = true;
+                    break;
+                }
+            }
+            JAXBObjectBuilder builder = context.createJAXBObjectBuilder(bean.getType(), bean.getRootElementName(), bean.getSchemaTypeName(), mixed);
 
             LinkedHashSet<Property> allProperties = new LinkedHashSet<Property>();
             for (Bean b = bean; b != null; b = b.getBaseClass()) {
@@ -268,7 +275,7 @@ public class ReaderIntrospector {
                     JAXBObjectBuilder elementBuilder = builder;
                     JVar parentVar = beanVar;
                     if (property.getXmlName() != null && !property.isXmlList()) {
-                        elementBuilder = builder.expectWrapperElement(property.getXmlName(), beanVar, property.getName());
+                        elementBuilder = builder.expectWrapperElement(property.getXmlName(), beanVar, property.getName(), property.isMixed());
                     }
 
                     // create collection var if necessary
@@ -346,9 +353,21 @@ public class ReaderIntrospector {
 
                         // read and set
                         JInvocation toSet = builder.getReadContextVar().invoke("readXmlAny")
-                                .arg(builder.getXSR())
+                                .arg(builder.getChildElementVar())
                                 .arg(context.dotclass(property.getComponentType()))
                                 .arg(property.isLax() ? JExpr.TRUE : JExpr.FALSE);
+                        doSet(builder, block, property, parentVar, toSet, collectionVar);
+                    }
+
+                    if (property.isMixed()) {
+                        // create element block
+                        JBlock block = elementBuilder.expectMixedElement();
+
+                        // add comment for readability
+                        block.add(new JLineComment(property.getXmlStyle() + " (Mixed): " + property.getName()));
+
+                        // read and set
+                        JInvocation toSet = builder.getChildElementVar().invoke("getText");
                         doSet(builder, block, property, parentVar, toSet, collectionVar);
                     }
                 }

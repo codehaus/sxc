@@ -321,6 +321,7 @@ public class RiModelBuilder {
             property.setNillable(referenceProperty.isCollectionNillable());
             property.setXmlAny(referenceProperty.getWildcard() != null);
             property.setLax(referenceProperty.getWildcard() == WildcardMode.LAX);
+            property.setMixed(referenceProperty.isMixed());
         } else if (runtimePropertyInfo instanceof RuntimeValuePropertyInfo) {
             property.setXmlStyle(Property.XmlStyle.VALUE);
             if (property.isCollection()) property.setXmlList(true);

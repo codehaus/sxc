@@ -54,6 +54,7 @@ public class Property {
     private boolean xmlList;
 
     private boolean xmlAny;
+    private boolean mixed;
     private boolean lax;
 
     private Field field;
@@ -168,6 +169,14 @@ public class Property {
 
     public void setXmlAny(boolean xmlAny) {
         this.xmlAny = xmlAny;
+    }
+
+    public boolean isMixed() {
+        return mixed;
+    }
+
+    public void setMixed(boolean mixed) {
+        this.mixed = mixed;
     }
 
     public boolean isLax() {

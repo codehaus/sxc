@@ -64,6 +64,7 @@ public class JAXBObjectBuilder {
     private final QName xmlRootElement;
     private final QName xmlType;
     private final JDefinedClass jaxbObjectClass;
+    private final boolean mixed;
     private final boolean wrapperElement;
     private ElementParserBuilderImpl parserBuilder;
     private ElementWriterBuilderImpl writerBuilder;
@@ -78,6 +79,7 @@ public class JAXBObjectBuilder {
     private boolean expectAnyAttribute;
     private final Set<QName> expectedElements = new LinkedHashSet<QName>();
     private boolean expectAnyElement;
+    private boolean expectMixedElement;
     private boolean expectValue;
     private JVar writerDefaultPrefix;
     private String writerDefaultNS;
@@ -85,7 +87,7 @@ public class JAXBObjectBuilder {
     private Set<String> dependencies = new TreeSet<String>();
     private JFieldVar lifecycleCallbackVar;
 
-    public JAXBObjectBuilder(JAXBObjectBuilder parent, ElementParserBuilderImpl parserBuilder) {
+    public JAXBObjectBuilder(JAXBObjectBuilder parent, ElementParserBuilderImpl parserBuilder, boolean mixed) {
         this.parent = parent;
         this.builderContext = parent.builderContext;
         this.type = parent.type;
@@ -93,6 +95,7 @@ public class JAXBObjectBuilder {
         this.xmlType = parent.xmlType;
         this.jaxbObjectClass = parent.jaxbObjectClass;
         this.parserBuilder = parserBuilder;
+        this.mixed = mixed;
         wrapperElement = true;
         fieldManager = parent.fieldManager;
         adapters = parent.adapters;
@@ -100,12 +103,13 @@ public class JAXBObjectBuilder {
         privatePropertyAccessors = parent.privatePropertyAccessors;
     }
 
-    public JAXBObjectBuilder(BuilderContext builderContext, Class type, QName xmlRootElement, QName xmlType) {
+    public JAXBObjectBuilder(BuilderContext builderContext, Class type, QName xmlRootElement, QName xmlType, boolean mixed) {
         this.parent = null;
         this.builderContext = builderContext;
         this.type = type;
         this.xmlRootElement = xmlRootElement;
         this.xmlType = xmlType;
+        this.mixed = mixed;
         wrapperElement = false;
         fieldManager = new IdentityManager();
         adapters = new TreeMap<String, JFieldVar>();
@@ -235,7 +239,7 @@ public class JAXBObjectBuilder {
 
     public ElementParserBuilderImpl getParserBuilder() {
         if (parserBuilder == null) {
-            parserBuilder = new ElementParserBuilderImpl(builderContext.getBuildContext(), jaxbObjectClass, type);
+            parserBuilder = new ElementParserBuilderImpl(builderContext.getBuildContext(), jaxbObjectClass, type, mixed);
             parserBuilder.setXmlType(xmlType);
             parserBuilder.setAllowUnkown(false);
             parserBuilder.setBaseClass(builderContext.getCodeModel().ref(JAXBObject.class).narrow(type));
@@ -418,6 +422,16 @@ public class JAXBObjectBuilder {
         return block;
     }
 
+    public JBlock expectMixedElement() {
+        if (expectValue) throw new IllegalArgumentException("A value is alredy expected");
+        if (expectMixedElement) throw new IllegalArgumentException("Mixed element is alredy expected");
+        expectMixedElement = true;
+
+        JBlock block = new JBlock();
+        getParserBuilder().setMixedElementBlock(null, block);
+        return block;
+    }
+
     public JBlock expectValue() {
         if (!expectedElements.isEmpty()) throw new IllegalArgumentException("Elements are alredy expected " + expectedElements);
         if (expectAnyElement) throw new IllegalArgumentException("Any element is alredy expected");
@@ -426,11 +440,11 @@ public class JAXBObjectBuilder {
         return getParserBuilder().getBody().getBlock();
     }
 
-    public JAXBObjectBuilder expectWrapperElement(QName elementName, JVar beanVar, String propertyName) {
+    public JAXBObjectBuilder expectWrapperElement(QName elementName, JVar beanVar, String propertyName, boolean mixed) {
         if (expectedElements.contains(elementName)) throw new IllegalArgumentException("Element is alredy expected " + elementName);
         expectedElements.add(elementName);
 
-        ElementParserBuilderImpl parserBuilder = new ElementParserBuilderImpl(builderContext.getBuildContext(), jaxbObjectClass, null, 2, propertyName);
+        ElementParserBuilderImpl parserBuilder = new ElementParserBuilderImpl(builderContext.getBuildContext(), jaxbObjectClass, null, mixed, 2, propertyName);
         parserBuilder.setAllowUnkown(false);
 
         String name = parserBuilder.getVariableManager().createId(decapitalize(beanVar.type().name()));
@@ -444,7 +458,7 @@ public class JAXBObjectBuilder {
         block.add(new JLineComment("ELEMENT WRAPPER: " + propertyName));
         getParserBuilder().setElementBlock(elementName, null, block);
 
-        JAXBObjectBuilder builder = new JAXBObjectBuilder(this, parserBuilder);
+        JAXBObjectBuilder builder = new JAXBObjectBuilder(this, parserBuilder, mixed);
         return builder;
     }
 

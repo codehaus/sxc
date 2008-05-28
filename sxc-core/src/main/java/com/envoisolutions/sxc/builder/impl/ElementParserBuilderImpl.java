@@ -41,6 +41,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
     private ExpectedAttribute anyAttribute;
     private final Map<QName, ExpectedElement> elements = new LinkedHashMap<QName, ExpectedElement>();
     private ExpectedElement anyElement;
+    private ExpectedElement mixedElement;
     private final Map<QName, ExpectedXsiType> xsiTypes = new LinkedHashMap<QName, ExpectedXsiType>();
     private ExpectedXsiType unexpectedXsiType;
     private final List<ElementParserBuilderImpl> states = new ArrayList<ElementParserBuilderImpl>();
@@ -90,11 +91,11 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         reserveVariables();
     }
 
-    public ElementParserBuilderImpl(BuildContext buildContext, JDefinedClass readerClass, Class returnType) throws BuildException {
-        this(buildContext, readerClass, returnType, 1, null);
+    public ElementParserBuilderImpl(BuildContext buildContext, JDefinedClass readerClass, Class returnType, boolean mixed) throws BuildException {
+        this(buildContext, readerClass, returnType, mixed, 1, null);
     }
 
-    public ElementParserBuilderImpl(BuildContext buildContext, JDefinedClass readerClass, Class returnType, int depth, String methodNameHint) throws BuildException {
+    public ElementParserBuilderImpl(BuildContext buildContext, JDefinedClass readerClass, Class returnType, boolean mixed, int depth, String methodNameHint) throws BuildException {
         if (buildContext == null) throw new NullPointerException("buildContext is null");
         if (readerClass == null) throw new NullPointerException("readerClass is null");
 
@@ -119,7 +120,11 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         addReadAsType = false;
 
         forEachAttribute = new JForEach(model.ref(Attribute.class), variableManager.createId("attribute"), getXSR().invoke("getAttributes"));
-        forEachChildElement = new JForEach(model.ref(XoXMLStreamReader.class), variableManager.createId("elementReader"), getXSR().invoke("getChildElements"));
+        if (!mixed) {
+            forEachChildElement = new JForEach(model.ref(XoXMLStreamReader.class), variableManager.createId("elementReader"), getXSR().invoke("getChildElements"));
+        } else {
+            forEachChildElement = new JForEach(model.ref(XoXMLStreamReader.class), variableManager.createId("elementReader"), getXSR().invoke("getMixedChildElements"));
+        }
 
         reserveVariables();
     }
@@ -327,6 +332,28 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         anyElement.setReadBlock(readBlock);
     }
 
+    public ElementParserBuilder expectMixedElement() {
+        return expectMixedElement(null);
+    }
+
+    public ElementParserBuilder expectMixedElement(String methodNameHint) {
+        if (mixedElement == null) {
+            mixedElement = new ExpectedElement();
+        }
+        if (mixedElement.getParserBuilder() == null) {
+            mixedElement.setParserBuilder(new ElementParserBuilderImpl(this, true, null, methodNameHint));
+        }
+        return mixedElement.getParserBuilder();
+    }
+
+    public void setMixedElementBlock(JVar readVar, JBlock readBlock) {
+        if (mixedElement == null) {
+            mixedElement = new ExpectedElement();
+        }
+        mixedElement.setReadVar(readVar);
+        mixedElement.setReadBlock(readBlock);
+    }
+
     public ElementParserBuilder expectXsiType(QName name) {
         return expectXsiType(name, null);
     }
@@ -525,7 +552,8 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
             || attributes.size() > 0
             || unexpectedXsiType != null
             || anyAttribute != null
-            || anyElement != null)){
+            || anyElement != null
+            || mixedElement != null)) {
             writeMainLoop();
         } else {
             b.add(removeBraces(codeBlock));
@@ -597,7 +625,7 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
         b.add(preElementBlock);
         b = preElementBlock;
 
-        if (!elements.isEmpty() || !xsiTypes.isEmpty() || anyElement != null || allowUnknown ) {
+        if (!elements.isEmpty() || !xsiTypes.isEmpty() || anyElement != null || mixedElement != null || allowUnknown ) {
             b.add(new JBlankLine());
             b.add(new JLineComment("Read elements"));
 
@@ -758,6 +786,12 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
 
         JIfElseBlock elementsBlock = new JIfElseBlock();
         block.add(elementsBlock);
+
+        if (mixedElement != null) {
+            JBlock stringBlock = elementsBlock.addCondition(xsrVar.invoke("isCharacters"));
+            writeReader(stringBlock, xsrVar, mixedElement, null);
+        }
+
         for (Map.Entry<QName, ExpectedElement> entry : elements.entrySet()) {
             QName name = entry.getKey();
             ExpectedElement expectedElement = entry.getValue();

@@ -28,6 +28,10 @@ public interface ElementParserBuilder extends ParserBuilder {
     ElementParserBuilder expectAnyElement(String methodNameHint);
     void setAnyElementBlock(JVar readVar, JBlock readBlock);
 
+    ElementParserBuilder expectMixedElement();
+    ElementParserBuilder expectMixedElement(String methodNameHint);
+    void setMixedElementBlock(JVar readVar, JBlock readBlock);
+
     ElementParserBuilder expectGlobalElement(QName qname);
     ElementParserBuilder expectGlobalElement(QName qname, String methodNameHint);
 
