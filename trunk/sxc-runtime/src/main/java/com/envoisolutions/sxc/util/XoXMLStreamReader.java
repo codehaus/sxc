@@ -60,5 +60,6 @@ public interface XoXMLStreamReader extends XMLStreamReader {
      * while advancing to the first child
      */
     Iterable<XoXMLStreamReader> getChildElements();
+    Iterable<XoXMLStreamReader> getMixedChildElements();
 
 }

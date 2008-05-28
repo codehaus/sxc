@@ -89,10 +89,10 @@ public class BuilderContext {
         return builder;
     }
 
-    public JAXBObjectBuilder createJAXBObjectBuilder(Class type, QName xmlRootElement, QName xmlType) {
+    public JAXBObjectBuilder createJAXBObjectBuilder(Class type, QName xmlRootElement, QName xmlType, boolean mixed) {
         JAXBObjectBuilder builder = jaxbObjectBuilders.get(type);
         if (builder == null) {
-            builder = new JAXBObjectBuilder(this, type, xmlRootElement, xmlType);
+            builder = new JAXBObjectBuilder(this, type, xmlRootElement, xmlType, mixed);
             jaxbObjectBuilders.put(type, builder);
         }
         return builder;

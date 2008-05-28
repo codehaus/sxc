@@ -403,10 +403,27 @@ public class XoXMLStreamReaderImpl implements XoXMLStreamReader {
         };
     }
 
+    public Iterable<XoXMLStreamReader> getMixedChildElements() {
+        return new Iterable<XoXMLStreamReader>() {
+            public Iterator<XoXMLStreamReader> iterator() {
+                return new ChildElementsIterator(true);
+            }
+        };
+    }
+
     private class ChildElementsIterator implements Iterator<XoXMLStreamReader> {
         private final int targetDepth = depth + 1;
+        private final boolean mixed;
         private boolean moveToNext = true;
         private boolean hasMoreEvents;
+
+        private ChildElementsIterator() {
+            this.mixed = false;
+        }
+
+        private ChildElementsIterator(boolean mixed) {
+            this.mixed = mixed;
+        }
 
         public boolean hasNext() {
             if (moveToNext) {
@@ -446,7 +463,7 @@ public class XoXMLStreamReaderImpl implements XoXMLStreamReader {
 
                 // if we are at a start element event and the proper depth,
                 // then we are at the next child element
-                if (event == START_ELEMENT && depth == targetDepth) {
+                if (atNext(event)) {
                     hasMoreEvents = true;
                     return;
                 }
@@ -454,6 +471,18 @@ public class XoXMLStreamReaderImpl implements XoXMLStreamReader {
 
             // we stepped out of our element so there will be no more child elements
             hasMoreEvents = false;
+        }
+
+        private boolean atNext(int event) {
+            if (event == START_ELEMENT) {
+                // only valid "atNext" if target depth is correct;
+                return depth == targetDepth;
+            } else if (mixed && (event == CHARACTERS  || event == CDATA)) {
+                // text is only returned if mixed and depth is targetDepth - 1 (sibling to target elements)
+                return depth == targetDepth - 1;
+            }
+            // Not "atNext"
+            return false;
         }
     }
 

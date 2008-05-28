@@ -91,7 +91,14 @@ public class WriterIntrospector {
         for (Bean bean : mybeans) {
             if (bean.getType().isEnum()) continue;
 
-            JAXBObjectBuilder builder = context.createJAXBObjectBuilder(bean.getType(), bean.getRootElementName(), bean.getSchemaTypeName());
+            boolean mixed = false;
+            for (Property property : bean.getProperties()) {
+                if (property.isMixed() && property.getXmlName() == null) {
+                    mixed = true;
+                    break;
+                }
+            }
+            JAXBObjectBuilder builder = context.createJAXBObjectBuilder(bean.getType(), bean.getRootElementName(), bean.getSchemaTypeName(), mixed);
 
             LinkedHashSet<Property> allProperties = new LinkedHashSet<Property>();
             for (Bean b = bean; b != null; b = b.getBaseClass()) {
@@ -361,7 +368,7 @@ public class WriterIntrospector {
                         }
                     }
 
-                    if (expectedTypes.size() == 1) {
+                    if (expectedTypes.size() == 1 && !property.isMixed()) {
                         ElementMapping mapping = property.getElementMappings().iterator().next();
 
                         // null check for non-nillable elements
@@ -392,6 +399,22 @@ public class WriterIntrospector {
                     } else {
                         JIfElseBlock conditional = new JIfElseBlock();
                         outerBlock.add(conditional);
+
+                        if (property.isMixed()) {
+                            // add instance of check
+                            JExpression isInstance = outerVar._instanceof(context.toJClass(String.class));
+                            JBlock block = conditional.addCondition(isInstance);
+
+                            // declare item variable
+                            JVar itemVar;
+                            if (toClass(property.getComponentType()) == String.class) {
+                                itemVar = outerVar;
+                            } else {
+                                String itemName = builder.getWriteVariableManager().createId("string");
+                                itemVar = block.decl(context.toJClass(String.class), itemName, JExpr.cast(context.toJClass(String.class), outerVar));
+                            }
+                            writeSimpleTypeElement(builder, itemVar, String.class, block);
+                        }
 
                         ElementMapping nilMapping = null;
                         for (Map.Entry<Class, ElementMapping> entry : expectedTypes.entrySet()) {
@@ -478,6 +501,25 @@ public class WriterIntrospector {
 
                     // process value through adapter
                     itemVar = writeAdapterConversion(builder, block, property, itemVar);
+
+                    if (property.isMixed()) {
+                        // add instance of check
+                        JExpression isInstance = itemVar._instanceof(context.toJClass(String.class));
+                        JConditional conditional = block._if(isInstance);
+
+                        // declare item variable
+                        JVar stringVar;
+                        if (toClass(property.getComponentType()) == String.class) {
+                            stringVar = itemVar;
+                        } else {
+                            String itemName = builder.getWriteVariableManager().createId("string");
+                            stringVar = conditional._then().decl(context.toJClass(String.class), itemName, JExpr.cast(context.toJClass(String.class), itemVar));
+                        }
+                        writeSimpleTypeElement(builder, stringVar, String.class, conditional._then());
+
+                        block = conditional._else();
+                    }
+
 
                     if (!property.isXmlAny()) {
                         block.invoke(builder.getWriteContextVar(), "unexpectedElementRef").arg(builder.getXSW()).arg(builder.getWriteObject()).arg(property.getName()).arg(itemVar);
