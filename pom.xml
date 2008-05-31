@@ -1,12 +1,16 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
+
   <groupId>com.envoisolutions.sxc</groupId>
   <artifactId>sxc</artifactId>
-  <name>Simple XML Compiler</name>
   <version>0.7-SNAPSHOT</version>
-  <inceptionYear>20.7-SNAPSHOT</inceptionYear>
+  <name>Simple XML Compiler</name>
+
   <packaging>pom</packaging>
-  
+
+  <inceptionYear>2007</inceptionYear>
+  <url>http://soter.codehaus.org</url>
+
   <licenses>
     <license>
       <name>CDDL 1.0</name>
@@ -18,37 +22,46 @@
     <name>Envoi Solutions LLC</name>
     <url>http://www.envoisolutions.com/</url>
   </organization>
-  
+
+  <scm>
+    <connection>scm:svn:https://svn.codehaus.org/sxc/trunk</connection>
+    <developerConnection>scm:svn:https://svn.codehaus.org/sxc/trunk</developerConnection>
+    <url>http://svn.soter.codehaus.org/browse/sxc/trunk</url>
+  </scm>
+
   <modules>
     <module>sxc-runtime</module>
     <module>sxc-core</module>
     <module>sxc-xpath</module>
     <module>sxc-jaxb</module>
+    <module>sxc-jaxb-maven-plugin</module>
     <module>sxc-drools</module>
   </modules>
-<profiles>
-  <profile>
-    <id>performance</id>
-    <activation>
-      <property>
-        <name>performance</name>
-      </property>
-    </activation>
-    <modules>
-      <module>sxc-performance</module>
-    </modules>
-  </profile>
-</profiles>
-  <scm>
-    <connection>scm:svn:https://svn.codehaus.org/sxc/tags/sxc-0.7-SNAPSHOT</connection>
-    <developerConnection>scm:svn:https://svn.codehaus.org/sxc/tags/sxc-0.7-SNAPSHOT</developerConnection>
-    <url>https://svn.sxc.codehaus.org/tags/sxc-0.7-SNAPSHOT</url>
-  </scm>
+
+  <profiles>
+    <profile>
+      <id>performance</id>
+      <activation>
+        <property>
+          <name>performance</name>
+        </property>
+      </activation>
+      <modules>
+        <module>sxc-performance</module>
+      </modules>
+    </profile>
+  </profiles>
+
   <dependencyManagement>
     <dependencies>
       <dependency>
         <groupId>com.envoisolutions.sxc</groupId>
         <artifactId>sxc-core</artifactId>
+        <version>${version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.envoisolutions.sxc</groupId>
+        <artifactId>sxc-runtime</artifactId>
         <version>${version}</version>
       </dependency>
       <dependency>
@@ -159,36 +172,36 @@
     </site>
   </distributionManagement>
   <reporting>
-  <plugins>
-    <plugin>
-      <artifactId>maven-javadoc-plugin</artifactId>
-      <configuration>
-        <minmemory>128m</minmemory>
-        <maxmemory>512m</maxmemory>
-        <verbose>false</verbose>
-      </configuration>
-    </plugin>
-    <plugin>
-      <artifactId>maven-project-info-reports-plugin</artifactId>
-      <reportSets>
-        <reportSet>
-          <reports>
-            <report>jdepend-maven-plugin</report>
-            <report>jxr-maven-plugin</report>
-            <report>surefire-report-maven-plugin</report>
-            <report>maven-javadoc-plugin</report>
-          </reports>
-        </reportSet>
-      </reportSets>
-    </plugin>
-    <plugin>
-      <groupId>org.codehaus.mojo</groupId>
-      <artifactId>jdepend-maven-plugin</artifactId>
-    </plugin>
-    <plugin>
-      <groupId>org.codehaus.mojo</groupId>
-      <artifactId>jxr-maven-plugin</artifactId>
-    </plugin>
-  </plugins>
-</reporting>
+    <plugins>
+      <plugin>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <configuration>
+          <minmemory>128m</minmemory>
+          <maxmemory>512m</maxmemory>
+          <verbose>false</verbose>
+        </configuration>
+      </plugin>
+      <plugin>
+        <artifactId>maven-project-info-reports-plugin</artifactId>
+        <reportSets>
+          <reportSet>
+            <reports>
+              <report>jdepend-maven-plugin</report>
+              <report>jxr-maven-plugin</report>
+              <report>surefire-report-maven-plugin</report>
+              <report>maven-javadoc-plugin</report>
+            </reports>
+          </reportSet>
+        </reportSets>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>jdepend-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>jxr-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </reporting>
 </project>

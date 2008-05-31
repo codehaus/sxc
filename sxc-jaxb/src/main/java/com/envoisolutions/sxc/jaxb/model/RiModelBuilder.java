@@ -24,6 +24,8 @@ import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.Iterator;
 import java.util.concurrent.Callable;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBElement;
@@ -61,7 +63,15 @@ public class RiModelBuilder {
     private final Model model;
 
     public RiModelBuilder(Map<String, Object> properties, Class... classes) throws JAXBException {
-        context = (JAXBContextImpl) ContextFactory.createContext(classes, properties);
+        Map<String, Object> riProperties = new LinkedHashMap<String, Object>(properties);
+        for (Iterator<String> iterator = riProperties.keySet().iterator(); iterator.hasNext();) {
+            String key =  iterator.next();
+            if (key.startsWith("com.envoisolutions")) {
+                iterator.remove();
+            }
+
+        }
+        context = (JAXBContextImpl) ContextFactory.createContext(classes, riProperties);
 
         RuntimeTypeInfoSet runtimeTypeInfoSet = JAXBModelFactory.create(context, classes);
 
