@@ -18,6 +18,7 @@
 package com.envoisolutions.sxc.jaxb;
 
 import java.io.IOException;
+import java.io.File;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.WildcardType;
@@ -54,6 +55,7 @@ public class BuilderContext {
     private final Map<Class, JAXBClass> jaxbClasses = new HashMap<Class, JAXBClass>();
     private final Map<String, Object> properties;
     private Callable<JAXBContext> schemaGenerator;
+    private Map<String, File> sources;
 
     public BuilderContext(Map<String, Object> properties, Class... classes) throws JAXBException {
         if (properties == null) properties = Collections.emptyMap();
@@ -136,18 +138,9 @@ public class BuilderContext {
 
     public Collection<JAXBClass> compile() {
         if (!jaxbObjectBuilders.isEmpty() || !jaxbEnumBuilders.isEmpty() || !jaxbObjectFactoryBuilders.isEmpty()) {
-            // write generated to code to ouput dir
-            CodeWriterImpl codeWriter;
-            try {
-                codeWriter = new CodeWriterImpl((String) properties.get("com.envoisolutions.sxc.output.directory"));
-                write(codeWriter);
-            } catch (IOException e) {
-                throw new BuildException(e);
-            }
-
             // compile the generated code
             Compiler compiler = Compiler.newInstance((String) properties.get("org.sxc.compiler"));
-            ClassLoader classLoader = compiler.compile(codeWriter.getSources());
+            ClassLoader classLoader = compiler.compile(getSources());
 
             // load the generated classes
             for (Class type : jaxbObjectBuilders.keySet()) {
@@ -178,6 +171,21 @@ public class BuilderContext {
         }
 
         return jaxbClasses.values();
+    }
+
+    public Map<String, File> getSources() {
+        // write generated to code to ouput dir
+        if (sources == null) {
+            CodeWriterImpl codeWriter;
+            try {
+                codeWriter = new CodeWriterImpl((String) properties.get("com.envoisolutions.sxc.output.directory"));
+                write(codeWriter);
+            } catch (IOException e) {
+                throw new BuildException(e);
+            }
+            sources = codeWriter.getSources();
+        }
+        return sources;
     }
 
     public JClass toJClass(Class clazz) {
