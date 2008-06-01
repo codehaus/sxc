@@ -53,11 +53,11 @@ public class BuilderContext {
     private final Map<Class, JAXBEnumBuilder> jaxbEnumBuilders = new HashMap<Class, JAXBEnumBuilder>();
     private final Map<Class, JAXBObjectFactoryBuilder> jaxbObjectFactoryBuilders = new HashMap<Class, JAXBObjectFactoryBuilder>();
     private final Map<Class, JAXBClass> jaxbClasses = new HashMap<Class, JAXBClass>();
-    private final Map<String, Object> properties;
+    private final Map<String, ?> properties;
     private Callable<JAXBContext> schemaGenerator;
     private Map<String, File> sources;
 
-    public BuilderContext(Map<String, Object> properties, Class... classes) throws JAXBException {
+    public BuilderContext(Map<String, ?> properties, Class... classes) throws JAXBException {
         if (properties == null) properties = Collections.emptyMap();
         this.properties = properties;
         buildContext = new BuildContext();

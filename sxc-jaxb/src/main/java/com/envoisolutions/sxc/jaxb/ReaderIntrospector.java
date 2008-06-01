@@ -179,8 +179,9 @@ public class ReaderIntrospector {
         // Add xsi type support for an other Bean that can be assigned to this property according to Java type assignment rules
         for (Bean xsiTypeBean : model.getBeans()) {
             Class xsiTypeClass = xsiTypeBean.getType();
-            if (bean.getType().isAssignableFrom(xsiTypeClass) && bean.getType() != xsiTypeClass && !Modifier.isAbstract(xsiTypeClass.getModifiers())) {
-                JBlock block = builder.expectXsiType(xsiTypeBean.getSchemaTypeName());
+            QName schemaTypeName = xsiTypeBean.getSchemaTypeName();
+            if (bean.getType().isAssignableFrom(xsiTypeClass) && schemaTypeName != null && bean.getType() != xsiTypeClass && !Modifier.isAbstract(xsiTypeClass.getModifiers())) {
+                JBlock block = builder.expectXsiType(schemaTypeName);
 
                 JAXBObjectBuilder elementBuilder = builders.get(xsiTypeBean);
                 if (elementBuilder == null) {

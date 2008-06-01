@@ -62,7 +62,7 @@ public class RiModelBuilder {
     private final JAXBContextImpl context;
     private final Model model;
 
-    public RiModelBuilder(Map<String, Object> properties, Class... classes) throws JAXBException {
+    public RiModelBuilder(Map<String, ?> properties, Class... classes) throws JAXBException {
         Map<String, Object> riProperties = new LinkedHashMap<String, Object>(properties);
         for (Iterator<String> iterator = riProperties.keySet().iterator(); iterator.hasNext();) {
             String key =  iterator.next();
