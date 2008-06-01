@@ -404,7 +404,9 @@ public class JAXBObjectBuilder {
 
     public JBlock expectElement(QName elementName) {
         if (expectValue) throw new IllegalArgumentException("A value is alredy expected");
-        if (expectedElements.contains(elementName)) throw new IllegalArgumentException("Element is alredy expected " + elementName);
+        if (expectedElements.contains(elementName)) {
+            throw new IllegalArgumentException("Element is alredy expected " + elementName);
+        }
         expectedElements.add(elementName);
 
         JBlock block = new JBlock();

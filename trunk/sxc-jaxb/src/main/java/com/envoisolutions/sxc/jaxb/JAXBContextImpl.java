@@ -47,12 +47,12 @@ public class JAXBContextImpl extends JAXBContext {
         return jaxbContext;
     }
 
-    public static synchronized JAXBContextImpl newInstance(Class[] classes, Map<String, Object> properties) throws JAXBException {
+    public static synchronized JAXBContextImpl newInstance(Class[] classes, Map<String, ?> properties) throws JAXBException {
         JAXBContextImpl jaxbContext = createContext(classes, properties);
         return jaxbContext;
     }
 
-    public static synchronized JAXBContextImpl createContext(Class[] classes, Map<String, Object> properties) throws JAXBException {
+    public static synchronized JAXBContextImpl createContext(Class[] classes, Map<String, ?> properties) throws JAXBException {
         JAXBContextImpl jaxbContext = new JAXBContextImpl(properties, classes);
         return jaxbContext;
     }
@@ -67,12 +67,12 @@ public class JAXBContextImpl extends JAXBContext {
         return jaxbContext;
     }
 
-    public static synchronized JAXBContextImpl newInstance(String contextPath, ClassLoader classLoader, Map<String, Object> properties) throws JAXBException {
+    public static synchronized JAXBContextImpl newInstance(String contextPath, ClassLoader classLoader, Map<String, ?> properties) throws JAXBException {
         JAXBContextImpl jaxbContext = createContext(contextPath, classLoader, properties);
         return jaxbContext;
     }
 
-    public static synchronized JAXBContextImpl createContext(String contextPath, ClassLoader classLoader, Map<String, Object> properties) throws JAXBException {
+    public static synchronized JAXBContextImpl createContext(String contextPath, ClassLoader classLoader, Map<String, ?> properties) throws JAXBException {
         Class[] classes = loadPackageClasses(contextPath, classLoader);
         JAXBContextImpl jaxbContext = createContext(classes, properties);
         return jaxbContext;
@@ -85,7 +85,13 @@ public class JAXBContextImpl extends JAXBContext {
         this(null, classes);
     }
     
-    public JAXBContextImpl(final Map<String, Object> properties, final Class... classes) throws JAXBException {
+    public JAXBContextImpl(final Map<String, ?> properties, final Class... classes) throws JAXBException {
+        String generateProperty = properties != null ? (String) properties.get("com.envoisolutions.sxc.generate") : null;
+        boolean generate = true;
+        if (generateProperty != null) {
+            generate = Boolean.parseBoolean(generateProperty);
+        }
+
         // Check if there is a generted marshaller for the specified types
         //
         // It is important that this simple check be performed without
@@ -101,21 +107,24 @@ public class JAXBContextImpl extends JAXBContext {
             }
         }
 
-        // generate missing classes
-        if (!unknownTypes.isEmpty()) {
+        if (unknownTypes.isEmpty()) {
+            schemaGenerator = new Callable<JAXBContext>() {
+                public JAXBContext call() throws Exception {
+                    // use the ri to generate the schema
+                    //noinspection unchecked
+                    JAXBContext context = ContextFactory.createContext(classes, (Map<String, Object>) properties);
+                    return context;
+                }
+            };
+        } else if(generate) {
+            // generate missing classes
             BuilderContext builder = new BuilderContext(properties, classes);
             schemaGenerator = builder.getSchemaGenerator();
             for (JAXBClass jaxbClass : builder.compile()) {
                 introspector.addJAXBClass(jaxbClass);
             }
         } else {
-            schemaGenerator = new Callable<JAXBContext>() {
-                public JAXBContext call() throws Exception {
-                    // use the ri to generate the schema
-                    JAXBContext context = ContextFactory.createContext(classes, properties);
-                    return context;
-                }
-            };
+            throw new JAXBException("Generation is disabled but no JaxB parser is available for the classes " + unknownTypes);
         }
 
         logger.info("Created SXC JAXB Context.");
