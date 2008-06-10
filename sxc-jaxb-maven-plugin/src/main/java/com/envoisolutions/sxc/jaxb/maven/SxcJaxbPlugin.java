@@ -67,7 +67,7 @@ public class SxcJaxbPlugin extends AbstractMojo {
             String directory = project.getBuild().getOutputDirectory();
             ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
             if (classLoader == null) classLoader = getClass().getClassLoader();
-            classLoader = new URLClassLoader(new URL[] {new File(directory).toURL()}, classLoader);
+            classLoader = new URLClassLoader(new URL[]{new File(directory).toURI().toURL()}, classLoader);
             jaxbGenerator.setClassLoader(classLoader);
 
             jaxbGenerator.generate();
