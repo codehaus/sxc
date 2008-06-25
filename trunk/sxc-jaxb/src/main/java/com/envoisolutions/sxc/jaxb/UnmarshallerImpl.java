@@ -165,7 +165,7 @@ public class UnmarshallerImpl implements Unmarshaller {
 
         if (source instanceof SAXSource) {
             SAXSource saxSource = (SAXSource) source;
-            return (JAXBElement<T>) unmarshal(saxSource, declaredType);
+            return (JAXBElement<T>) unmarshal2(saxSource, declaredType);
         } else {
             XMLStreamReader streamReader = createXMLStreamReader(source);
             return unmarshal(streamReader, declaredType);
@@ -184,7 +184,7 @@ public class UnmarshallerImpl implements Unmarshaller {
         }
     }
 
-    private Object unmarshal(SAXSource saxSource, Class<?> declaredType) throws JAXBException {
+    private Object unmarshal2(SAXSource saxSource, Class<?> declaredType) throws JAXBException {
         if (saxSource == null) throw new IllegalArgumentException("saxSource is null");
 
         InputSource inputSource = saxSource.getInputSource();

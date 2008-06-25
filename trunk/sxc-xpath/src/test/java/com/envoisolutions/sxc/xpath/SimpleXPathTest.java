@@ -6,7 +6,7 @@ import junit.framework.TestCase;
 
 public class SimpleXPathTest extends TestCase {
     String custTag = null;
-    String idTag = null;
+    String tag = null;
     boolean match;
     boolean noMatch;
     String expr = null;
@@ -62,24 +62,35 @@ public class SimpleXPathTest extends TestCase {
     public void testGlobalElement() throws Exception {
 
         System.setProperty("streax-xo.output.directory", "target/tmp-xpath");
-        XPathEventHandler idHandler = new XPathEventHandler() {
+        XPathEventHandler handler = new XPathEventHandler() {
 
             public void onMatch(XPathEvent event) throws XMLStreamException {
-                idTag = event.getReader().getLocalName();
+                tag = event.getReader().getLocalName();
             }
             
         };
         
         XPathBuilder builder = new XPathBuilder();
         builder.addPrefix("c", "urn:customer");
-        builder.listen("//c:id", idHandler);
+        builder.listen("//c:id", handler);
         
         XPathEvaluator evaluator = builder.compile();
         
         evaluator.evaluate(getClass().getResourceAsStream("customer.xml"));
         
-        assertEquals("id", idTag);
+        assertEquals("id", tag);
+        
+        builder = new XPathBuilder();
+        builder.addPrefix("c", "urn:customer");
+        builder.listen("//c:customer", handler);
+        
+        evaluator = builder.compile();
+        
+        evaluator.evaluate(getClass().getResourceAsStream("customer.xml"));
+        
+        assertEquals("customer", tag);
     }
+    
     
     public void testGlobalElementLocalName() throws Exception {
 
@@ -87,7 +98,7 @@ public class SimpleXPathTest extends TestCase {
         XPathEventHandler idHandler = new XPathEventHandler() {
 
             public void onMatch(XPathEvent event) throws XMLStreamException {
-                idTag = event.getReader().getLocalName();
+                tag = event.getReader().getLocalName();
             }
             
         };
@@ -100,7 +111,7 @@ public class SimpleXPathTest extends TestCase {
         
         evaluator.evaluate(getClass().getResourceAsStream("customer.xml"));
         
-        assertEquals("id", idTag);
+        assertEquals("id", tag);
     }
     
     public void testAnd() throws Exception {
@@ -109,7 +120,7 @@ public class SimpleXPathTest extends TestCase {
         XPathEventHandler idHandler = new XPathEventHandler() {
 
             public void onMatch(XPathEvent event) throws XMLStreamException {
-                idTag = event.getReader().getLocalName();
+                tag = event.getReader().getLocalName();
             }
             
         };
@@ -122,7 +133,7 @@ public class SimpleXPathTest extends TestCase {
         
         evaluator.evaluate(getClass().getResourceAsStream("customer.xml"));
         
-        assertEquals("id", idTag);
+        assertEquals("id", tag);
     }
     
     public void testOr() throws Exception {
@@ -131,7 +142,7 @@ public class SimpleXPathTest extends TestCase {
         XPathEventHandler idHandler = new XPathEventHandler() {
 
             public void onMatch(XPathEvent event) throws XMLStreamException {
-                idTag = event.getReader().getLocalName();
+                tag = event.getReader().getLocalName();
             }
             
         };
@@ -144,7 +155,7 @@ public class SimpleXPathTest extends TestCase {
         
         evaluator.evaluate(getClass().getResourceAsStream("customer.xml"));
         
-        assertEquals("id", idTag);
+        assertEquals("id", tag);
     }
     
     
@@ -154,7 +165,7 @@ public class SimpleXPathTest extends TestCase {
         XPathEventHandler idHandler = new XPathEventHandler() {
 
             public void onMatch(XPathEvent event) throws XMLStreamException {
-                idTag = event.getReader().getLocalName();
+                tag = event.getReader().getLocalName();
             }
             
         };
@@ -167,7 +178,7 @@ public class SimpleXPathTest extends TestCase {
         
         evaluator.evaluate(getClass().getResourceAsStream("customer.xml"));
         
-        assertEquals("id", idTag);
+        assertEquals("id", tag);
     }
     
     public void testSimpleExpression() throws Exception {
@@ -183,7 +194,7 @@ public class SimpleXPathTest extends TestCase {
         XPathEventHandler idHandler = new XPathEventHandler() {
 
             public void onMatch(XPathEvent event) throws XMLStreamException {
-                idTag = event.getReader().getLocalName();
+                tag = event.getReader().getLocalName();
             }
             
         };
@@ -197,6 +208,6 @@ public class SimpleXPathTest extends TestCase {
         evaluator.evaluate(getClass().getResourceAsStream("customer2.xml"));
         
         assertEquals("customer", custTag);
-        assertEquals("id", idTag);
+        assertEquals("id", tag);
     }
 }
