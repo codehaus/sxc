@@ -1,15 +1,19 @@
 package com.envoisolutions.sxc.builder.impl;
 
+import static com.envoisolutions.sxc.builder.impl.IdentityManager.capitalize;
+
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import javax.xml.XMLConstants;
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
-import javax.xml.XMLConstants;
 
 import com.envoisolutions.sxc.Context;
 import com.envoisolutions.sxc.Reader;
@@ -17,23 +21,22 @@ import com.envoisolutions.sxc.builder.BuildException;
 import com.envoisolutions.sxc.builder.CodeBody;
 import com.envoisolutions.sxc.builder.ElementParserBuilder;
 import com.envoisolutions.sxc.builder.ParserBuilder;
-import static com.envoisolutions.sxc.builder.impl.IdentityManager.capitalize;
-import com.envoisolutions.sxc.util.XoXMLStreamReader;
 import com.envoisolutions.sxc.util.Attribute;
+import com.envoisolutions.sxc.util.XoXMLStreamReader;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JClassAlreadyExistsException;
 import com.sun.codemodel.JConditional;
+import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JForEach;
 import com.sun.codemodel.JForLoop;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
-import com.sun.codemodel.JDefinedClass;
-import com.sun.codemodel.JForEach;
 
 public class ElementParserBuilderImpl extends AbstractParserBuilder implements ElementParserBuilder {
 
@@ -652,7 +655,11 @@ public class ElementParserBuilderImpl extends AbstractParserBuilder implements E
 
                 JConditional ifDepth = b._if(depthVar.eq(targetDepthVar));
 
-                writeElementReader(elements, ifDepth._then(), xsrVar, false);
+                Map<QName, ExpectedElement> globalAndLocalEls = new HashMap<QName, ExpectedElement>();
+                globalAndLocalEls.putAll(elements);
+                globalAndLocalEls.putAll(buildContext.getGlobalElements());
+                
+                writeElementReader(globalAndLocalEls, ifDepth._then(), xsrVar, false);
 
                 if (allowUnknown) {
                     writeElementReader(buildContext.getGlobalElements(), ifDepth._else(), xsrVar, true);
