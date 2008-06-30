@@ -51,4 +51,18 @@ public abstract class Reader {
     public abstract Object read(XoXMLStreamReader xsr, 
                                 Map<String,Object> properties,
                                 QName type) throws Exception;
+    
+    protected int incrementElementCount(QName name, int depth)
+    {
+	String key = name.toString() + new Integer(depth);
+	Integer i = (Integer) context.get(key);
+	if (i == null)
+	{
+	    i = 1;
+	}
+	
+	context.put(key, i + 1);
+	
+	return i;
+    }
 }

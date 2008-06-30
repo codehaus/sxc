@@ -10,6 +10,7 @@ public class SimpleXPathTest extends TestCase {
     boolean match;
     boolean noMatch;
     String expr = null;
+    String value;
     
     public void testNonMatchedText() throws Exception {
 
@@ -158,6 +159,45 @@ public class SimpleXPathTest extends TestCase {
         assertEquals("id", tag);
     }
     
+    public void testElementNumber() throws Exception {
+
+        System.setProperty("com.envoisolutions.sxc.output.directory", "target/tmp-xpath");
+        XPathEventHandler idHandler = new XPathEventHandler() {
+
+            public void onMatch(XPathEvent event) throws XMLStreamException {
+                value = event.getReader().getAttributeValue("", "name");
+            }
+        };
+        
+        XPathBuilder builder = new XPathBuilder();
+        builder.listen("//order[1]", idHandler);
+        
+        XPathEvaluator evaluator = builder.compile();
+        
+        evaluator.evaluate(getClass().getResourceAsStream("orders.xml"));
+        
+        assertEquals("1", value);
+        
+        // Try the second one
+        builder = new XPathBuilder();
+        builder.listen("//order[2]", idHandler);
+        
+        evaluator = builder.compile();
+        
+        evaluator.evaluate(getClass().getResourceAsStream("orders.xml"));
+        
+        assertEquals("2", value);
+        
+        // try a non global element
+        builder = new XPathBuilder();
+        builder.listen("/orders/order[2]", idHandler);
+        
+        evaluator = builder.compile();
+        
+        evaluator.evaluate(getClass().getResourceAsStream("orders.xml"));
+        
+        assertEquals("2", value);
+    }
     
     public void testSimpleNamespaces() throws Exception {
         System.setProperty("streax-xo.output.directory", "target/tmp-xpath");
