@@ -16,6 +16,7 @@ import org.jaxen.expr.LiteralExpr;
 import org.jaxen.expr.LocationPath;
 import org.jaxen.expr.LogicalExpr;
 import org.jaxen.expr.NameStep;
+import org.jaxen.expr.NumberExpr;
 import org.jaxen.expr.Predicate;
 import org.jaxen.expr.TextNodeStep;
 import org.jaxen.expr.XPathExpr;
@@ -32,6 +33,7 @@ import com.envoisolutions.sxc.builder.impl.BuilderImpl;
 import com.envoisolutions.sxc.xpath.impl.XPathEvaluatorImpl;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JPrimitiveType;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
@@ -48,6 +50,7 @@ public class XPathBuilder {
     private JType eventType;
     private int varCount = 0;
     private JPrimitiveType boolType;
+    private JPrimitiveType intType;
 
     public XPathBuilder() {
         super();
@@ -59,6 +62,7 @@ public class XPathBuilder {
         eventType = parserBldr.getCodeModel()._ref(XPathEvent.class);
         stringType = parserBldr.getCodeModel()._ref(String.class);
         boolType = parserBldr.getCodeModel().BOOLEAN;
+        intType = parserBldr.getCodeModel().INT;
     }
 
     public void listen(String expr, XPathEventHandler handler) {
@@ -127,6 +131,8 @@ public class XPathBuilder {
             return handle(xpathBuilder, (FunctionCallExpr) expr);
         } else if (expr instanceof LogicalExpr) {
             return handle(xpathBuilder, (LogicalExpr) expr);
+        } else if (expr instanceof NumberExpr) {
+            return handle(xpathBuilder, (NumberExpr) expr);
         } else {
             throw new XPathException("Unknown expression type " + expr);
         }
@@ -253,9 +259,23 @@ public class XPathBuilder {
         return handlePredicates(returnBuilder, step.getPredicateSet().getPredicates());
     }
 
-    private Object handlePredicates(ParserBuilder returnBuilder, List predicates) {
+    private Object handle(ElementParserBuilder xpathBuilder, NumberExpr expr) {
+	JBlock block = xpathBuilder.getBody().getBlock();
+	JVar xsrVar = xpathBuilder.getXSR();
+	
+	JInvocation result = JExpr._this().invoke("incrementElementCount")
+        	.arg(xsrVar.invoke("getName"))
+        	.arg(xsrVar.invoke("getDepth"));
+	JVar countVar = block.decl(intType, "count", result);
+		
+	JBlock then = block._if(countVar.eq(JExpr.lit((int) Double.valueOf(expr.getText()).doubleValue())))._then();
+	
+	return xpathBuilder.newState(then);
+    }
+
+    private Object handlePredicates(ParserBuilder returnBuilder, List<?> predicates) {
         Object returnObj = returnBuilder;
-        for (Iterator pitr = predicates.iterator(); pitr.hasNext();) {
+        for (Iterator<?> pitr = predicates.iterator(); pitr.hasNext();) {
             Predicate p = (Predicate) pitr.next();
             
             returnObj = 
@@ -266,7 +286,7 @@ public class XPathBuilder {
 
     public Map<String, String> getNamespaceContext() {
         return namespaceContext;
-    }
+    }    
 
     public void setNamespaceContext(Map<String, String> namespaceContext) {
         this.namespaceContext = namespaceContext;
