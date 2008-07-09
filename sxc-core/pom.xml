@@ -2,12 +2,12 @@
   <modelVersion>4.0.0</modelVersion>
   <artifactId>sxc-core</artifactId>
   <name>SXC Core</name>
-  <version>0.7-SNAPSHOT</version>
+  <version>0.7</version>
 
   <parent>
     <groupId>com.envoisolutions.sxc</groupId>
     <artifactId>sxc</artifactId>
-    <version>0.7-SNAPSHOT</version>
+    <version>0.7</version>
   </parent>
   
   <dependencies>
