@@ -3,7 +3,7 @@
 
   <groupId>com.envoisolutions.sxc</groupId>
   <artifactId>sxc</artifactId>
-  <version>0.7</version>
+  <version>0.8-SNAPSHOT</version>
   <name>Simple XML Compiler</name>
 
   <packaging>pom</packaging>
@@ -24,9 +24,9 @@
   </organization>
 
   <scm>
-    <connection>scm:svn:https://svn.codehaus.org/sxc/tags/sxc-0.7</connection>
-    <developerConnection>scm:svn:https://svn.codehaus.org/sxc/tags/sxc-0.7</developerConnection>
-    <url>http://svn.soter.codehaus.org/browse/sxc/tags/sxc-0.7</url>
+    <connection>scm:svn:https://svn.codehaus.org/sxc/trunk</connection>
+    <developerConnection>scm:svn:https://svn.codehaus.org/sxc/trunk</developerConnection>
+    <url>http://svn.soter.codehaus.org/browse/sxc/trunk</url>
   </scm>
 
   <modules>
@@ -72,7 +72,7 @@
       <dependency>
         <groupId>com.envoisolutions.sxc</groupId>
         <artifactId>sxc-drools</artifactId>
-        <version>0.6</version>
+        <version>0.7-SNAPSHOT</version>
       </dependency>
       <dependency>
         <groupId>com.envoisolutions.sxc</groupId>
