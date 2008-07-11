@@ -3,7 +3,7 @@
 
   <groupId>com.envoisolutions.sxc</groupId>
   <artifactId>sxc</artifactId>
-  <version>0.8-SNAPSHOT</version>
+  <version>0.7.1</version>
   <name>Simple XML Compiler</name>
 
   <packaging>pom</packaging>
@@ -24,9 +24,9 @@
   </organization>
 
   <scm>
-    <connection>scm:svn:https://svn.codehaus.org/sxc/trunk</connection>
-    <developerConnection>scm:svn:https://svn.codehaus.org/sxc/trunk</developerConnection>
-    <url>http://svn.soter.codehaus.org/browse/sxc/trunk</url>
+    <connection>scm:svn:https://svn.codehaus.org/sxc/tags/sxc-0.7.1</connection>
+    <developerConnection>scm:svn:https://svn.codehaus.org/sxc/tags/sxc-0.7.1</developerConnection>
+    <url>http://svn.soter.codehaus.org/browse/sxc/tags/sxc-0.7.1</url>
   </scm>
 
   <modules>
