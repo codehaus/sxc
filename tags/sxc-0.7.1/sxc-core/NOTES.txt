@@ -1,0 +1,21 @@
+JAXB TODO
+0.6 Release
+- Attachments
+- ObjectFactorys
+- IDRef
+- mixed content
+- Unsupported types: URI, xs:any, Document
+- Validation
+- Type adapters
+
+XPath TODO;
+- descendent/parents
+- expressions
+- selectSingle/selectNodes??
+
+Versioning:
+- Schema contains statements on how to build model:
+  <stx:new class="Customer">
+  <stx:set/>
+  
+XSLT???
