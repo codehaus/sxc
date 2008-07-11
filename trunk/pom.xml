@@ -72,7 +72,7 @@
       <dependency>
         <groupId>com.envoisolutions.sxc</groupId>
         <artifactId>sxc-drools</artifactId>
-        <version>0.7-SNAPSHOT</version>
+        <version>${version}</version>
       </dependency>
       <dependency>
         <groupId>com.envoisolutions.sxc</groupId>
