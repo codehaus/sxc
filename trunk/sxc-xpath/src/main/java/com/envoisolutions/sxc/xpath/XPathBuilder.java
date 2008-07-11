@@ -32,8 +32,11 @@ import com.envoisolutions.sxc.builder.ParserBuilder;
 import com.envoisolutions.sxc.builder.impl.BuilderImpl;
 import com.envoisolutions.sxc.xpath.impl.XPathEvaluatorImpl;
 import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMod;
+import com.sun.codemodel.JMods;
 import com.sun.codemodel.JPrimitiveType;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
@@ -49,8 +52,10 @@ public class XPathBuilder {
     private Builder builder;
     private JType eventType;
     private int varCount = 0;
+    private int elementCounters = 0;
     private JPrimitiveType boolType;
     private JPrimitiveType intType;
+    private JCodeModel model;
 
     public XPathBuilder() {
         super();
@@ -58,11 +63,12 @@ public class XPathBuilder {
         builder = new BuilderImpl();
         parserBldr = builder.getParserBuilder();
         
-        eventHandlerType = parserBldr.getCodeModel()._ref(XPathEventHandler.class);
-        eventType = parserBldr.getCodeModel()._ref(XPathEvent.class);
-        stringType = parserBldr.getCodeModel()._ref(String.class);
-        boolType = parserBldr.getCodeModel().BOOLEAN;
-        intType = parserBldr.getCodeModel().INT;
+        model = parserBldr.getCodeModel();
+        eventHandlerType = model._ref(XPathEventHandler.class);
+        eventType = model._ref(XPathEvent.class);
+        stringType = model._ref(String.class);
+        boolType = model.BOOLEAN;
+        intType = model.INT;
     }
 
     public void listen(String expr, XPathEventHandler handler) {
@@ -260,15 +266,15 @@ public class XPathBuilder {
     }
 
     private Object handle(ElementParserBuilder xpathBuilder, NumberExpr expr) {
+//        xpathBuilder = xpathBuilder.newState();
+        
 	JBlock block = xpathBuilder.getBody().getBlock();
-	JVar xsrVar = xpathBuilder.getXSR();
 	
-	JInvocation result = JExpr._this().invoke("incrementElementCount")
-        	.arg(xsrVar.invoke("getName"))
-        	.arg(xsrVar.invoke("getDepth"));
-	JVar countVar = block.decl(intType, "count", result);
+        JVar counterVar = parserBldr.getBody().field(JMod.PUBLIC, intType, "counter" + elementCounters++, JExpr.lit(0));
+        
+        block.assignPlus(counterVar, JExpr.lit(1));
 		
-	JBlock then = block._if(countVar.eq(JExpr.lit((int) Double.valueOf(expr.getText()).doubleValue())))._then();
+	JBlock then = block._if(counterVar.eq(JExpr.lit((int) Double.valueOf(expr.getText()).doubleValue())))._then();
 	
 	return xpathBuilder.newState(then);
     }
