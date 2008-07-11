@@ -2,12 +2,12 @@
   <modelVersion>4.0.0</modelVersion>
   <artifactId>sxc-runtime</artifactId>
   <name>SXC Runtime</name>
-  <version>0.8-SNAPSHOT</version>
+  <version>0.7.1</version>
 
   <parent>
     <groupId>com.envoisolutions.sxc</groupId>
     <artifactId>sxc</artifactId>
-    <version>0.8-SNAPSHOT</version>
+    <version>0.7.1</version>
   </parent>
   
   <dependencies>
