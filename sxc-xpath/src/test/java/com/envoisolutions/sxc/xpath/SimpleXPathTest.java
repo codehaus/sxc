@@ -188,6 +188,10 @@ public class SimpleXPathTest extends TestCase {
         
         assertEquals("2", value);
         
+        evaluator.evaluate(getClass().getResourceAsStream("orders.xml"));
+        
+        assertEquals("2", value);
+        
         // try a non global element
         builder = new XPathBuilder();
         builder.listen("/orders/order[2]", idHandler);
