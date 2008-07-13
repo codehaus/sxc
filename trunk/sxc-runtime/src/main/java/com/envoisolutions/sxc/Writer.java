@@ -10,16 +10,23 @@ import java.util.Map;
 
 public abstract class Writer {
     protected Context context;
-    XMLOutputFactory xof = XMLOutputFactory.newInstance();
+    XMLOutputFactory xof;
 
     public Writer(Context context) {
         this.context = context;
     }
 
     public void write(OutputStream is, Object o) throws Exception {
-        XMLStreamWriter w = xof.createXMLStreamWriter(is);
+        XMLStreamWriter w = getXMLOutputFactory().createXMLStreamWriter(is);
         write(w, o);
         w.close();
+    }
+
+    protected XMLOutputFactory getXMLOutputFactory() {
+        if (xof == null) {
+            xof = XMLOutputFactory.newInstance();
+        }
+        return xof;
     }
     
     public void write(XMLStreamWriter xsr, Object o) throws Exception {
