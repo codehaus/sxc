@@ -3,12 +3,12 @@
   <groupId>com.envoisolutions.sxc</groupId>
   <artifactId>sxc-drools</artifactId>
   <name>SXC Drools</name>
-  <version>0.8-SNAPSHOT</version>
+  <version>0.7.2</version>
 
   <parent>
     <groupId>com.envoisolutions.sxc</groupId>
     <artifactId>sxc</artifactId>
-    <version>0.8-SNAPSHOT</version>
+    <version>0.7.2</version>
   </parent>
 
 
