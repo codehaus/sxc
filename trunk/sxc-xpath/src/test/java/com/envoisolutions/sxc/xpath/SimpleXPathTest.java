@@ -58,6 +58,12 @@ public class SimpleXPathTest extends TestCase {
         
         assertTrue(match);
         assertEquals("//c:id[text()='1']", expr);
+        
+
+        evaluator.evaluate(getClass().getResourceAsStream("customer-whitespace.xml"));
+        
+        assertTrue(match);
+        assertEquals("//c:id[text()='1']", expr);
     }
     
     public void testGlobalElement() throws Exception {
