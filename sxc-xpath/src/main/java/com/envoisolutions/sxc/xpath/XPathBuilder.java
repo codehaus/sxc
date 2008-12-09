@@ -1,5 +1,20 @@
 package com.envoisolutions.sxc.xpath;
 
+import com.envoisolutions.sxc.Context;
+import com.envoisolutions.sxc.builder.Builder;
+import com.envoisolutions.sxc.builder.CodeBody;
+import com.envoisolutions.sxc.builder.ElementParserBuilder;
+import com.envoisolutions.sxc.builder.ParserBuilder;
+import com.envoisolutions.sxc.builder.impl.BuilderImpl;
+import com.envoisolutions.sxc.xpath.impl.XPathEvaluatorImpl;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JMod;
+import com.sun.codemodel.JPrimitiveType;
+import com.sun.codemodel.JType;
+import com.sun.codemodel.JVar;
+
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -23,23 +38,6 @@ import org.jaxen.expr.XPathExpr;
 import org.jaxen.saxpath.Axis;
 import org.jaxen.saxpath.SAXPathException;
 import org.jaxen.saxpath.helpers.XPathReaderFactory;
-
-import com.envoisolutions.sxc.Context;
-import com.envoisolutions.sxc.builder.Builder;
-import com.envoisolutions.sxc.builder.CodeBody;
-import com.envoisolutions.sxc.builder.ElementParserBuilder;
-import com.envoisolutions.sxc.builder.ParserBuilder;
-import com.envoisolutions.sxc.builder.impl.BuilderImpl;
-import com.envoisolutions.sxc.xpath.impl.XPathEvaluatorImpl;
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JInvocation;
-import com.sun.codemodel.JMod;
-import com.sun.codemodel.JMods;
-import com.sun.codemodel.JPrimitiveType;
-import com.sun.codemodel.JType;
-import com.sun.codemodel.JVar;
 
 public class XPathBuilder {
     private Map<String,String> namespaceContext;
@@ -91,6 +89,7 @@ public class XPathBuilder {
         vars.put(varName, eventHandler);
         
         ParserBuilder xpathBuilder = parserBldr;
+        JBlock block;
         try {
             org.jaxen.saxpath.XPathReader reader = XPathReaderFactory.createReader();
             
@@ -105,11 +104,12 @@ public class XPathBuilder {
                 ExpressionState exp = (ExpressionState) o;
                 JVar var = exp.getVar();
                 ParserBuilder builder = exp.getBuilder();
-                JBlock block = builder.getBody().getBlock();
+                block = builder.getBody().getBlock();
                 
-                xpathBuilder = builder.newState(block._if(var)._then());
+                block = block._if(var)._then();
             } else {
                 xpathBuilder = (ParserBuilder) o;
+                block = xpathBuilder.getBody().getBlock();
             }
         } catch (SAXPathException e) {
             throw new XPathException(e);
@@ -118,11 +118,11 @@ public class XPathBuilder {
         CodeBody body = xpathBuilder.getBody();
         
         // grab the event handler out of the context
-        JVar handlerVar = body.decl(eventHandlerType, varName, 
+        JVar handlerVar = block.decl(eventHandlerType, varName, 
                                     JExpr.cast(eventHandlerType, 
                                                JExpr._super().ref("context").invoke("get").arg(varName)));
 
-        body.add(handlerVar.invoke("onMatch").arg(JExpr._new(eventType).arg(JExpr.lit(expr)).arg(xpathBuilder.getXSR())));
+        block.add(handlerVar.invoke("onMatch").arg(JExpr._new(eventType).arg(JExpr.lit(expr)).arg(xpathBuilder.getXSR())));
     }
 
     private Object handleExpression(ElementParserBuilder xpathBuilder, Expr expr) {
@@ -196,14 +196,29 @@ public class XPathBuilder {
     }
 
     private ExpressionState handle(ElementParserBuilder parent, EqualityExpr expr) {
-        ExpressionState left = (ExpressionState) handleExpression(parent, expr.getLHS());
+        Object leftObj = handleExpression(parent, expr.getLHS());
         ExpressionState right = (ExpressionState) handleExpression(parent, expr.getRHS());
         
-        JVar var = parent.getBody().decl(boolType,
-                              "b" + varCount++,
-                     left.getVar().invoke("equals").arg(right.getVar()));
+        JVar leftVar;
+        JVar rightVar;
+        ParserBuilder parent2; 
+        if (leftObj instanceof ParserBuilder) {
+            // We've got an attribute.. i.e. [@foo='bar']
+            ParserBuilder attBuilder = (ParserBuilder) leftObj;
+            leftVar = attBuilder.as(String.class);
+            rightVar = attBuilder.passParentVariable(right.getVar());
+            parent2 = attBuilder;
+        } else {
+            leftVar = ((ExpressionState) leftObj).getVar();
+            rightVar = right.getVar();
+            parent2 = parent;
+        }
         
-        return new ExpressionState(parent, var);
+        JVar var = parent2.getBody().decl(boolType,
+                                          "b" + varCount++,
+                                          leftVar.invoke("equals").arg(rightVar));
+        
+        return new ExpressionState(parent2, var);
     }
 
     private Object handle(ElementParserBuilder xpathBuilder, LocationPath path) {
